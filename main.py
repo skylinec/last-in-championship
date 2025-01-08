@@ -60,6 +60,32 @@ class AuditLog(Base):
 # Create tables
 Base.metadata.create_all(bind=engine)
 
+# Add this function to perform the database migration
+def migrate_database():
+    db = SessionLocal()
+    try:
+        # Check if core_users column exists
+        try:
+            db.execute("SELECT core_users FROM settings LIMIT 1")
+            return  # Column exists, no migration needed
+        except:
+            # Add core_users column
+            db.execute('ALTER TABLE settings ADD COLUMN core_users JSON')
+            # Update existing rows with default core users
+            db.execute(
+                "UPDATE settings SET core_users = :users",
+                {"users": json.dumps(["Matt", "Kushal", "Nathan", "Michael", "Ben"])}
+            )
+            db.commit()
+            print("Added core_users column to settings table")
+    except Exception as e:
+        db.rollback()
+        print(f"Migration error: {str(e)}")
+    finally:
+        db.close()
+
+migrate_database()  # Add this line
+
 # Initialize default settings if not exists
 def init_settings():
     db = SessionLocal()
@@ -1441,4 +1467,5 @@ def clear_database():
 if __name__ == "__main__":
     # Create tables on startup
     Base.metadata.create_all(bind=engine)
+    migrate_database()  # Add this line
     app.run(debug=True)

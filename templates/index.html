@@ -2,185 +2,193 @@
 {% block title %}Log Attendance{% endblock %}
 
 {% block content %}
-<div class="form-container">
-    <h1>Log Attendance</h1>
-    <form id="logForm">
-        <div class="form-group">
-            <label for="status">Status:</label>
-            <select id="status" name="status" onchange="toggleTimeInput()">
-                <option value="in-office">In Office</option>
-                <option value="remote">Remote</option>
-                <option value="sick">Sick</option>
-                <option value="leave">Leave</option>
+<div class="dashboard-container">
+    <div class="attendance-form-container">
+        <h1>Log Attendance</h1>
+        <form id="logForm" class="modern-form">
+            <div class="form-group">
+                <label for="status">Status</label>
+                <div class="status-buttons">
+                    <input type="radio" id="in-office" name="status" value="in-office" checked>
+                    <label for="in-office" class="status-button">🏢 In Office</label>
+                    
+                    <input type="radio" id="remote" name="status" value="remote">
+                    <label for="remote" class="status-button">🏠 Remote</label>
+                    
+                    <input type="radio" id="sick" name="status" value="sick">
+                    <label for="sick" class="status-button">🤒 Sick</label>
+                    
+                    <input type="radio" id="leave" name="status" value="leave">
+                    <label for="leave" class="status-button">✈️ Leave</label>
+                </div>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="date">Date</label>
+                    <input type="date" id="date" name="date" required>
+                </div>
+
+                <div class="form-group" id="timeInput">
+                    <label for="time">Time Started</label>
+                    <input type="time" id="time" name="time" required>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label for="name">Name</label>
+                <input type="text" 
+                       id="name" 
+                       name="name" 
+                       list="namesList" 
+                       value="{{ session.user }}"
+                       autocomplete="off"
+                       required>
+                <datalist id="namesList"></datalist>
+            </div>
+
+            <button type="submit" class="submit-button">Submit Attendance</button>
+        </form>
+    </div>
+
+    <div class="podium-container">
+        <div class="podium-controls">
+            <select id="podiumPeriod">
+                <option value="day">Today</option>
+                <option value="week">This Week</option>
+                <option value="month">This Month</option>
             </select>
         </div>
-        <div class="form-group">
-            <label for="date">Date:</label>
-            <input type="date" id="date" name="date" required>
+        <div class="podium">
+            <div class="podium-place" id="second">
+                <div class="trophy">🥈</div>
+                <div class="platform" style="height: 70px">2</div>
+            </div>
+            <div class="podium-place" id="first">
+                <div class="trophy">🏆</div>
+                <div class="platform" style="height: 100px">1</div>
+            </div>
+            <div class="podium-place" id="third">
+                <div class="trophy">🥉</div>
+                <div class="platform" style="height: 40px">3</div>
+            </div>
         </div>
-        <div class="form-group" id="timeInput">
-            <label for="time">Time Started:</label>
-            <input type="time" id="time" name="time" required>
+        <div class="podium-names">
+            <div id="secondName">-</div>
+            <div id="firstName">-</div>
+            <div id="thirdName">-</div>
         </div>
-        <div class="form-group">
-            <label for="name">Name:</label>
-            <input type="text" 
-                   id="name" 
-                   name="name" 
-                   list="namesList" 
-                   value="{{ session.user }}"
-                   autocomplete="off"
-                   required>
-            <datalist id="namesList"></datalist>
-        </div>
-        <button type="submit">Submit</button>
-    </form>
-    <div id="result" class="message" style="display: none;"></div>
-</div>
-<div class="podium-container">
-    <div class="podium-controls">
-        <select id="podiumPeriod">
-            <option value="day">Today</option>
-            <option value="week">This Week</option>
-            <option value="month">This Month</option>
-        </select>
-    </div>
-    <div class="podium">
-        <div class="podium-place" id="second">
-            <div class="trophy">🥈</div>
-            <div class="platform" style="height: 70px">2</div>
-        </div>
-        <div class="podium-place" id="first">
-            <div class="trophy">🏆</div>
-            <div class="platform" style="height: 100px">1</div>
-        </div>
-        <div class="podium-place" id="third">
-            <div class="trophy">🥉</div>
-            <div class="platform" style="height: 40px">3</div>
+        <div class="podium-points">
+            <div id="secondPoints">-</div>
+            <div id="firstPoints">-</div>
+            <div id="thirdPoints">-</div>
         </div>
     </div>
-    <div class="podium-names">
-        <div id="secondName">-</div>
-        <div id="firstName">-</div>
-        <div id="thirdName">-</div>
-    </div>
-    <div class="podium-points">
-        <div id="secondPoints">-</div>
-        <div id="firstPoints">-</div>
-        <div id="thirdPoints">-</div>
-    </div>
-</div>
-
-<div class="quick-action-buttons">
-    <button id="clockInButton" class="quick-action-button" onclick="clockIn('in-office')">
-        Clock In (In Office)
-    </button>
-    <button id="clockInRemoteButton" class="quick-action-button remote" onclick="clockIn('remote')">
-        Clock In (Remote)
-    </button>
 </div>
 
 <style>
-.form-container {
-    max-width: 500px;
+.dashboard-container {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 40px;
+    max-width: 1200px;
     margin: 0 auto;
     padding: 20px;
-    float: left;
 }
 
-.quick-action-buttons {
-    position: fixed;
-    bottom: 20px;
-    right: 20px;
+.attendance-form-container {
+    background: white;
+    padding: 30px;
+    border-radius: 12px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.modern-form {
     display: flex;
     flex-direction: column;
-    gap: 10px;
-    z-index: 1000;
+    gap: 24px;
 }
 
-.quick-action-button {
-    position: static;  /* Override the fixed position */
-    margin: 0;        /* Reset margin */
-}
-
-.quick-action-button.remote {
-    background: var(--success-color);
-}
-
-.quick-action-button.remote:hover {
-    background: var(--primary-color);
-}
-
-.quick-action-button:active {
-    transform: translateY(0);
-}
-
-.quick-action-button:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-    transform: none;
-}
-.container {
+.form-row {
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 20px;
 }
 
-.podium-container {
-    background: white;
-    padding: 20px;
-    border-radius: 8px;
-    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-    float: right;
-}
-
-.podium-controls {
-    margin-bottom: 20px;
-    text-align: center;
-}
-
-.podium {
+.form-group {
     display: flex;
-    align-items: flex-end;
-    justify-content: center;
-    gap: 10px;
-    margin-bottom: 10px;
+    flex-direction: column;
+    gap: 8px;
 }
 
-.podium-place {
-    text-align: center;
-    width: 80px;
+.form-group label {
+    font-weight: 500;
+    color: var(--primary-color);
+}
+
+.form-group input:not([type="radio"]) {
+    padding: 12px;
+    border: 2px solid #e1e1e1;
+    border-radius: 6px;
+    font-size: 16px;
     transition: all 0.3s ease;
 }
 
-.platform {
-    background: var(--primary-color);
-    color: white;
-    padding: 10px;
-    border-radius: 4px 4px 0 0;
+.form-group input:focus {
+    border-color: var(--accent-color);
+    box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.2);
 }
 
-.trophy {
-    font-size: 24px;
-    margin-bottom: 5px;
-}
-
-.podium-names, .podium-points {
-    display: flex;
-    justify-content: center;
+.status-buttons {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
     gap: 10px;
+}
+
+.status-buttons input[type="radio"] {
+    display: none;
+}
+
+.status-button {
+    padding: 12px;
+    text-align: center;
+    background: #f8f9fa;
+    border: 2px solid #e1e1e1;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.status-buttons input[type="radio"]:checked + .status-button {
+    background: var(--accent-color);
+    color: white;
+    border-color: var(--accent-color);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.submit-button {
+    background: var(--accent-color);
+    color: white;
+    padding: 14px;
+    border: none;
+    border-radius: 6px;
+    font-size: 16px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.3s ease;
     margin-top: 10px;
 }
 
-.podium-names div, .podium-points div {
-    width: 80px;
-    text-align: center;
-    font-size: 0.9em;
+.submit-button:hover {
+    background: var(--primary-color);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
 }
 
-#first .platform { background: #ffd700; }
-#second .platform { background: #c0c0c0; }
-#third .platform { background: #cd7f32; }
+.quick-action-buttons {
+    display: none;
+}
 </style>
 
 <script>
@@ -189,15 +197,13 @@ async function updatePodium() {
     const response = await fetch(`/rankings/${period}`);
     const data = await response.text();
     
-    // Parse the HTML response to get rankings
     const parser = new DOMParser();
     const doc = parser.parseFromString(data, 'text/html');
     const rows = doc.querySelectorAll('tr');
     
-    // Update podium places
     const places = ['first', 'second', 'third'];
     places.forEach((place, index) => {
-        if (rows[index + 1]) { // Skip header row
+        if (rows[index + 1]) {
             const cells = rows[index + 1].cells;
             document.getElementById(`${place}Name`).textContent = cells[0].textContent;
             document.getElementById(`${place}Points`).textContent = cells[1].textContent;
@@ -242,7 +248,6 @@ async function clockIn(status) {
         resultDiv.style.display = 'block';
         
         if (result.type === 'success') {
-            // Disable both clock in buttons for today
             document.getElementById('clockInButton').disabled = true;
             document.getElementById('clockInRemoteButton').disabled = true;
             document.querySelectorAll('.quick-action-button').forEach(button => {
@@ -260,18 +265,17 @@ async function clockIn(status) {
     }
 }
 
-function toggleTimeInput() {
-  const statusValue = document.getElementById('status').value;
-  const timeInput = document.getElementById('timeInput');
-  if (statusValue === 'remote' || statusValue === 'in-office') {
-    timeInput.style.display = '';
-  } else {
-    timeInput.style.display = 'none';
-    timeInput.value = '08:00';
-  }
-}
+document.querySelectorAll('input[name="status"]').forEach(radio => {
+    radio.addEventListener('change', function() {
+        const timeInput = document.getElementById('timeInput');
+        if (this.value === 'sick' || this.value === 'leave') {
+            timeInput.style.display = 'none';
+        } else {
+            timeInput.style.display = 'block';
+        }
+    });
+});
 
-// Initialize form
 document.getElementById('date').valueAsDate = new Date();
 document.getElementById('time').value = new Date().toLocaleTimeString('en-GB', { 
     hour: '2-digit', 
@@ -279,7 +283,6 @@ document.getElementById('time').value = new Date().toLocaleTimeString('en-GB', {
     hour12: false 
 });
 
-// Form submission handler
 document.getElementById('logForm').addEventListener('submit', async (event) => {
     event.preventDefault();
     const formData = {
@@ -321,7 +324,6 @@ document.getElementById('logForm').addEventListener('submit', async (event) => {
     }
 });
 
-// Check if already clocked in today
 document.addEventListener('DOMContentLoaded', async () => {
     loadNames();
     

@@ -3,6 +3,8 @@ version: '3.8'
 services:
   web:
     build: .
+    ports:
+      - "8000:8000"  # Add port mapping
     volumes:
       - ./data:/app/data
     environment:
@@ -17,7 +19,7 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
-    command: ["gunicorn", "--bind", "0.0.0.0:8000", "main:app"]  # Updated command
+    command: ["gunicorn", "--bind", "0.0.0.0:8000", "main:app"]
     
   db:
     image: postgres:14-alpine

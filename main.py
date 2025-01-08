@@ -1,5 +1,5 @@
 from flask import Flask, request, jsonify, render_template, session, redirect, url_for
-from sqlalchemy import create_engine, Column, Integer, String, DateTime, Float, JSON, event, text
+from sqlalchemy import create_engine, Column, Integer, String, DateTime, Float, JSON, event, text, Boolean
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from datetime import datetime, timedelta, date  # Add date import
@@ -48,6 +48,10 @@ class Settings(Base):
     late_bonus = Column(Float, nullable=False)
     remote_days = Column(JSON, nullable=False)
     core_users = Column(JSON, nullable=False)  # Add this line
+    enable_streaks = Column(Boolean, default=False)
+    streak_multiplier = Column(Float, default=0.5)  # Points multiplier per day in streak
+    streaks_enabled = Column(Boolean, default=False)
+    streak_bonus = Column(Float, default=0.5)
 
 class AuditLog(Base):
     __tablename__ = "audit_log"
@@ -110,7 +114,11 @@ def init_settings():
             },
             late_bonus=1,
             remote_days={},
-            core_users=["Matt", "Kushal", "Nathan", "Michael", "Ben"]  # Add default core users
+            core_users=["Matt", "Kushal", "Nathan", "Michael", "Ben"],  # Add default core users
+            enable_streaks=False,
+            streak_multiplier=0.5,
+            streaks_enabled=False,
+            streak_bonus=0.5
         )
         db.add(default_settings)
         db.commit()
@@ -555,6 +563,7 @@ def calculate_daily_score(entry, settings, position=None, total_entries=None):
     status = entry["status"].replace("-", "_")
     base_points = settings["points"][status]
     position_bonus = 0
+    streak_bonus = calculate_streak_bonus(entry, settings) if status in ["in_office", "remote"] else 0
     
     if position is not None and total_entries is not None:
         if status == "in_office" or (status == "remote" and is_eligible_remote_day(entry, settings)):
@@ -586,52 +595,62 @@ def calculate_daily_score(entry, settings, position=None, total_entries=None):
     streak_bonus = calculate_streak_bonus(entry)
     
     total_points = base_points + position_bonus + streak_bonus
+
+    # Add streak bonus if enabled
+    if settings.get("enable_streaks", False):
+        streak_bonus = calculate_streak_bonus(entry, settings.get("streak_multiplier", 0.5))
+        total_points += streak_bonus
+    
     return total_points
 
-def calculate_streak_bonus(entry):
-    """Calculate bonus points for consecutive late arrivals"""
+def calculate_streak_bonus(entry, settings):
+    """Calculate bonus points for consecutive attendance"""
+    if not settings.get('streaks_enabled', False):
+        return 0
+        
     db = SessionLocal()
     try:
         # Get entries for the last 5 working days
         date = datetime.strptime(entry["date"], "%Y-%m-%d")
         entries = db.query(Entry).filter(
             Entry.name == entry["name"],
-            Entry.date < entry["date"]
+            Entry.date < entry["date"],
+            Entry.status.in_(['in-office', 'remote'])  # Only count active attendance
         ).order_by(Entry.date.desc()).limit(5).all()
         
-        streak = 0
+        streak = 1  # Current day counts
+        prev_date = date
+        
         for e in entries:
-            e_time = datetime.strptime(e.time, "%H:%M").time()
-            if e_time >= datetime.strptime("11:00", "%H:%M").time():
-                streak += 1
-            else:
+            e_date = datetime.strptime(e.date, "%Y-%m-%d")
+            # Check if it's the next consecutive working day
+            days_between = business_days_between(e_date, prev_date)
+            if days_between != 1:
+                break
+            streak += 1
+            prev_date = e_date
+            if streak >= 5:  # Cap at 5 days
                 break
         
-        return streak * 0.5  # 0.5 points per day of streak
+        return streak * settings.get('streak_bonus', 0.5) if streak > 1 else 0
+        
     finally:
         db.close()
 
-def is_eligible_remote_day(entry, settings):
-    """Check if this is an eligible remote work day for late bonus"""
-    entry_date = datetime.strptime(entry["date"], '%Y-%m-%d')
-    weekday = entry_date.strftime('%a').lower()
-    remote_days = settings.get('remote_days', {}).get(entry['name'], [])
-    return weekday in remote_days
+def business_days_between(start_date, end_date):
+    """Calculate number of business days between two dates"""
+    current = start_date
+    days = 0
+    while current <= end_date:
+        if current.weekday() < 5:  # 0-4 represents Monday to Friday
+            days += 1
+        current += timedelta(days=1)
+    return days
 
-def get_week_dates(year, week):
-    """Get start and end dates for a given ISO week"""
-    # Create a date object for January 1st of the year
-    jan1 = datetime(year, 1, 1)
-    # Get the day of the week (1-7, treating Monday as 1)
-    day_of_week = jan1.isoweekday()
-    # Calculate the date of week 1's Monday
-    week1_monday = jan1 - timedelta(days=day_of_week - 1)
-    # Calculate the Monday of our target week
-    target_monday = week1_monday + timedelta(weeks=week-1)
-    # Calculate the Sunday of our target week
-    target_sunday = target_monday + timedelta(days=6)
-    return target_monday, target_sunday
-
+def calculate_streak_bonus(entry):
+    """Calculate bonus points for consecutive late arrivals"""
+    db = SessionLocal()
+    try:
 def get_week_bounds(date_str):
     """Get the start and end dates for a week"""
     try:
@@ -1538,8 +1557,18 @@ def clear_database():
 
 # Move all initialization code to the bottom
 def initialize_app():
+    """Initialize the application and run any pending migrations"""
     Base.metadata.create_all(bind=engine)
-    migrate_database()
+    
+    # Import migration here to avoid circular imports
+    from migrations.add_streaks import migrate as migrate_streaks
+    
+    try:
+        migrate_streaks()  # Will only run if not already applied
+    except Exception as e:
+        app.logger.error(f"Migration error: {str(e)}")
+        # Continue app startup even if migration fails
+    
     init_settings()
 
 # Call initialization at the bottom

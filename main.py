@@ -143,70 +143,35 @@ import uuid
 from flask import Flask, request, jsonify, render_template, render_template_string, session, redirect, url_for
 from functools import wraps
 
-# File to store data
-data_file = "championship_data.json"
-SETTINGS_FILE = "championship_settings.json"
-AUDIT_FILE = "audit_trail.json"
+# Replace JSON file constants with database config
 CORE_USERS = ['Matt', 'Kushal', 'Nathan', 'Michael', 'Ben']
-USERS_FILE = "users.json"
-
-def init_files():
-    """Initialize JSON files with default data if they don't exist"""
-    # Default settings
-    if not os.path.exists(SETTINGS_FILE):
-        default_settings = {
-            "points": {
-                "in_office": 10,  # Base points for in-office
-                "remote": 10,     # Base points for remote
-                "sick": 10,       # Match base points to keep neutral
-                "leave": 10       # Match base points to keep neutral
-            },
-            "late_bonus": 1,      # Multiplier for late arrival bonus (max 4×)
-            "sick_bonus": 0,      # No bonus for sick days
-            "leave_bonus": 0,     # No bonus for leave days
-            "remote_days": {}     # Eligible remote days per user
-        }
-        with open(SETTINGS_FILE, 'w') as f:
-            json.dump(default_settings, f, indent=4)
-
-    # Default data file
-    if not os.path.exists(data_file):
-        with open(data_file, 'w') as f:
-            json.dump([], f)
-
-    # Default audit file
-    if not os.path.exists(AUDIT_FILE):
-        with open(AUDIT_FILE, 'w') as f:
-            json.dump([], f)
-    
-    # Initialize users file
-    if not os.path.exists(USERS_FILE):
-        with open(USERS_FILE, 'w') as f:
-            json.dump({}, f, indent=4)
-
-def save_user(username, password):
-    """Save user to JSON file"""
-    try:
-        with open(USERS_FILE, 'r+') as f:
-            users = json.load(f)
-            users[username] = password  # In production, use proper password hashing
-            f.seek(0)
-            json.dump(users, f, indent=4)
-            f.truncate()
-        return True
-    except Exception as e:
-        app.logger.error(f"Error saving user: {str(e)}")
-        return False
 
 def verify_user(username, password):
-    """Verify user credentials"""
+    """Verify user credentials from database"""
+    db = SessionLocal()
     try:
-        with open(USERS_FILE, 'r') as f:
-            users = json.load(f)
-            return username in users and users[username] == password
+        user = db.query(User).filter_by(username=username).first()
+        return user is not None and user.password == password  # In production, use proper password hashing
     except Exception as e:
         app.logger.error(f"Error verifying user: {str(e)}")
         return False
+    finally:
+        db.close()
+
+def save_user(username, password):
+    """Save user to database"""
+    db = SessionLocal()
+    try:
+        user = User(username=username, password=password)  # In production, use proper password hashing
+        db.add(user)
+        db.commit()
+        return True
+    except Exception as e:
+        db.rollback()
+        app.logger.error(f"Error saving user: {str(e)}")
+        return False
+    finally:
+        db.close()
 
 # Flask app
 app = Flask(__name__)
@@ -276,12 +241,15 @@ def view_audit():
 
 @app.route("/check_attendance")
 def check_attendance():
-    data = load_data()
-    today = datetime.now().date().isoformat()
-    today_entries = [e for e in data if e["date"] == today]
-    missing_users = [user for user in CORE_USERS 
-                    if not any(e["name"] == user for e in today_entries)]
-    return jsonify(missing_users)
+    db = SessionLocal()
+    try:
+        today = datetime.now().date().isoformat()
+        today_entries = db.query(Entry).filter_by(date=today).all()
+        present_users = [entry.name for entry in today_entries]
+        missing_users = [user for user in CORE_USERS if user not in present_users]
+        return jsonify(missing_users)
+    finally:
+        db.close()
 
 @app.route("/")
 @login_required
@@ -291,58 +259,83 @@ def index():
 @app.route("/names")
 @login_required
 def get_names():
-    data = load_data()
-    return jsonify(list(set(entry["name"] for entry in data)))
+    db = SessionLocal()
+    try:
+        names = db.query(Entry.name).distinct().all()
+        return jsonify([name[0] for name in names])
+    finally:
+        db.close()
 
 @app.route("/today-entries")
 @login_required
 def get_today_entries():
-    data = load_data()
-    today = datetime.now().date().isoformat()
-    return jsonify([
-        entry for entry in data 
-        if entry["date"] == today
-    ])
+    db = SessionLocal()
+    try:
+        today = datetime.now().date().isoformat()
+        entries = db.query(Entry).filter_by(date=today).all()
+        return jsonify([{
+            "id": e.id,
+            "date": e.date,
+            "time": e.time,
+            "name": e.name,
+            "status": e.status
+        } for e in entries])
+    finally:
+        db.close()
 
 @app.route("/log", methods=["POST"])
 @login_required
 def log_attendance():
-    data = load_data()
-    
-    # Check for existing entry for this person today
-    today_entries = [
-        e for e in data 
-        if e["date"] == request.json["date"] and 
-        e["name"].lower() == request.json["name"].lower()
-    ]
-    
-    if today_entries:
+    db = SessionLocal()
+    try:
+        # Check for existing entry
+        existing = db.query(Entry).filter_by(
+            date=request.json["date"],
+            name=request.json["name"]
+        ).first()
+        
+        if existing:
+            return jsonify({
+                "message": "Error: Already logged attendance for this person today.",
+                "type": "error"
+            }), 400
+        
+        entry = Entry(
+            id=str(uuid.uuid4()),
+            date=request.json["date"],
+            name=request.json["name"],
+            status=request.json["status"],
+            time=request.json["time"]
+        )
+        
+        db.add(entry)
+        db.commit()
+        
+        log_audit(
+            "log_attendance",
+            session['user'],
+            f"Logged attendance for {entry.name}",
+            new_data={
+                "date": entry.date,
+                "name": entry.name,
+                "status": entry.status,
+                "time": entry.time
+            }
+        )
+        
         return jsonify({
-            "message": "Error: Already logged attendance for this person today.",
+            "message": "Attendance logged successfully.",
+            "type": "success"
+        }), 200
+    except Exception as e:
+        db.rollback()
+        app.logger.error(f"Error logging attendance: {str(e)}")
+        return jsonify({
+            "message": f"Error logging attendance: {str(e)}",
             "type": "error"
-        }), 400
-    
-    entry = {
-        "id": str(uuid.uuid4()),
-        "date": request.json["date"],
-        "name": request.json["name"],
-        "status": request.json["status"],
-        "time": request.json["time"],
-        "timestamp": datetime.now().isoformat()
-    }
-    
-    data.append(entry)
-    save_data(data)
-    log_audit(
-        "log_attendance",
-        session['user'],
-        f"Logged attendance for {entry['name']}",
-        new_data=entry
-    )
-    return jsonify({
-        "message": "Attendance logged successfully.",
-        "type": "success"
-    }), 200
+        }), 500
+    finally:
+        db.close()
 
 def update_positions_for_date(data, date):
     """Position is now calculated dynamically, no need to store it"""
@@ -654,57 +647,77 @@ def get_entries():
 @app.route("/edit/<entry_id>", methods=["PATCH", "DELETE"])
 @login_required
 def modify_entry(entry_id):
-    data = load_data()
-    entry_index = next((i for i, e in enumerate(data) if e.get("id") == entry_id), None)
-    
-    if entry_index is None:
-        return jsonify({"error": "Entry not found"}), 404
-    
-    if request.method == "PATCH":
-        # Store old data for audit
-        old_data = data[entry_index].copy()
-        updated_data = request.json
+    db = SessionLocal()
+    try:
+        entry = db.query(Entry).filter_by(id=entry_id).first()
+        if not entry:
+            return jsonify({"error": "Entry not found"}), 404
         
-        # Check for duplicates
-        existing_entry = next(
-            (e for e in data 
-             if e["date"] == updated_data.get("date", old_data["date"]) and
-             e["name"].lower() == updated_data.get("name", old_data["name"]).lower() and
-             e.get("id") != entry_id),
-            None
-        )
-        
-        if existing_entry:
-            return jsonify({
-                "message": "Error: Cannot update - Already have an entry for this person on this date.",
-                "type": "error"
-            }), 400
+        if request.method == "PATCH":
+            # Store old data for audit
+            old_data = {
+                "date": entry.date,
+                "time": entry.time,
+                "name": entry.name,
+                "status": entry.status
+            }
             
-        data[entry_index].update(updated_data)
-        log_audit(
-            "modify_entry",
-            session['user'],
-            f"Modified entry for {old_data['name']} on {old_data['date']}",
-            old_data=old_data,
-            new_data=data[entry_index]
-        )
-    else:
-        # Log deletion
-        deleted_entry = data[entry_index]
-        log_audit(
-            "delete_entry",
-            session['user'],
-            f"Deleted entry for {deleted_entry['name']} on {deleted_entry['date']}",
-            old_data=deleted_entry,
-            new_data=None
-        )
-        data.pop(entry_index)
+            updated_data = request.json
+            
+            # Check for duplicates
+            existing = db.query(Entry).filter(
+                Entry.date == updated_data.get("date", entry.date),
+                Entry.name == updated_data.get("name", entry.name),
+                Entry.id != entry_id
+            ).first()
+            
+            if existing:
+                return jsonify({
+                    "message": "Error: Already have an entry for this person on this date.",
+                    "type": "error"
+                }), 400
+            
+            # Update entry
+            for key, value in updated_data.items():
+                setattr(entry, key, value)
+            
+            log_audit(
+                "modify_entry",
+                session['user'],
+                f"Modified entry for {entry.name} on {entry.date}",
+                old_data=old_data,
+                new_data=updated_data
+            )
+        else:
+            # Log deletion
+            log_audit(
+                "delete_entry",
+                session['user'],
+                f"Deleted entry for {entry.name} on {entry.date}",
+                old_data={
+                    "date": entry.date,
+                    "time": entry.time,
+                    "name": entry.name,
+                    "status": entry.status
+                }
+            )
+            db.delete(entry)
         
-    save_data(data)
-    return jsonify({
-        "message": "Entry updated successfully.",
-        "type": "success"
-    })
+        db.commit()
+        return jsonify({
+            "message": "Entry updated successfully.",
+            "type": "success"
+        })
+    
+    except Exception as e:
+        db.rollback()
+        app.logger.error(f"Error modifying entry: {str(e)}")
+        return jsonify({
+            "message": f"Error modifying entry: {str(e)}",
+            "type": "error"
+        }), 500
+    finally:
+        db.close()
 
 @app.route("/settings", methods=["GET", "POST"])
 @login_required

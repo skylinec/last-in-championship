@@ -2,11 +2,12 @@ from flask import Flask, request, jsonify, render_template, session, redirect, u
 from sqlalchemy import create_engine, Column, Integer, String, DateTime, Float, JSON, event
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date  # Add date import
 import os
 import uuid
 import psycopg2
 import psycopg2.extras  # Add this import
+import json  # Add explicit json import
 
 # Database setup
 DATABASE_URL = os.getenv('DATABASE_URL', 'postgresql://user:password@localhost:5432/championship')
@@ -135,14 +136,23 @@ def log_audit(action, user, details, old_data=None, new_data=None):
     """Log audit entry to database with proper change tracking"""
     db = SessionLocal()
     try:
+        app.logger.info(f"Starting audit log for {action} by {user}")
+        app.logger.debug(f"Old data: {old_data}")
+        app.logger.debug(f"New data: {new_data}")
+        
         # Ensure data is JSON serializable and handle None values
         def clean_value(v):
             if v is None:
                 return "None"
             if isinstance(v, (datetime, date)):
                 return v.isoformat()
+            if isinstance(v, dict):
+                return {k: clean_value(v) for k, v in v.items()}
+            if isinstance(v, (list, tuple)):
+                return [clean_value(x) for x in v]
             return str(v)
 
+        # Deep clean the data
         if old_data:
             old_data = {k: clean_value(v) for k, v in old_data.items()}
         if new_data:
@@ -156,28 +166,39 @@ def log_audit(action, user, details, old_data=None, new_data=None):
                 old_value = old_data.get(key, "None")
                 new_value = new_data.get(key, "None")
                 if old_value != new_value:
-                    changes.append({
-                        "field": key,
-                        "old": old_value,
-                        "new": new_value
-                    })
-            # Only set changes if there are actual changes
-            if not changes:
-                changes = None
+                    # Convert dictionaries to sorted JSON strings for comparison
+                    if isinstance(old_value, dict) and isinstance(new_value, dict):
+                        old_str = json.dumps(old_value, sort_keys=True)
+                        new_str = json.dumps(new_value, sort_keys=True)
+                        if old_str != new_str:
+                            changes.append({
+                                "field": key,
+                                "old": old_value,
+                                "new": new_value
+                            })
+                    else:
+                        changes.append({
+                            "field": key,
+                            "old": old_value,
+                            "new": new_value
+                        })
 
-        audit_entry = AuditLog(
-            user=user,
-            action=action,
-            details=details,
-            changes=changes
-        )
-        
-        db.add(audit_entry)
-        db.commit()
-        
-        # Verify the entry was saved
-        db.refresh(audit_entry)
-        app.logger.info(f"Audit log created: {audit_entry}")
+        # Only create audit entry if there are changes or it's a non-modification action
+        if changes or not (old_data and new_data):
+            audit_entry = AuditLog(
+                user=user,
+                action=action,
+                details=details,
+                changes=changes
+            )
+            
+            db.add(audit_entry)
+            db.commit()
+            db.refresh(audit_entry)
+            app.logger.info(f"Audit log created: {audit_entry}")
+            app.logger.debug(f"Changes recorded: {changes}")
+        else:
+            app.logger.info("No changes detected, skipping audit log")
         
     except Exception as e:
         db.rollback()
@@ -847,21 +868,29 @@ def manage_settings():
             old_settings = db.query(Settings).first()
             new_settings = request.json
             
+            # Log the original values for debugging
+            app.logger.debug(f"Original old settings: {old_settings.__dict__ if old_settings else None}")
+            app.logger.debug(f"Original new settings: {new_settings}")
+            
             # Normalize both old and new settings for comparison
             if old_settings:
-                old_data = normalize_settings({
-                    "points": old_settings.points,
-                    "late_bonus": old_settings.late_bonus,
-                    "remote_days": old_settings.remote_days
-                })
+                old_data = {
+                    "points": dict(old_settings.points),
+                    "late_bonus": float(old_settings.late_bonus),
+                    "remote_days": dict(old_settings.remote_days)
+                }
             
-            # Normalize and validate new settings
-            try:
-                normalized_new = normalize_settings(new_settings)
-            except (KeyError, ValueError) as e:
-                return jsonify({"error": f"Invalid settings format: {str(e)}"}), 400
+            # Update database and get normalized new settings
+            normalized_new = {
+                "points": {
+                    k: int(v) for k, v in new_settings["points"].items()
+                },
+                "late_bonus": float(new_settings["late_bonus"]),
+                "remote_days": {
+                    k: sorted(v) for k, v in new_settings.get("remote_days", {}).items()
+                }
+            }
 
-            # Update database
             if old_settings:
                 old_settings.points = normalized_new["points"]
                 old_settings.late_bonus = normalized_new["late_bonus"]
@@ -872,15 +901,14 @@ def manage_settings():
             
             db.commit()
             
-            # Log the changes if there are any differences
-            if not old_settings or old_data != normalized_new:
-                log_audit(
-                    "update_settings",
-                    session['user'],
-                    "Updated point settings",
-                    old_data=old_data if old_settings else None,
-                    new_data=normalized_new
-                )
+            # Log audit with the actual changes
+            log_audit(
+                "update_settings",
+                session['user'],
+                "Updated point settings",
+                old_data=old_data if old_settings else None,
+                new_data=normalized_new
+            )
             
             return jsonify({"message": "Settings updated successfully"})
             

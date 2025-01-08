@@ -7,11 +7,11 @@
 <div class="filters-container">
     <form id="filterForm" class="filters">
         <div class="filter-group">
-            <label for="action">Action:</label>
-            <select name="action" id="action">
-                <option value="all" {% if selected_action == 'all' %}selected{% endif %}>All Actions</option>
+            <label for="action">Actions:</label>
+            <select name="action" id="action" multiple size="4">
+                <option value="all" selected>All Actions</option>
                 {% for action in actions %}
-                <option value="{{ action }}" {% if action == selected_action %}selected{% endif %}>
+                <option value="{{ action }}" {% if action in selected_actions %}selected{% endif %}>
                     {{ action|replace('_', ' ')|title }}
                 </option>
                 {% endfor %}
@@ -19,29 +19,28 @@
         </div>
         
         <div class="filter-group">
-            <label for="user">User:</label>
-            <select name="user" id="user">
-                <option value="all" {% if selected_user == 'all' %}selected{% endif %}>All Users</option>
+            <label for="user">Users:</label>
+            <select name="user" id="user" multiple size="4">
+                <option value="all" selected>All Users</option>
                 {% for user in users %}
-                <option value="{{ user }}" {% if user == selected_user %}selected{% endif %}>
+                <option value="{{ user }}" {% if user in selected_users %}selected{% endif %}>
                     {{ user }}
                 </option>
                 {% endfor %}
             </select>
         </div>
         
-        <div class="filter-group">
+        <div class="filter-group date-range">
             <label for="from">From:</label>
             <input type="date" id="from" name="from" value="{{ date_from }}">
-        </div>
-        
-        <div class="filter-group">
             <label for="to">To:</label>
             <input type="date" id="to" name="to" value="{{ date_to }}">
         </div>
         
-        <button type="submit">Apply Filters</button>
-        <button type="button" onclick="resetFilters()">Reset</button>
+        <div class="filter-actions">
+            <button type="submit">Apply Filters</button>
+            <button type="button" onclick="resetFilters()">Reset</button>
+        </div>
     </form>
 </div>
 
@@ -300,6 +299,20 @@
     background: #f8d7da;
     color: #721c24;
 }
+
+/* Add these new styles to the existing ones */
+.filter-group select[multiple] {
+    min-height: 100px;
+}
+
+.filter-group select[multiple] option {
+    padding: 4px 8px;
+}
+
+.filter-group select[multiple] option:checked {
+    background: var(--accent-color);
+    color: white;
+}
 </style>
 
 <script>
@@ -309,10 +322,22 @@ document.getElementById('filterForm').addEventListener('submit', function(e) {
 });
 
 function applyFilters(page = 1) {
-    const form = document.getElementById('filterForm');
-    const formData = new FormData(form);
-    const params = new URLSearchParams(formData);
-    params.set('page', page);
+    const actionSelect = document.getElementById('action');
+    const userSelect = document.getElementById('user');
+    const fromDate = document.getElementById('from').value;
+    const toDate = document.getElementById('to').value;
+
+    const actions = Array.from(actionSelect.selectedOptions).map(opt => opt.value);
+    const users = Array.from(userSelect.selectedOptions).map(opt => opt.value);
+
+    const params = new URLSearchParams({
+        action: actions.join(','),
+        user: users.join(','),
+        from: fromDate,
+        to: toDate,
+        page: page
+    });
+
     window.location.href = `/audit?${params.toString()}`;
 }
 

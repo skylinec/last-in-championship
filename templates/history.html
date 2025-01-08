@@ -4,16 +4,47 @@
 {% block content %}
 <h1>Attendance History</h1>
 <div class="filters">
-    <select id="periodFilter" class="form-control">
-        <option value="today">Today</option>
-        <option value="all">All Time</option>
-        <option value="week">This Week</option>
-        <option value="month">This Month</option>
-    </select>
-    <div class="pagination">
-        <span>Page: <span id="currentPage">1</span> / <span id="totalPages">1</span></span>
-        <button class="btn-nav" onclick="changePage(-1)">Previous</button>
-        <button class="btn-nav" onclick="changePage(1)">Next</button>
+    <div class="filter-group">
+        <label for="periodFilter">Period:</label>
+        <select id="periodFilter" class="form-control" multiple size="4">
+            <option value="today" selected>Today</option>
+            <option value="week">This Week</option>
+            <option value="month">This Month</option>
+            <option value="all">All Time</option>
+        </select>
+    </div>
+
+    <div class="filter-group">
+        <label for="nameFilter">Users:</label>
+        <select id="nameFilter" class="form-control" multiple size="4">
+            <option value="all" selected>All Users</option>
+            {% for user in users %}
+            <option value="{{ user }}">{{ user }}</option>
+            {% endfor %}
+        </select>
+    </div>
+
+    <div class="filter-group">
+        <label for="statusFilter">Status:</label>
+        <select id="statusFilter" class="form-control" multiple size="4">
+            <option value="all" selected>All Status</option>
+            <option value="in-office">In Office</option>
+            <option value="remote">Remote</option>
+            <option value="sick">Sick</option>
+            <option value="leave">Leave</option>
+        </select>
+    </div>
+
+    <div class="filter-group date-range">
+        <label for="fromDate">From:</label>
+        <input type="date" id="fromDate" class="form-control">
+        <label for="toDate">To:</label>
+        <input type="date" id="toDate" class="form-control">
+    </div>
+    
+    <div class="filter-actions">
+        <button onclick="applyFilters()" class="btn-apply">Apply Filters</button>
+        <button onclick="resetFilters()" class="btn-reset">Reset</button>
     </div>
 </div>
 
@@ -42,17 +73,39 @@ let currentPage = 1;
 const ITEMS_PER_PAGE = 20;
 
 async function loadHistory() {
-    const period = document.getElementById('periodFilter').value;
-    const response = await fetch(`/edit?period=${period}&page=${currentPage}`);
-    const data = await response.json();
-    updateTable(data.entries);
-    updatePagination(data.total);
-    
-    if (period === 'today') {
-        await loadDailyRankings();
-        document.getElementById('dailyRankings').style.display = 'block';
-    } else {
-        document.getElementById('dailyRankings').style.display = 'none';
+    const periodSelect = document.getElementById('periodFilter');
+    const nameSelect = document.getElementById('nameFilter');
+    const statusSelect = document.getElementById('statusFilter');
+    const fromDate = document.getElementById('fromDate').value;
+    const toDate = document.getElementById('toDate').value;
+
+    const periods = Array.from(periodSelect.selectedOptions).map(opt => opt.value);
+    const users = Array.from(nameSelect.selectedOptions).map(opt => opt.value);
+    const statuses = Array.from(statusSelect.selectedOptions).map(opt => opt.value);
+
+    try {
+        const params = new URLSearchParams({
+            period: periods.join(','),
+            page: currentPage,
+            user: users.join(','),
+            status: statuses.join(','),
+            from: fromDate,
+            to: toDate
+        });
+
+        const response = await fetch(`/edit?${params}`);
+        const data = await response.json();
+        updateTable(data.entries);
+        updatePagination(data.total);
+        
+        if (periods.includes('today')) {
+            await loadDailyRankings();
+            document.getElementById('dailyRankings').style.display = 'block';
+        } else {
+            document.getElementById('dailyRankings').style.display = 'none';
+        }
+    } catch (error) {
+        console.error('Error loading history:', error);
     }
 }
 
@@ -196,6 +249,21 @@ function changePage(delta) {
     }
 }
 
+function applyFilters() {
+    currentPage = 1;
+    loadHistory();
+}
+
+function resetFilters() {
+    document.getElementById('periodFilter').value = 'today';
+    document.getElementById('nameFilter').value = 'all';
+    document.getElementById('statusFilter').value = 'all';
+    document.getElementById('fromDate').value = '';
+    document.getElementById('toDate').value = '';
+    currentPage = 1;
+    loadHistory();
+}
+
 document.getElementById('periodFilter').addEventListener('change', () => {
     currentPage = 1;
     loadHistory();
@@ -206,14 +274,86 @@ loadHistory();
 
 <style>
 .filters {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 20px;
-    padding: 15px;
     background: white;
+    padding: 20px;
     border-radius: 8px;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    margin-bottom: 20px;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 20px;
+    align-items: start;
+}
+
+.filter-group {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.filter-group label {
+    font-weight: 500;
+    color: var(--primary-color);
+}
+
+.form-control {
+    padding: 8px;
+    border: 2px solid #ddd;
+    border-radius: 4px;
+    width: 100%;
+}
+
+.form-control:focus {
+    border-color: var(--accent-color);
+    outline: none;
+    box-shadow: 0 0 0 2px rgba(52, 152, 219, 0.2);
+}
+
+.form-control option {
+    padding: 4px 8px;
+}
+
+.form-control option:checked {
+    background: var(--accent-color);
+    color: white;
+}
+
+.date-range {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: auto 1fr auto 1fr;
+    gap: 10px;
+    align-items: center;
+}
+
+.filter-actions {
+    grid-column: 1 / -1;
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+}
+
+.btn-apply, .btn-reset {
+    padding: 8px 16px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.btn-apply {
+    background: var(--accent-color);
+    color: white;
+}
+
+.btn-reset {
+    background: var(--warning-color);
+    color: white;
+}
+
+.btn-apply:hover, .btn-reset:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 2px 5px rgba(0,0,0,0.2);
 }
 
 .pagination {

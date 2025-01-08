@@ -895,8 +895,8 @@ def normalize_settings(settings_dict):
         "points": {
             "in_office": int(settings_dict["points"]["in_office"]),
             "remote": int(settings_dict["points"]["remote"]),
-            "sick": int(settings_dict["points"].get("sick", 5)),
-            "leave": int(settings_dict["points"].get("leave", 5))
+            "sick": int(settings_dict["points"]["sick"]),
+            "leave": int(settings_dict["points"]["leave"])
         },
         "late_bonus": float(settings_dict["late_bonus"]),
         "remote_days": {

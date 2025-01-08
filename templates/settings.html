@@ -21,6 +21,14 @@
                 <label for="late_bonus">Late Arrival Bonus:</label>
                 <input type="number" id="late_bonus" name="late_bonus" value="{{ settings.late_bonus }}" min="0" max="5">
             </div>
+            <div class="form-group">
+                <label for="sick">Sick Day Points:</label>
+                <input type="number" id="sick" name="points.sick" value="{{ settings.points.sick }}" min="0" max="20">
+            </div>
+            <div class="form-group">
+                <label for="leave">Annual Leave Points:</label>
+                <input type="number" id="leave" name="points.leave" value="{{ settings.points.leave }}" min="0" max="20">
+            </div>
 
             <!-- Remote work days configuration -->
             <h3>Remote Work Late Bonus Days</h3>
@@ -265,12 +273,10 @@ document.getElementById('settingsForm').addEventListener('submit', async (event)
         points: {
             in_office: parseInt(formData.get('points.in_office')),
             remote: parseInt(formData.get('points.remote')),
-            sick: 5,
-            leave: 5
+            sick: parseInt(formData.get('points.sick')),
+            leave: parseInt(formData.get('points.leave'))
         },
         late_bonus: parseInt(formData.get('late_bonus')),
-        sick_bonus: parseInt(formData.get('sick_bonus')),
-        leave_bonus: parseInt(formData.get('leave_bonus')),
         remote_days: {}
     };
     

@@ -1288,6 +1288,103 @@ def period_filter(entry, period):
     except (ValueError, AttributeError):
         return False
 
+@app.route("/maintenance")
+@login_required
+def maintenance():
+    return render_template("maintenance.html")
+
+@app.route("/export-data")
+@login_required
+def export_data():
+    db = SessionLocal()
+    try:
+        # Export all tables
+        entries = db.query(Entry).all()
+        settings = db.query(Settings).first()
+        audit_logs = db.query(AuditLog).all()
+
+        data = {
+            "entries": [{
+                "id": e.id,
+                "date": e.date,
+                "time": e.time,
+                "name": e.name,
+                "status": e.status,
+                "timestamp": e.timestamp.isoformat()
+            } for e in entries],
+            "settings": {
+                "points": settings.points,
+                "late_bonus": settings.late_bonus,
+                "remote_days": settings.remote_days
+            } if settings else None,
+            "audit_logs": [{
+                "timestamp": log.timestamp.isoformat(),
+                "user": log.user,
+                "action": log.action,
+                "details": log.details,
+                "changes": log.changes
+            } for log in audit_logs]
+        }
+        
+        return jsonify(data)
+    finally:
+        db.close()
+
+@app.route("/import-data", methods=["POST"])
+@login_required
+def import_data():
+    if not request.is_json:
+        return jsonify({"error": "Content-Type must be application/json"}), 400
+
+    data = request.json
+    db = SessionLocal()
+    try:
+        # Clear existing data
+        db.query(Entry).delete()
+        db.query(Settings).delete()
+        db.query(AuditLog).delete()
+
+        # Import entries
+        for entry_data in data.get("entries", []):
+            entry = Entry(
+                id=entry_data["id"],
+                date=entry_data["date"],
+                time=entry_data["time"],
+                name=entry_data["name"],
+                status=entry_data["status"],
+                timestamp=datetime.fromisoformat(entry_data["timestamp"])
+            )
+            db.add(entry)
+
+        # Import settings
+        if data.get("settings"):
+            settings = Settings(
+                points=data["settings"]["points"],
+                late_bonus=data["settings"]["late_bonus"],
+                remote_days=data["settings"]["remote_days"]
+            )
+            db.add(settings)
+
+        # Import audit logs
+        for log_data in data.get("audit_logs", []):
+            log = AuditLog(
+                timestamp=datetime.fromisoformat(log_data["timestamp"]),
+                user=log_data["user"],
+                action=log_data["action"],
+                details=log_data["details"],
+                changes=log_data["changes"]
+            )
+            db.add(log)
+
+        db.commit()
+        return jsonify({"message": "Data imported successfully"})
+    
+    except Exception as e:
+        db.rollback()
+        return jsonify({"error": str(e)}), 500
+    finally:
+        db.close()
+
 if __name__ == "__main__":
     # Create tables on startup
     Base.metadata.create_all(bind=engine)

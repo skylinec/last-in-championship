@@ -248,6 +248,14 @@
             <a href="/audit">Audit Trail</a>
             <a href="/settings">Settings</a>
             <a href="/visualizations">Visualizations</a>
+            <div class="dropdown">
+                <a href="#">Admin ▾</a>
+                <div class="dropdown-content">
+                    <a href="/settings">Settings</a>
+                    <a href="/audit">Audit Trail</a>
+                    <a href="/maintenance">Maintenance</a>
+                </div>
+            </div>
             <div class="user-info">
                 {{ session.user }} | <a href="{{ url_for('logout') }}">Logout</a>
             </div>

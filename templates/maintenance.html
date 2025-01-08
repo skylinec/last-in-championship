@@ -1,0 +1,151 @@
+{% extends "base.html" %}
+{% block title %}System Maintenance{% endblock %}
+
+{% block content %}
+<h1>System Maintenance</h1>
+
+<div class="maintenance-container">
+    <div class="maintenance-section">
+        <h2>Export Data</h2>
+        <p>Download all system data as JSON file</p>
+        <button onclick="exportData()" class="action-button">Export Data</button>
+    </div>
+
+    <div class="maintenance-section">
+        <h2>Import Data</h2>
+        <p>Warning: This will replace all existing data!</p>
+        <div class="import-controls">
+            <input type="file" id="importFile" accept=".json">
+            <button onclick="importData()" class="action-button warning">Import Data</button>
+        </div>
+    </div>
+
+    <div id="status" class="status-message" style="display: none;"></div>
+</div>
+
+<style>
+.maintenance-container {
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 20px;
+}
+
+.maintenance-section {
+    background: white;
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    margin-bottom: 20px;
+}
+
+.import-controls {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    margin-top: 10px;
+}
+
+.action-button {
+    padding: 10px 20px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    background: var(--accent-color);
+    color: white;
+}
+
+.action-button.warning {
+    background: var(--warning-color);
+}
+
+.action-button:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+}
+
+.status-message {
+    padding: 15px;
+    border-radius: 4px;
+    margin-top: 20px;
+    animation: fadeIn 0.3s ease-out;
+}
+
+.status-message.success {
+    background: var(--success-color);
+    color: white;
+}
+
+.status-message.error {
+    background: var(--warning-color);
+    color: white;
+}
+</style>
+
+<script>
+async function exportData() {
+    try {
+        const response = await fetch('/export-data');
+        const data = await response.json();
+        
+        // Create and download file
+        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `championship-data-${new Date().toISOString().split('T')[0]}.json`;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        a.remove();
+        
+        showStatus('Data exported successfully', 'success');
+    } catch (error) {
+        showStatus('Error exporting data: ' + error.message, 'error');
+    }
+}
+
+async function importData() {
+    const fileInput = document.getElementById('importFile');
+    if (!fileInput.files.length) {
+        showStatus('Please select a file first', 'error');
+        return;
+    }
+
+    try {
+        const file = fileInput.files[0];
+        const text = await file.text();
+        const data = JSON.parse(text);
+
+        const response = await fetch('/import-data', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(data)
+        });
+
+        const result = await response.json();
+        if (response.ok) {
+            showStatus('Data imported successfully', 'success');
+            fileInput.value = '';
+        } else {
+            throw new Error(result.error);
+        }
+    } catch (error) {
+        showStatus('Error importing data: ' + error.message, 'error');
+    }
+}
+
+function showStatus(message, type) {
+    const status = document.getElementById('status');
+    status.textContent = message;
+    status.className = `status-message ${type}`;
+    status.style.display = 'block';
+    
+    setTimeout(() => {
+        status.style.display = 'none';
+    }, 5000);
+}
+</script>
+{% endblock %}

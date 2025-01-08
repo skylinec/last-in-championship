@@ -558,15 +558,29 @@ def calculate_daily_score(entry, settings, position=None, total_entries=None):
     
     if position is not None and total_entries is not None:
         if status == "in_office" or (status == "remote" and is_eligible_remote_day(entry, settings)):
-            # Always use last-in scoring (higher position = more points)
+            # Get mode from request
+            mode = request.args.get('mode', 'last-in')
+            
+            if mode == 'early-bird':
+                # For early bird mode, reverse the position calculation
+                position = total_entries - position + 1
+                
             position_bonus = position * settings["late_bonus"]
             
             # Add special bonuses based on timing
             arrival_time = datetime.strptime(entry["time"], "%H:%M").time()
-            if arrival_time >= datetime.strptime("17:00", "%H:%M").time():
-                position_bonus *= 1.5  # 50% bonus for after 5 PM
-            elif arrival_time <= datetime.strptime("08:00", "%H:%M").time():
-                position_bonus *= 0.5  # 50% penalty for before 8 AM
+            if mode == 'last-in':
+                # Late arrival bonuses only apply in last-in mode
+                if arrival_time >= datetime.strptime("17:00", "%H:%M").time():
+                    position_bonus *= 1.5  # 50% bonus for after 5 PM
+                elif arrival_time <= datetime.strptime("08:00", "%H:%M").time():
+                    position_bonus *= 0.5  # 50% penalty for before 8 AM
+            else:
+                # Early arrival bonuses for early-bird mode
+                if arrival_time <= datetime.strptime("08:00", "%H:%M").time():
+                    position_bonus *= 1.5  # 50% bonus for before 8 AM
+                elif arrival_time >= datetime.strptime("10:00", "%H:%M").time():
+                    position_bonus *= 0.5  # 50% penalty for after 10 AM
     
     # Add streak bonus (if applicable)
     streak_bonus = calculate_streak_bonus(entry)
@@ -694,6 +708,7 @@ def format_date_range(start_date, end_date, period):
 def calculate_scores(data, period, current_date):
     settings = load_settings()
     filtered_data = [entry for entry in data if in_period(entry, period, current_date)]
+    mode = request.args.get('mode', 'last-in')  # Get mode from request
     
     # Group entries by date for position calculation
     daily_entries = {}
@@ -706,7 +721,11 @@ def calculate_scores(data, period, current_date):
     # Calculate scores for each person
     scores = {}
     for date, entries in daily_entries.items():
-        entries.sort(key=lambda x: datetime.strptime(x["time"], "%H:%M"))
+        # Sort entries based on mode
+        entries.sort(
+            key=lambda x: datetime.strptime(x["time"], "%H:%M"), 
+            reverse=(mode == 'early-bird')  # Reverse sort for early-bird mode
+        )
         total_entries = len(entries)
         
         for position, entry in enumerate(entries, 1):

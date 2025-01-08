@@ -2,44 +2,208 @@
 {% block title %}Log Attendance{% endblock %}
 
 {% block content %}
-<h1>Log Attendance</h1>
-<form id="logForm">
-    <div class="form-group">
-        <label for="date">Date:</label>
-        <input type="date" id="date" name="date" required>
-    </div>
-    <div class="form-group">
-        <label for="time">Time Started:</label>
-        <input type="time" id="time" name="time" required>
-    </div>
-    <div class="form-group">
-        <label for="name">Name:</label>
-        <input type="text" 
-               id="name" 
-               name="name" 
-               list="namesList" 
-               autocomplete="off"
-               required>
-        <datalist id="namesList"></datalist>
-    </div>
-    <div class="form-group">
-        <label for="status">Status:</label>
-        <select id="status" name="status" required>
-            <option value="in-office">In Office</option>
-            <option value="remote">Remote</option>
-            <option value="sick">Sick</option>
-            <option value="leave">Leave</option>
+<div class="form-container">
+    <h1>Log Attendance</h1>
+    <form id="logForm">
+        <div class="form-group">
+            <label for="status">Status:</label>
+            <select id="status" name="status" onchange="toggleTimeInput()">
+                <option value="in-office">In Office</option>
+                <option value="remote">Remote</option>
+                <option value="sick">Sick</option>
+                <option value="leave">Leave</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label for="date">Date:</label>
+            <input type="date" id="date" name="date" required>
+        </div>
+        <div class="form-group" id="timeInput">
+            <label for="time">Time Started:</label>
+            <input type="time" id="time" name="time" required>
+        </div>
+        <div class="form-group">
+            <label for="name">Name:</label>
+            <input type="text" 
+                   id="name" 
+                   name="name" 
+                   list="namesList" 
+                   value="{{ session.user }}"
+                   autocomplete="off"
+                   required>
+            <datalist id="namesList"></datalist>
+        </div>
+        <button type="submit">Submit</button>
+    </form>
+    <div id="result" class="message" style="display: none;"></div>
+</div>
+<div class="podium-container">
+    <div class="podium-controls">
+        <select id="podiumPeriod">
+            <option value="day">Today</option>
+            <option value="week">This Week</option>
+            <option value="month">This Month</option>
         </select>
     </div>
-    <button type="submit">Submit</button>
-</form>
-<div id="result" class="message" style="display: none;"></div>
+    <div class="podium">
+        <div class="podium-place" id="second">
+            <div class="trophy">🥈</div>
+            <div class="platform" style="height: 70px">2</div>
+        </div>
+        <div class="podium-place" id="first">
+            <div class="trophy">🏆</div>
+            <div class="platform" style="height: 100px">1</div>
+        </div>
+        <div class="podium-place" id="third">
+            <div class="trophy">🥉</div>
+            <div class="platform" style="height: 40px">3</div>
+        </div>
+    </div>
+    <div class="podium-names">
+        <div id="secondName">-</div>
+        <div id="firstName">-</div>
+        <div id="thirdName">-</div>
+    </div>
+    <div class="podium-points">
+        <div id="secondPoints">-</div>
+        <div id="firstPoints">-</div>
+        <div id="thirdPoints">-</div>
+    </div>
+</div>
+
+<button id="clockInButton" class="quick-action-button" onclick="clockIn()">
+    Clock In (In Office)
+</button>
+
+<style>
+.form-container {
+    max-width: 500px;
+    margin: 0 auto;
+    padding: 20px;
+    float: left;
+}
+
+.quick-action-button {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    background: var(--accent-color);
+    color: white;
+    padding: 15px 30px;
+    border-radius: 25px;
+    border: none;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+    cursor: pointer;
+    font-size: 1.1em;
+    transition: all 0.3s ease;
+    z-index: 1000;
+}
+
+.quick-action-button:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+    background: var(--primary-color);
+}
+
+.quick-action-button:active {
+    transform: translateY(0);
+}
+
+.quick-action-button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none;
+}
+.container {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+}
+
+.podium-container {
+    background: white;
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    float: right;
+}
+
+.podium-controls {
+    margin-bottom: 20px;
+    text-align: center;
+}
+
+.podium {
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    gap: 10px;
+    margin-bottom: 10px;
+}
+
+.podium-place {
+    text-align: center;
+    width: 80px;
+    transition: all 0.3s ease;
+}
+
+.platform {
+    background: var(--primary-color);
+    color: white;
+    padding: 10px;
+    border-radius: 4px 4px 0 0;
+}
+
+.trophy {
+    font-size: 24px;
+    margin-bottom: 5px;
+}
+
+.podium-names, .podium-points {
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+    margin-top: 10px;
+}
+
+.podium-names div, .podium-points div {
+    width: 80px;
+    text-align: center;
+    font-size: 0.9em;
+}
+
+#first .platform { background: #ffd700; }
+#second .platform { background: #c0c0c0; }
+#third .platform { background: #cd7f32; }
+</style>
 
 <script>
-const form = document.getElementById('logForm');
-const nameInput = document.getElementById('name');
+async function updatePodium() {
+    const period = document.getElementById('podiumPeriod').value;
+    const response = await fetch(`/rankings/${period}`);
+    const data = await response.text();
+    
+    // Parse the HTML response to get rankings
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(data, 'text/html');
+    const rows = doc.querySelectorAll('tr');
+    
+    // Update podium places
+    const places = ['first', 'second', 'third'];
+    places.forEach((place, index) => {
+        if (rows[index + 1]) { // Skip header row
+            const cells = rows[index + 1].cells;
+            document.getElementById(`${place}Name`).textContent = cells[0].textContent;
+            document.getElementById(`${place}Points`).textContent = cells[1].textContent;
+        } else {
+            document.getElementById(`${place}Name`).textContent = '-';
+            document.getElementById(`${place}Points`).textContent = '-';
+        }
+    });
+}
 
-// Replace loadNames function with this version
+document.getElementById('podiumPeriod').addEventListener('change', updatePodium);
+document.addEventListener('DOMContentLoaded', updatePodium);
 async function loadNames() {
     const response = await fetch('/names');
     const names = await response.json();
@@ -49,13 +213,13 @@ async function loadNames() {
         .join('');
 }
 
-form.addEventListener('submit', async (event) => {
-    event.preventDefault();
+async function clockIn() {
+    const now = new Date();
     const data = {
-        date: document.getElementById('date').value,
-        time: document.getElementById('time').value,
-        name: nameInput.value,
-        status: document.getElementById('status').value
+        date: now.toISOString().split('T')[0],
+        time: now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }),
+        name: '{{ session.user }}',
+        status: 'in-office'
     };
     
     try {
@@ -72,13 +236,73 @@ form.addEventListener('submit', async (event) => {
         resultDiv.style.display = 'block';
         
         if (result.type === 'success') {
-            form.reset();
+            // Disable the clock in button for today
+            const button = document.getElementById('clockInButton');
+            button.disabled = true;
+            button.style.opacity = '0.5';
+            button.style.cursor = 'not-allowed';
+            button.title = 'Already clocked in today';
+        }
+        
+        setTimeout(() => {
+            resultDiv.style.display = 'none';
+        }, 5000);
+    } catch (error) {
+        console.error('Error:', error);
+    }
+}
+
+function toggleTimeInput() {
+  const statusValue = document.getElementById('status').value;
+  const timeInput = document.getElementById('timeInput');
+  if (statusValue === 'remote' || statusValue === 'in-office') {
+    timeInput.style.display = '';
+  } else {
+    timeInput.style.display = 'none';
+    timeInput.value = '08:00';
+  }
+}
+
+// Initialize form
+document.getElementById('date').valueAsDate = new Date();
+document.getElementById('time').value = new Date().toLocaleTimeString('en-GB', { 
+    hour: '2-digit', 
+    minute: '2-digit',
+    hour12: false 
+});
+
+// Form submission handler
+document.getElementById('logForm').addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const formData = {
+        date: document.getElementById('date').value,
+        time: document.getElementById('time').value,
+        name: document.getElementById('name').value,
+        status: document.getElementById('status').value
+    };
+    
+    try {
+        const response = await fetch('/log', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(formData)
+        });
+        
+        const result = await response.json();
+        const resultDiv = document.getElementById('result');
+        resultDiv.innerText = result.message;
+        resultDiv.className = `message ${result.type}`;
+        resultDiv.style.display = 'block';
+        
+        if (result.type === 'success') {
+            document.getElementById('logForm').reset();
             document.getElementById('date').valueAsDate = new Date();
             document.getElementById('time').value = new Date().toLocaleTimeString('en-GB', { 
                 hour: '2-digit', 
                 minute: '2-digit',
                 hour12: false 
             });
+            document.getElementById('name').value = '{{ session.user }}';
         }
         
         setTimeout(() => {
@@ -89,16 +313,21 @@ form.addEventListener('submit', async (event) => {
     }
 });
 
-// Initialize
-document.getElementById('date').valueAsDate = new Date();
-document.getElementById('time').value = new Date().toLocaleTimeString('en-GB', { 
-    hour: '2-digit', 
-    minute: '2-digit',
-    hour12: false 
+// Check if already clocked in today
+document.addEventListener('DOMContentLoaded', async () => {
+    loadNames();
+    
+    const response = await fetch('/today-entries');
+    const entries = await response.json();
+    const username = '{{ session.user }}';
+    
+    if (entries.some(e => e.name === username)) {
+        const button = document.getElementById('clockInButton');
+        button.disabled = true;
+        button.style.opacity = '0.5';
+        button.style.cursor = 'not-allowed';
+        button.title = 'Already clocked in today';
+    }
 });
-loadNames();
 </script>
-
-<!-- Add autocomplete library -->
-<script src="https://cdn.jsdelivr.net/npm/@tarekraafat/autocomplete.js@10.2.7/dist/autoComplete.min.js"></script>
 {% endblock %}

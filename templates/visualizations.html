@@ -40,6 +40,54 @@ select {
     border-radius: 4px;
     border: 1px solid #ddd;
 }
+
+.viz-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+}
+
+.info-toggle {
+    background: none;
+    border: none;
+    color: var(--accent-color);
+    font-size: 1.2em;
+    cursor: pointer;
+    padding: 5px;
+    border-radius: 50%;
+    width: 30px;
+    height: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background-color 0.3s;
+}
+
+.info-toggle:hover {
+    background: rgba(52, 152, 219, 0.1);
+}
+
+.info-panel {
+    display: none;
+    padding: 10px;
+    margin-bottom: 15px;
+    background: #f8f9fa;
+    border-left: 4px solid var(--accent-color);
+    border-radius: 4px;
+    font-size: 0.9em;
+    color: #666;
+}
+
+.info-panel.visible {
+    display: block;
+    animation: slideDown 0.3s ease-out;
+}
+
+@keyframes slideDown {
+    from { opacity: 0; transform: translateY(-10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
 </style>
 {% endblock %}
 
@@ -51,42 +99,77 @@ select {
         <option value="90">Last Quarter</option>
         <option value="all">All Time</option>
     </select>
-    <select id="userFilter" onchange="updateCharts()">
-        <option value="all">All Users</option>
+    <select id="userFilter" multiple onchange="updateCharts()" size="5">
         {% for user in core_users %}
-        <option value="{{ user }}">{{ user }}</option>
+        <option value="{{ user }}" selected>{{ user }}</option>
         {% endfor %}
     </select>
 </div>
 
 <div class="viz-grid">
     <div class="viz-card wide">
-        <h3>Weekly Attendance Pattern</h3>
+        <div class="viz-header">
+            <h3>Weekly Attendance Pattern</h3>
+            <button class="info-toggle" onclick="toggleInfo('heatmap-info')">ⓘ</button>
+        </div>
+        <div class="info-panel" id="heatmap-info">
+            Shows when people typically arrive each day. Darker colors indicate more people arriving at that time. This helps identify peak arrival times and patterns across the week.
+        </div>
         <div id="heatmap"></div>
     </div>
     
     <div class="viz-card">
-        <h3>Status Distribution</h3>
+        <div class="viz-header">
+            <h3>Status Distribution</h3>
+            <button class="info-toggle" onclick="toggleInfo('status-info')">ⓘ</button>
+        </div>
+        <div class="info-panel" id="status-info">
+            Breakdown of attendance types (in-office, remote, sick, leave). Helps track work patterns and absence trends.
+        </div>
         <div id="statusPie"></div>
     </div>
     
     <div class="viz-card">
-        <h3>Points Progression</h3>
+        <div class="viz-header">
+            <h3>Points Progression</h3>
+            <button class="info-toggle" onclick="toggleInfo('points-info')">ⓘ</button>
+        </div>
+        <div class="info-panel" id="points-info">
+            Shows how average points have changed over time. Useful for tracking overall participation and engagement trends.
+        </div>
         <div id="pointsLine"></div>
     </div>
     
     <div class="viz-card wide">
-        <h3>Daily Activity Timeline</h3>
+        <div class="viz-header">
+            <h3>Daily Activity Timeline</h3>
+            <button class="info-toggle" onclick="toggleInfo('timeline-info')">ⓘ</button>
+        </div>
+        <div class="info-panel" id="timeline-info">
+            Shows the daily breakdown of in-office vs remote work. Helps track office occupancy and remote work patterns.
+        </div>
         <div id="timeline"></div>
     </div>
     
     <div class="viz-card">
-        <h3>Early Bird Analysis</h3>
-        <div id="earlyBird"></div>
+        <div class="viz-header">
+            <h3>Late Arrival Analysis</h3>
+            <button class="info-toggle" onclick="toggleInfo('late-info')">ⓘ</button>
+        </div>
+        <div class="info-panel" id="late-info">
+            Percentage of arrivals after 9:00 AM per person. Higher percentages earn more points in this "Last-In Championship"!
+        </div>
+        <div id="lateArrival"></div>
     </div>
     
     <div class="viz-card">
-        <h3>User Comparison</h3>
+        <div class="viz-header">
+            <h3>User Comparison</h3>
+            <button class="info-toggle" onclick="toggleInfo('comparison-info')">ⓘ</button>
+        </div>
+        <div class="info-panel" id="comparison-info">
+            Compares in-office vs remote work percentages for each user. Useful for understanding individual work patterns.
+        </div>
         <div id="comparison"></div>
     </div>
 </div>
@@ -94,47 +177,49 @@ select {
 <script>
 async function createHeatmap(data) {
     const chartDiv = document.getElementById('heatmap');
-    const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
-    const hours = Array.from({length: 12}, (_, i) => `${i + 7}:00`);
-    
-    // Initialize empty matrix
-    const values = days.map(() => Array(hours.length).fill(0));
-    
-    // Fill in actual values
-    if (data) {
-        Object.entries(data).forEach(([key, count]) => {
-            const [day, hour] = key.split('-');
-            const dayIndex = days.indexOf(day);
-            const hourIndex = hours.indexOf(hour);
-            if (dayIndex !== -1 && hourIndex !== -1) {
-                values[dayIndex][hourIndex] = count;
-            }
-        });
-    }
-
-    const layout = {
-        title: 'Arrival Time Patterns',
-        xaxis: { 
-            title: 'Hour',
-            type: 'category',
-            fixedrange: true
-        },
-        yaxis: { 
-            title: 'Day',
-            type: 'category',
-            fixedrange: true
-        },
-        margin: { t: 50, l: 100, r: 50, b: 50 },
-        height: 400,
-        width: null  // This will make it responsive
-    };
-
-    const config = {
-        responsive: true,
-        displayModeBar: false
-    };
-
     try {
+        const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
+        const hours = Array.from({length: 14}, (_, i) => `${String(i + 7).padStart(2, '0')}:00`);
+        
+        const values = days.map(() => Array(hours.length).fill(0));
+        
+        if (data) {
+            Object.entries(data).forEach(([key, count]) => {
+                const [day, time] = key.split('-');
+                const dayIndex = days.indexOf(day);
+                const hourIndex = hours.indexOf(time);
+                if (dayIndex !== -1 && hourIndex !== -1) {
+                    values[dayIndex][hourIndex] = count;
+                }
+            });
+        }
+
+        const layout = {
+            title: 'Attendance Pattern by Day and Hour',
+            xaxis: { 
+                title: 'Hour',
+                ticktext: hours,
+                tickvals: hours.map((_, i) => i),
+                type: 'category',
+                fixedrange: true
+            },
+            yaxis: { 
+                title: 'Day',
+                ticktext: days,
+                tickvals: days.map((_, i) => i),
+                type: 'category',
+                fixedrange: true
+            },
+            margin: { t: 50, l: 100, r: 50, b: 50 },
+            height: 400,
+            width: null
+        };
+
+        const config = {
+            responsive: true,
+            displayModeBar: false
+        };
+
         await Plotly.newPlot('heatmap', [{
             z: values,
             x: hours,
@@ -142,13 +227,18 @@ async function createHeatmap(data) {
             type: 'heatmap',
             colorscale: 'Viridis',
             showscale: true,
-            hoverongaps: false
+            hoverongaps: false,
+            hovertemplate: 
+                "Day: %{y}<br>" +
+                "Time: %{x}<br>" +
+                "Count: %{z}<br>" +
+                "<extra></extra>"
         }], layout, config);
         
-        // Clear loading message after successful plot
         chartDiv.classList.remove('loading');
     } catch (error) {
-        chartDiv.innerHTML = `<p class="error">Failed to create heatmap chart: ${error.message}</p>`;
+        console.error('Heatmap data:', { data });
+        chartDiv.innerHTML = `<p class="error">Failed to create heatmap: ${error.message}</p>`;
         throw error;
     }
 }
@@ -233,29 +323,46 @@ async function createTimeline(data) {
     }
 }
 
-async function createEarlyBirdChart(data) {
-    const chartDiv = document.getElementById('earlyBird');
-    const names = Object.keys(data);
-    const percentages = names.map(name => data[name].early_percentage);
-    const totalDays = names.map(name => data[name].total_days);
-
-    const layout = {
-        title: 'Early Arrival Analysis',
-        xaxis: { title: 'Name' },
-        yaxis: { title: 'Early Arrival %' },
-        height: 400
-    };
-
+async function createLateArrivalChart(data) {
+    const chartDiv = document.getElementById('lateArrival');
     try {
-        await Plotly.newPlot('earlyBird', [{
+        if (!data || Object.keys(data).length === 0) {
+            throw new Error('No late arrival data available');
+        }
+
+        const names = Object.keys(data);
+        const percentages = names.map(name => data[name].late_percentage);
+        const totalDays = names.map(name => data[name].total_days);
+
+        const layout = {
+            title: 'Late Arrival Analysis',
+            xaxis: { title: 'Name' },
+            yaxis: { 
+                title: 'Late Arrival %',
+                range: [0, 100]
+            },
+            height: 400
+        };
+
+        await Plotly.newPlot('lateArrival', [{
             x: names,
             y: percentages,
             type: 'bar',
-            text: totalDays.map(days => `${days} days`),
-            textposition: 'auto'
+            text: percentages.map((p, i) => 
+                `${p.toFixed(1)}%<br>${totalDays[i]} days`
+            ),
+            textposition: 'auto',
+            hovertemplate: 
+                "Name: %{x}<br>" +
+                "Late %: %{y:.1f}%<br>" +
+                "Total Days: %{text}<br>" +
+                "<extra></extra>"
         }], layout);
+        
         chartDiv.classList.remove('loading');
     } catch (error) {
+        console.error('Late arrival data:', data);
+        chartDiv.innerHTML = `<p class="error">Failed to create late arrival chart: ${error.message}</p>`;
         throw error;
     }
 }
@@ -296,8 +403,7 @@ async function createComparison(data) {
 }
 
 async function updateCharts() {
-    // Add loading class to chart containers
-    const charts = document.querySelectorAll('.viz-card > div');
+    const charts = document.querySelectorAll('.viz-card > div:last-child');
     charts.forEach(chart => {
         chart.innerHTML = '';
         chart.classList.add('loading');
@@ -305,36 +411,37 @@ async function updateCharts() {
 
     try {
         const range = document.getElementById('dateRange').value;
-        const user = document.getElementById('userFilter').value;
-        const response = await fetch(`/visualization-data?range=${range}&user=${user}`);
+        const userSelect = document.getElementById('userFilter');
+        const selectedUsers = Array.from(userSelect.selectedOptions).map(opt => opt.value);
+        const users = selectedUsers.length ? selectedUsers.join(',') : 'all';
         
+        const response = await fetch(`/visualization-data?range=${range}&user=${users}`);
         if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
         }
         
         const data = await response.json();
         
-        // Create each chart in a try-catch block
         const createCharts = [
             { func: createHeatmap, data: data.weeklyPatterns, id: 'heatmap' },
             { func: createStatusPie, data: data.statusCounts, id: 'statusPie' },
             { func: createPointsLine, data: data.pointsProgress, id: 'pointsLine' },
             { func: createTimeline, data: data.dailyActivity, id: 'timeline' },
-            { func: createEarlyBirdChart, data: data.earlyBirdAnalysis, id: 'earlyBird' },
+            { func: createLateArrivalChart, data: data.lateArrivalAnalysis, id: 'lateArrival' },
             { func: createComparison, data: data.userComparison, id: 'comparison' }
         ];
 
-        for (const chart of createCharts) {
+        await Promise.all(createCharts.map(async chart => {
             try {
                 await chart.func(chart.data);
-                // Loading class will be removed by each chart function
+                document.getElementById(chart.id).classList.remove('loading');
             } catch (error) {
                 console.error(`Error creating ${chart.id}:`, error);
                 const chartDiv = document.getElementById(chart.id);
                 chartDiv.classList.remove('loading');
-                chartDiv.innerHTML = `<p class="error">Failed to create ${chart.id} chart</p>`;
+                chartDiv.innerHTML = `<p class="error">Failed to create chart: ${error.message}</p>`;
             }
-        }
+        }));
     } catch (error) {
         console.error('Error updating charts:', error);
         charts.forEach(chart => {
@@ -344,7 +451,25 @@ async function updateCharts() {
     }
 }
 
-// Update loading and error styling
+document.head.insertAdjacentHTML('beforeend', `
+    <style>
+        #userFilter {
+            min-width: 150px;
+            background: white;
+            border: 2px solid #ddd;
+            border-radius: 4px;
+            padding: 5px;
+        }
+        #userFilter option {
+            padding: 5px;
+        }
+        #userFilter option:checked {
+            background: var(--accent-color);
+            color: white;
+        }
+    </style>
+`);
+
 document.head.insertAdjacentHTML('beforeend', `
     <style>
         .error {
@@ -367,9 +492,13 @@ document.head.insertAdjacentHTML('beforeend', `
     </style>
 `);
 
-// Initialize charts with better error handling
 document.addEventListener('DOMContentLoaded', () => {
     updateCharts().catch(console.error);
 });
+
+function toggleInfo(id) {
+    const panel = document.getElementById(id);
+    panel.classList.toggle('visible');
+}
 </script>
 {% endblock %}

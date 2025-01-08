@@ -18,13 +18,21 @@
                 <input type="number" id="remote" name="points.remote" value="{{ settings.points.remote }}" min="0" max="20">
             </div>
             <div class="form-group">
-                <label for="early_bonus">Early Arrival Bonus:</label>
-                <input type="number" id="early_bonus" name="early_bonus" value="{{ settings.early_bonus }}" min="0" max="5">
+                <label for="late_bonus">Late Arrival Bonus:</label>
+                <input type="number" id="late_bonus" name="late_bonus" value="{{ settings.late_bonus }}" min="0" max="5">
+            </div>
+            <div class="form-group">
+                <label for="sick_bonus">Sick Day Bonus:</label>
+                <input type="number" id="sick_bonus" name="sick_bonus" value="{{ settings.sick_bonus }}" min="0" max="5">
+            </div>
+            <div class="form-group">
+                <label for="leave_bonus">Annual Leave Bonus:</label>
+                <input type="number" id="leave_bonus" name="leave_bonus" value="{{ settings.leave_bonus }}" min="0" max="5">
             </div>
 
             <!-- Remote work days configuration -->
-            <h3>Remote Work Early Bonus Days</h3>
-            <p class="helper-text">Select days when remote workers can earn early bonus points</p>
+            <h3>Remote Work Late Bonus Days</h3>
+            <p class="helper-text">Select days when remote workers can earn late bonus points</p>
             <div class="remote-days-table">
                 <table>
                     <thead>
@@ -65,13 +73,15 @@
         <h3>Daily Scoring</h3>
         <p>Points are awarded based on:</p>
         <ul>
-            <li>Base points for attendance type</li>
-            <li>Early arrival bonus applies to:
+            <li>Base points (10) for all attendance types (in-office, remote, sick, leave)</li>
+            <li>Late arrival bonus (position × late_bonus) applies to:
                 <ul>
                     <li>In-office attendance (always)</li>
-                    <li>Remote work on designated remote days (per user)</li>
+                    <li>Remote work on designated remote days only</li>
                 </ul>
             </li>
+            <li>Position bonus increases with later arrival (promoting the "Last-In" concept)</li>
+            <li>Sick days and leave days are neutral - they receive base points only</li>
         </ul>
         
         <div class="example-box">
@@ -83,30 +93,46 @@
                     <th>Total</th>
                 </tr>
                 <tr>
-                    <td>1st In Office</td>
-                    <td>{{ settings.points.in_office }} + (4 × {{ settings.early_bonus }})</td>
-                    <td>{{ settings.points.in_office + (4 * settings.early_bonus) }}</td>
+                    <td>Last In Office (5th person)</td>
+                    <td>10 + (5 × {{ settings.late_bonus }})</td>
+                    <td>{{ 10 + (5 * settings.late_bonus) }}</td>
                 </tr>
                 <tr>
-                    <td>1st Remote (eligible day)</td>
-                    <td>{{ settings.points.remote }} + (4 × {{ settings.early_bonus }})</td>
-                    <td>{{ settings.points.remote + (4 * settings.early_bonus) }}</td>
+                    <td>Second-to-Last (4th person)</td>
+                    <td>10 + (4 × {{ settings.late_bonus }})</td>
+                    <td>{{ 10 + (4 * settings.late_bonus) }}</td>
+                </tr>
+                <tr>
+                    <td>Last Remote (eligible day)</td>
+                    <td>10 + (5 × {{ settings.late_bonus }})</td>
+                    <td>{{ 10 + (5 * settings.late_bonus) }}</td>
                 </tr>
                 <tr>
                     <td>Remote (non-eligible day)</td>
-                    <td>{{ settings.points.remote }}</td>
-                    <td>{{ settings.points.remote }}</td>
+                    <td>10 (base only)</td>
+                    <td>10</td>
+                </tr>
+                <tr>
+                    <td>Sick Day</td>
+                    <td>10 (base only)</td>
+                    <td>10</td>
+                </tr>
+                <tr>
+                    <td>Annual Leave</td>
+                    <td>10 (base only)</td>
+                    <td>10</td>
                 </tr>
             </table>
         </div>
 
         <div class="example-box">
-            <h4>Remote Work Early Bonus Rules</h4>
+            <h4>Scoring Notes</h4>
             <ul>
-                <li>Early bonus points are awarded for remote work only on designated days</li>
-                <li>Each user can have different eligible remote days</li>
-                <li>Early bonus calculation is identical to in-office bonus</li>
-                <li>Position is determined by submission time regardless of work type</li>
+                <li>Rankings are based only on in-office and eligible remote work days</li>
+                <li>Sick days and leave days don't affect your average score</li>
+                <li>Later arrivals earn more points (multiplied by position number)</li>
+                <li>Remote work only earns position bonus on designated days</li>
+                <li>Weekly and monthly scores are averages of daily scores (excluding sick/leave)</li>
             </ul>
         </div>
     </div>
@@ -247,7 +273,9 @@ document.getElementById('settingsForm').addEventListener('submit', async (event)
             sick: 5,
             leave: 5
         },
-        early_bonus: parseInt(formData.get('early_bonus')),
+        late_bonus: parseInt(formData.get('late_bonus')),
+        sick_bonus: parseInt(formData.get('sick_bonus')),
+        leave_bonus: parseInt(formData.get('leave_bonus')),
         remote_days: {}
     };
     
@@ -272,47 +300,10 @@ document.getElementById('settingsForm').addEventListener('submit', async (event)
         
         const result = await response.json();
         alert(result.message);
-        
-        // Update examples and calculations without reloading
-        updateScoringExamples(settings);
+        location.reload();
     } catch (error) {
         alert('Error saving settings: ' + error.message);
     }
 });
-
-function updateScoringExamples(settings) {
-    // Update example calculations in the scoring explanation section
-    const inOfficeFirst = settings.points.in_office + (4 * settings.early_bonus);
-    const inOfficeSecond = settings.points.in_office + (3 * settings.early_bonus);
-    const remoteBonus = settings.points.remote + (4 * settings.early_bonus);
-    
-    // Update the example table
-    document.querySelector('.example-table tbody').innerHTML = `
-        <tr>
-            <td>1st</td>
-            <td>In Office</td>
-            <td>${settings.points.in_office} + (4 × ${settings.early_bonus})</td>
-            <td>${inOfficeFirst}</td>
-        </tr>
-        <tr>
-            <td>2nd</td>
-            <td>In Office</td>
-            <td>${settings.points.in_office} + (3 × ${settings.early_bonus})</td>
-            <td>${inOfficeSecond}</td>
-        </tr>
-        <tr>
-            <td>1st</td>
-            <td>Remote (eligible day)</td>
-            <td>${settings.points.remote} + (4 × ${settings.early_bonus})</td>
-            <td>${remoteBonus}</td>
-        </tr>
-        <tr>
-            <td>N/A</td>
-            <td>Remote (non-eligible)</td>
-            <td>${settings.points.remote}</td>
-            <td>${settings.points.remote}</td>
-        </tr>
-    `;
-}
 </script>
 {% endblock %}

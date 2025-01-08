@@ -10,6 +10,7 @@ data_file = "championship_data.json"
 SETTINGS_FILE = "championship_settings.json"
 AUDIT_FILE = "audit_trail.json"
 CORE_USERS = ['Matt', 'Kushal', 'Nathan', 'Michael', 'Ben']
+USERS_FILE = "users.json"
 
 def init_files():
     """Initialize JSON files with default data if they don't exist"""
@@ -17,12 +18,15 @@ def init_files():
     if not os.path.exists(SETTINGS_FILE):
         default_settings = {
             "points": {
-                "in_office": 10,
-                "remote": 8,
-                "sick": 5,
-                "leave": 5
+                "in_office": 10,  # Base points for in-office
+                "remote": 10,     # Base points for remote
+                "sick": 10,       # Match base points to keep neutral
+                "leave": 10       # Match base points to keep neutral
             },
-            "early_bonus": 1
+            "late_bonus": 1,      # Multiplier for late arrival bonus (max 4×)
+            "sick_bonus": 0,      # No bonus for sick days
+            "leave_bonus": 0,     # No bonus for leave days
+            "remote_days": {}     # Eligible remote days per user
         }
         with open(SETTINGS_FILE, 'w') as f:
             json.dump(default_settings, f, indent=4)
@@ -36,6 +40,35 @@ def init_files():
     if not os.path.exists(AUDIT_FILE):
         with open(AUDIT_FILE, 'w') as f:
             json.dump([], f)
+    
+    # Initialize users file
+    if not os.path.exists(USERS_FILE):
+        with open(USERS_FILE, 'w') as f:
+            json.dump({}, f, indent=4)
+
+def save_user(username, password):
+    """Save user to JSON file"""
+    try:
+        with open(USERS_FILE, 'r+') as f:
+            users = json.load(f)
+            users[username] = password  # In production, use proper password hashing
+            f.seek(0)
+            json.dump(users, f, indent=4)
+            f.truncate()
+        return True
+    except Exception as e:
+        app.logger.error(f"Error saving user: {str(e)}")
+        return False
+
+def verify_user(username, password):
+    """Verify user credentials"""
+    try:
+        with open(USERS_FILE, 'r') as f:
+            users = json.load(f)
+            return username in users and users[username] == password
+    except Exception as e:
+        app.logger.error(f"Error verifying user: {str(e)}")
+        return False
 
 # Flask app
 app = Flask(__name__)
@@ -87,8 +120,7 @@ def login():
     if request.method == "POST":
         username = request.form.get("username")
         password = request.form.get("password")
-        # Simple authentication - in real system use proper password hashing
-        if username and password == "demo":  # Simplified for demo
+        if username and password and verify_user(username, password):
             session['user'] = username
             log_audit("login", username, "Successful login")
             return redirect(url_for('index'))
@@ -103,14 +135,22 @@ def register():
         
         if not username or not password:
             return render_template("register.html", error="Username and password are required")
-            
-        if password != "demo":
-            return render_template("register.html", error="For this demo, please use 'demo' as the password")
         
-        # In a real system, you would hash the password and store user data
-        session['user'] = username
-        log_audit("register", username, "New user registration")
-        return redirect(url_for('index'))
+        try:
+            with open(USERS_FILE, 'r') as f:
+                users = json.load(f)
+                if username in users:
+                    return render_template("register.html", error="Username already exists")
+        except Exception as e:
+            app.logger.error(f"Error checking user: {str(e)}")
+            return render_template("register.html", error="Registration system error")
+        
+        if save_user(username, password):
+            session['user'] = username
+            log_audit("register", username, "New user registration")
+            return redirect(url_for('index'))
+        
+        return render_template("register.html", error="Failed to register user")
         
     return render_template("register.html")
 
@@ -218,24 +258,40 @@ def parse_uk_date(date_str):
         except ValueError:
             return datetime.now()
 
-def calculate_daily_score(entry, settings, position=None):
-    """Calculate score for a single day's entry with remote work day bonus"""
+def calculate_daily_score(entry, settings, position=None, total_entries=None):
+    """Calculate score for a single day's entry with all bonuses"""
     status = entry["status"].replace("-", "_")
-    points = settings["points"][status]
     
-    # Get the day of week
+    # Base points for attendance type
+    base_points = settings["points"][status]
+    late_bonus = 0
+    
+    # Add late bonus for in-office or eligible remote work
+    if position is not None and total_entries is not None:
+        if status == "in_office" or (
+            status == "remote" and 
+            is_eligible_remote_day(entry, settings)
+        ):
+            # Higher position = later arrival = more points
+            # Last person (highest position) gets maximum bonus (4)
+            late_bonus = position * settings["late_bonus"]
+    
+    # Add fixed bonuses for sick and leave
+    bonus = 0
+    if status == "sick" and "sick_bonus" in settings:
+        bonus = settings["sick_bonus"]
+    elif status == "leave" and "leave_bonus" in settings:
+        bonus = settings["leave_bonus"]
+    
+    total_points = base_points + late_bonus + bonus
+    return total_points
+
+def is_eligible_remote_day(entry, settings):
+    """Check if this is an eligible remote work day for late bonus"""
     entry_date = datetime.strptime(entry["date"], '%Y-%m-%d')
     weekday = entry_date.strftime('%a').lower()
-    
-    # Check if user gets early bonus for remote work on this day
     remote_days = settings.get('remote_days', {}).get(entry['name'], [])
-    is_remote_bonus_day = weekday in remote_days
-    
-    # Add early bonus for in-office or eligible remote work
-    if position is not None and (status == "in_office" or (status == "remote" and is_remote_bonus_day)):
-        points += max((5 - position) * settings["early_bonus"], 0)
-    
-    return points
+    return weekday in remote_days
 
 def get_week_dates(year, week):
     """Get start and end dates for a given ISO week"""
@@ -337,57 +393,68 @@ def calculate_scores(data, period, current_date):
     # Calculate scores for each person
     scores = {}
     for date, entries in daily_entries.items():
-        # Sort entries by time for each day
         entries.sort(key=lambda x: datetime.strptime(x["time"], "%H:%M"))
+        total_entries = len(entries)
         
-        # Calculate daily scores
         for position, entry in enumerate(entries, 1):
             name = entry["name"]
             if name not in scores:
                 scores[name] = {
                     "total": 0,
-                    "days": 0,
+                    "active_days": 0,  # Only count in-office and remote days
+                    "days": 0,         # Count all days for stats
                     "in_office": 0,
                     "remote": 0,
                     "sick": 0,
-                    "leave": 0
+                    "leave": 0,
+                    "latest_arrivals": 0,
+                    "arrival_times": []  # Track arrival times for average calculation
                 }
             
             stats = scores[name]
-            stats["days"] += 1
             status = entry["status"].replace("-", "_")
             stats[status] += 1
+            stats["days"] += 1
             
-            # Calculate points consistently
-            points = calculate_daily_score(entry, settings, position)
-            stats["total"] += points
+            # Only include in-office and remote days in scoring
+            if status in ["in_office", "remote"]:
+                stats["active_days"] += 1
+                points = calculate_daily_score(entry, settings, position, total_entries)
+                stats["total"] += points
+                
+                if position == total_entries:
+                    stats["latest_arrivals"] += 1
+                
+                # Track arrival times for average calculation
+                arrival_time = datetime.strptime(entry["time"], "%H:%M")
+                stats["arrival_times"].append(arrival_time)
     
-    # Format rankings with average scores
+    # Format rankings with average scores (only considering active days)
     rankings = []
     for name, stats in scores.items():
-        if stats["days"] > 0:
+        if stats["active_days"] > 0:  # Only include people with active days
+            avg_arrival_time = calculate_average_time(stats["arrival_times"])
             rankings.append({
                 "name": name,
-                "score": round(stats["total"] / stats["days"], 2),
+                "score": round(stats["total"] / stats["active_days"], 2),  # Average only active days
+                "latest_percentage": round((stats["latest_arrivals"] / stats["active_days"]) * 100, 1),
+                "average_arrival_time": avg_arrival_time,
                 "stats": stats
             })
     
-    return sorted(rankings, key=lambda x: x["score"], reverse=True)
+    rankings.sort(key=lambda x: (x["score"], x["latest_percentage"]), reverse=True)
+    return rankings
 
-def in_period(entry, period, current_date):
-    """Check if entry falls within the specified period"""
-    entry_date = datetime.fromisoformat(entry["date"]).date()
+def calculate_average_time(times):
+    """Calculate the average time from a list of datetime.time objects"""
+    if not times:
+        return "N/A"
     
-    if period == 'day':
-        return entry_date == current_date.date()
-    elif period == 'week':
-        week_start = current_date.date()
-        week_end = (current_date + timedelta(days=6)).date()
-        return week_start <= entry_date <= week_end
-    elif period == 'month':
-        return (entry_date.year == current_date.year and 
-                entry_date.month == current_date.month)
-    return True
+    total_minutes = sum(t.hour * 60 + t.minute for t in times)
+    avg_minutes = total_minutes // len(times)
+    avg_hour = avg_minutes // 60
+    avg_minute = avg_minutes % 60
+    return f"{avg_hour:02d}:{avg_minute:02d}"
 
 @app.route("/rankings/today")
 @login_required
@@ -400,11 +467,9 @@ def daily_rankings():
     today_entries.sort(key=lambda x: datetime.strptime(x["time"], "%H:%M"))
     
     rankings = []
-    for entry in today_entries:
-        points = settings["points"][entry["status"].replace("-", "_")]
-        if entry["status"] == "in-office":
-            points += max((5 - entry["position"]) * settings["early_bonus"], 0)
-            
+    total_entries = len(today_entries)
+    for position, entry in enumerate(today_entries, 1):
+        points = calculate_daily_score(entry, settings, position, total_entries)
         rankings.append({
             "name": entry["name"],
             "time": entry["time"],
@@ -412,6 +477,8 @@ def daily_rankings():
             "points": points
         })
     
+    # Sort by points descending (latest arrivals get more points)
+    rankings.sort(key=lambda x: x["points"], reverse=True)
     return jsonify(rankings)
 
 @app.route("/rankings/day")
@@ -430,11 +497,9 @@ def day_rankings(date=None):
     
     # Calculate points and prepare rankings
     rankings = []
+    total_entries = len(day_entries)
     for position, entry in enumerate(day_entries, 1):
-        points = settings["points"][entry["status"].replace("-", "_")]
-        if entry["status"] == "in-office":
-            points += max((5 - position) * settings["early_bonus"], 0)
-            
+        points = calculate_daily_score(entry, settings, position, total_entries)
         rankings.append({
             "name": entry["name"],
             "time": entry["time"],
@@ -442,6 +507,8 @@ def day_rankings(date=None):
             "points": points
         })
     
+    # Sort by points descending (latest arrivals get more points)
+    rankings.sort(key=lambda x: x["points"], reverse=True)
     return render_template("day_rankings.html", 
                          rankings=rankings,
                          date=date)
@@ -570,40 +637,36 @@ def get_visualization_data():
                 "statusCounts": {"in_office": 0, "remote": 0, "sick": 0, "leave": 0},
                 "pointsProgress": {},
                 "dailyActivity": {},
-                "earlyBirdAnalysis": {},
+                "lateArrivalAnalysis": {},
                 "userComparison": {}
             })
             
         date_range = request.args.get('range', 'all')
-        user_filter = request.args.get('user', 'all')
+        user_filter = request.args.get('user', 'all').split(',')
         
-        # Convert date strings to datetime objects for comparison
         cutoff_date = None
         if date_range != 'all':
             days = int(date_range)
             cutoff_date = datetime.now().date() - timedelta(days=days)
         
-        # Filter data
         filtered_data = []
         for entry in data:
             try:
                 entry_date = datetime.strptime(entry['date'], '%Y-%m-%d').date()
                 if cutoff_date and entry_date < cutoff_date:
                     continue
-                if user_filter != 'all' and entry['name'] != user_filter:
+                if 'all' not in user_filter and entry['name'] not in user_filter:
                     continue
                 filtered_data.append(entry)
             except (ValueError, KeyError):
-                # Skip malformed entries
                 continue
         
-        # Calculate visualizations data
         vis_data = {
             'weeklyPatterns': calculate_weekly_patterns(filtered_data),
             'statusCounts': calculate_status_counts(filtered_data),
             'pointsProgress': calculate_points_progression(filtered_data),
             'dailyActivity': calculate_daily_activity(filtered_data),
-            'earlyBirdAnalysis': analyze_early_arrivals(filtered_data),
+            'lateArrivalAnalysis': analyze_late_arrivals(filtered_data),
             'userComparison': calculate_user_comparison(filtered_data)
         }
         
@@ -658,18 +721,24 @@ def calculate_points_progression(data):
     }
 
 def calculate_weekly_patterns(data):
+    """Calculate attendance patterns by day and hour"""
     patterns = {}
-    for entry in data:
-        try:
-            if normalize_status(entry["status"]) == "in_office":  # Fix: Normalize status
+    try:
+        for entry in data:
+            # Only include in-office and remote work for time patterns
+            if normalize_status(entry["status"]) in ["in_office", "remote"]:
                 date = datetime.strptime(entry["date"], '%Y-%m-%d')
                 time = datetime.strptime(entry["time"], "%H:%M")
+                
                 day = date.strftime("%A")
                 hour = f"{time.hour:02d}:00"
+                
                 key = f"{day}-{hour}"
                 patterns[key] = patterns.get(key, 0) + 1
-        except (ValueError, KeyError):
-            continue
+                
+    except (ValueError, KeyError) as e:
+        app.logger.error(f"Error in weekly patterns: {str(e)}")
+    
     return patterns
 
 def analyze_early_arrivals(data):
@@ -695,6 +764,34 @@ def analyze_early_arrivals(data):
             "total_days": stats["total_count"]
         }
         for name, stats in early_stats.items()
+        if stats["total_count"] > 0
+    }
+
+def analyze_late_arrivals(data):
+    """Calculate late arrival statistics for each user"""
+    late_stats = {}
+    for entry in data:
+        status = normalize_status(entry['status'])
+        # Only include in-office and remote work for late analysis
+        if status in ["in_office", "remote"]:
+            try:
+                time = datetime.strptime(entry["time"], "%H:%M").time()
+                name = entry["name"]
+                if name not in late_stats:
+                    late_stats[name] = {"late_count": 0, "total_count": 0}
+                
+                late_stats[name]["total_count"] += 1
+                if time.hour >= 9:
+                    late_stats[name]["late_count"] += 1
+            except (ValueError, KeyError):
+                continue
+    
+    return {
+        name: {
+            "late_percentage": (stats["late_count"] / stats["total_count"]) * 100,
+            "total_days": stats["total_count"]
+        }
+        for name, stats in late_stats.items()
         if stats["total_count"] > 0
     }
 
@@ -806,16 +903,35 @@ def save_data(data):
         json.dump(data, file, indent=4)
 
 def load_settings():
-    """Load settings with better error handling"""
+    """Load settings with better error handling and migration"""
     try:
         with open(SETTINGS_FILE, "r") as file:
             settings = json.load(file)
-            # Ensure remote_days exists
-            if 'remote_days' not in settings:
-                settings['remote_days'] = {}
+            
+            # Migrate old settings format to new
+            if 'early_bonus' in settings and 'late_bonus' not in settings:
+                settings['late_bonus'] = settings.pop('early_bonus')
+            
+            # Ensure all required settings exist with defaults
+            defaults = {
+                'late_bonus': 1,
+                'sick_bonus': 2,
+                'leave_bonus': 2,
+                'remote_days': {},
+                'points': {
+                    "in_office": 10,
+                    "remote": 8,
+                    "sick": 5,
+                    "leave": 5
+                }
+            }
+            
+            for key, value in defaults.items():
+                if key not in settings:
+                    settings[key] = value
+            
             return settings
     except (FileNotFoundError, json.JSONDecodeError):
-        # If file doesn't exist or is corrupted, create new with defaults
         default_settings = {
             "points": {
                 "in_office": 10,
@@ -823,7 +939,9 @@ def load_settings():
                 "sick": 5,
                 "leave": 5
             },
-            "early_bonus": 1,
+            "late_bonus": 1,
+            "sick_bonus": 2,
+            "leave_bonus": 2,
             "remote_days": {}
         }
         save_settings(default_settings)
@@ -833,16 +951,46 @@ def save_settings(settings):
     with open(SETTINGS_FILE, "w") as file:
         json.dump(settings, file, indent=4)
 
-def period_filter(entry, period):
-    entry_date = datetime.fromisoformat(entry["date"])
-    now = datetime.now()
-
-    if period == "week":
-        return (now - entry_date).days < 7
-    elif period == "month":
-        return (now - entry_date).days < 30
-    else:
+def in_period(entry, period, current_date):
+    """Check if entry falls within the specified period"""
+    try:
+        entry_date = datetime.strptime(entry["date"], '%Y-%m-%d').date()
+        current = current_date.date() if isinstance(current_date, datetime) else current_date
+        
+        if period == 'day':
+            return entry_date == current
+        elif period == 'week':
+            # Get Monday of the current week
+            week_start = current - timedelta(days=current.weekday())
+            week_end = week_start + timedelta(days=6)
+            return week_start <= entry_date <= week_end
+        elif period == 'month':
+            # Check if same year and month
+            return entry_date.year == current.year and entry_date.month == current.month
         return True
+    except (ValueError, AttributeError):
+        return False
+
+def period_filter(entry, period):
+    """Filter entries by period relative to current date"""
+    try:
+        entry_date = datetime.strptime(entry["date"], '%Y-%m-%d').date()
+        now = datetime.now().date()
+        
+        if period == "today":
+            return entry_date == now
+        elif period == "week":
+            # Get Monday of current week
+            week_start = now - timedelta(days=now.weekday())
+            return week_start <= entry_date <= now
+        elif period == "month":
+            # Start of current month
+            month_start = now.replace(day=1)
+            return month_start <= entry_date <= now
+        else:
+            return True  # "all" period
+    except (ValueError, AttributeError):
+        return False
 
 if __name__ == "__main__":
     app.run(debug=True)

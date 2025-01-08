@@ -5,41 +5,44 @@
 <h1>System Audit Trail</h1>
 
 <div class="filters-container">
+    <h2>Filter Audit Log</h2>
     <form id="filterForm" class="filters">
-        <div class="filter-group">
-            <label for="action">Actions:</label>
-            <select name="action" id="action" multiple size="4">
-                <option value="all" selected>All Actions</option>
-                {% for action in actions %}
-                <option value="{{ action }}" {% if action in selected_actions %}selected{% endif %}>
-                    {{ action|replace('_', ' ')|title }}
-                </option>
-                {% endfor %}
-            </select>
+        <div class="filter-section">
+            <div class="filter-group">
+                <label for="action">Actions:</label>
+                <select name="action" id="action" multiple size="4">
+                    <option value="all" selected>All Actions</option>
+                    {% for action in actions %}
+                    <option value="{{ action }}">{{ action|replace('_', ' ')|title }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            
+            <div class="filter-group">
+                <label for="user">Users:</label>
+                <select name="user" id="user" multiple size="4">
+                    <option value="all" selected>All Users</option>
+                    {% for user in users %}
+                    <option value="{{ user }}">{{ user }}</option>
+                    {% endfor %}
+                </select>
+            </div>
         </div>
-        
-        <div class="filter-group">
-            <label for="user">Users:</label>
-            <select name="user" id="user" multiple size="4">
-                <option value="all" selected>All Users</option>
-                {% for user in users %}
-                <option value="{{ user }}" {% if user in selected_users %}selected{% endif %}>
-                    {{ user }}
-                </option>
-                {% endfor %}
-            </select>
-        </div>
-        
-        <div class="filter-group date-range">
-            <label for="from">From:</label>
-            <input type="date" id="from" name="from" value="{{ date_from }}">
-            <label for="to">To:</label>
-            <input type="date" id="to" name="to" value="{{ date_to }}">
+
+        <div class="filter-section date-range">
+            <div class="filter-group">
+                <label for="from">From Date:</label>
+                <input type="date" id="from" name="from" value="{{ date_from }}">
+            </div>
+            <div class="filter-group">
+                <label for="to">To Date:</label>
+                <input type="date" id="to" name="to" value="{{ date_to }}">
+            </div>
         </div>
         
         <div class="filter-actions">
-            <button type="submit">Apply Filters</button>
-            <button type="button" onclick="resetFilters()">Reset</button>
+            <button type="submit" class="btn-primary">Apply Filters</button>
+            <button type="button" class="btn-secondary" onclick="resetFilters()">Reset</button>
         </div>
     </form>
 </div>
@@ -234,22 +237,96 @@
     margin-bottom: 20px;
 }
 
+.filters-container h2 {
+    margin: 0 0 20px 0;
+    color: var(--primary-color);
+    font-size: 1.2em;
+}
+
 .filters {
     display: flex;
-    gap: 15px;
-    align-items: flex-end;
-    flex-wrap: wrap;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.filter-section {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 20px;
 }
 
 .filter-group {
     display: flex;
     flex-direction: column;
-    gap: 5px;
+    gap: 8px;
 }
 
 .filter-group label {
-    font-size: 0.9em;
-    color: #666;
+    font-weight: 500;
+    color: var(--primary-color);
+}
+
+.filter-group select,
+.filter-group input {
+    padding: 8px;
+    border: 2px solid #ddd;
+    border-radius: 4px;
+    font-size: 14px;
+    transition: all 0.3s ease;
+}
+
+.filter-group select[multiple] {
+    min-height: 120px;
+}
+
+.filter-group select option {
+    padding: 8px;
+}
+
+.filter-group select:focus,
+.filter-group input:focus {
+    border-color: var(--accent-color);
+    outline: none;
+    box-shadow: 0 0 0 2px rgba(52, 152, 219, 0.1);
+}
+
+.filter-group select option:checked {
+    background: var(--accent-color);
+    color: white;
+}
+
+.filter-actions {
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+    padding-top: 10px;
+    border-top: 1px solid #eee;
+}
+
+.btn-primary,
+.btn-secondary {
+    padding: 8px 16px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: 500;
+    transition: all 0.3s ease;
+}
+
+.btn-primary {
+    background: var(--accent-color);
+    color: white;
+}
+
+.btn-secondary {
+    background: var(--warning-color);
+    color: white;
+}
+
+.btn-primary:hover,
+.btn-secondary:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 2px 5px rgba(0,0,0,0.2);
 }
 
 .pagination {

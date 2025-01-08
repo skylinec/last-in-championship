@@ -3,48 +3,57 @@
 
 {% block content %}
 <h1>Attendance History</h1>
-<div class="filters">
-    <div class="filter-group">
-        <label for="periodFilter">Period:</label>
-        <select id="periodFilter" class="form-control" multiple size="4">
-            <option value="today" selected>Today</option>
-            <option value="week">This Week</option>
-            <option value="month">This Month</option>
-            <option value="all">All Time</option>
-        </select>
-    </div>
+<div class="filters-container">
+    <h2>Filter History</h2>
+    <div class="filters">
+        <div class="filter-section">
+            <div class="filter-group">
+                <label for="periodFilter">Time Period:</label>
+                <select id="periodFilter" class="form-control" multiple size="4">
+                    <option value="today" selected>Today</option>
+                    <option value="week">This Week</option>
+                    <option value="month">This Month</option>
+                    <option value="all">All Time</option>
+                </select>
+            </div>
 
-    <div class="filter-group">
-        <label for="nameFilter">Users:</label>
-        <select id="nameFilter" class="form-control" multiple size="4">
-            <option value="all" selected>All Users</option>
-            {% for user in users %}
-            <option value="{{ user }}">{{ user }}</option>
-            {% endfor %}
-        </select>
-    </div>
+            <div class="filter-group">
+                <label for="nameFilter">Users:</label>
+                <select id="nameFilter" class="form-control" multiple size="4">
+                    <option value="all" selected>All Users</option>
+                    {% for user in users %}
+                    <option value="{{ user }}">{{ user }}</option>
+                    {% endfor %}
+                </select>
+            </div>
 
-    <div class="filter-group">
-        <label for="statusFilter">Status:</label>
-        <select id="statusFilter" class="form-control" multiple size="4">
-            <option value="all" selected>All Status</option>
-            <option value="in-office">In Office</option>
-            <option value="remote">Remote</option>
-            <option value="sick">Sick</option>
-            <option value="leave">Leave</option>
-        </select>
-    </div>
+            <div class="filter-group">
+                <label for="statusFilter">Status:</label>
+                <select id="statusFilter" class="form-control" multiple size="4">
+                    <option value="all" selected>All Status</option>
+                    <option value="in-office">In Office</option>
+                    <option value="remote">Remote</option>
+                    <option value="sick">Sick</option>
+                    <option value="leave">Leave</option>
+                </select>
+            </div>
+        </div>
 
-    <div class="filter-group date-range">
-        <label for="fromDate">From:</label>
-        <input type="date" id="fromDate" class="form-control">
-        <label for="toDate">To:</label>
-        <input type="date" id="toDate" class="form-control">
-    </div>
-    
-    <div class="filter-actions">
-        <button onclick="applyFilters()" class="btn-apply">Apply Filters</button>
-        <button onclick="resetFilters()" class="btn-reset">Reset</button>
+        <div class="filter-section date-range">
+            <div class="filter-group">
+                <label for="fromDate">From Date:</label>
+                <input type="date" id="fromDate" class="form-control">
+            </div>
+            <div class="filter-group">
+                <label for="toDate">To Date:</label>
+                <input type="date" id="toDate" class="form-control">
+            </div>
+        </div>
+        
+        <div class="filter-actions">
+            <button onclick="applyFilters()" class="btn-primary">Apply Filters</button>
+            <button onclick="resetFilters()" class="btn-secondary">Reset</button>
+        </div>
     </div>
 </div>
 
@@ -283,16 +292,30 @@ loadHistory();
 </script>
 
 <style>
-.filters {
+.filters-container {
     background: white;
     padding: 20px;
     border-radius: 8px;
     box-shadow: 0 2px 5px rgba(0,0,0,0.1);
     margin-bottom: 20px;
+}
+
+.filters-container h2 {
+    margin: 0 0 20px 0;
+    color: var(--primary-color);
+    font-size: 1.2em;
+}
+
+.filters {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.filter-section {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
     gap: 20px;
-    align-items: start;
 }
 
 .filter-group {
@@ -343,7 +366,7 @@ loadHistory();
     justify-content: center;
 }
 
-.btn-apply, .btn-reset {
+.btn-primary, .btn-secondary {
     padding: 8px 16px;
     border: none;
     border-radius: 4px;
@@ -351,17 +374,17 @@ loadHistory();
     transition: all 0.3s ease;
 }
 
-.btn-apply {
+.btn-primary {
     background: var(--accent-color);
     color: white;
 }
 
-.btn-reset {
+.btn-secondary {
     background: var(--warning-color);
     color: white;
 }
 
-.btn-apply:hover, .btn-reset:hover {
+.btn-primary:hover, .btn-secondary:hover {
     transform: translateY(-2px);
     box-shadow: 0 2px 5px rgba(0,0,0,0.2);
 }

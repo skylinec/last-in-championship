@@ -57,7 +57,7 @@
             </tr>
         </thead>
         <tbody>
-            {% for entry in entries|reverse %}
+            {% for entry in entries %}
             <tr class="audit-row {{ entry.action|lower }}">
                 <td>{{ entry.timestamp|replace('T', ' ') }}</td>
                 <td>{{ entry.user }}</td>

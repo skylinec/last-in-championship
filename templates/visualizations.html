@@ -181,18 +181,20 @@ async function createHeatmap(data) {
         console.log("Raw heatmap data:", data);
         
         const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
-        const hours = Array.from({length: 13}, (_, i) => `${String(i + 7).padStart(2, '0')}:00`);
+        const hours = Array.from({length: 14}, (_, i) => `${String(i + 7).padStart(2, '0')}:00`);
         
         // Initialize the matrix with zeros
         const values = days.map(() => Array(hours.length).fill(0));
         
         // Fill in the values from the data
-        for (const [key, count] of Object.entries(data)) {
-            const [day, time] = key.split('-');
-            const dayIndex = days.indexOf(day);
-            const hourIndex = hours.indexOf(time);
-            if (dayIndex !== -1 && hourIndex !== -1) {
-                values[dayIndex][hourIndex] = count;
+        if (data) {
+            for (const [key, count] of Object.entries(data)) {
+                const [day, hour] = key.split('-');
+                const dayIndex = days.indexOf(day);
+                const hourIndex = hours.indexOf(hour);
+                if (dayIndex !== -1 && hourIndex !== -1) {
+                    values[dayIndex][hourIndex] = count;
+                }
             }
         }
         
@@ -203,16 +205,22 @@ async function createHeatmap(data) {
             xaxis: { 
                 title: 'Hour',
                 ticktext: hours,
-                tickvals: hours.map((_, i) => i),
-                type: 'category'
+                tickvals: Array.from({length: hours.length}, (_, i) => i),
+                tickangle: -45
             },
             yaxis: { 
                 title: 'Day',
                 ticktext: days,
-                tickvals: days.map((_, i) => i),
-                type: 'category'
+                tickvals: Array.from({length: days.length}, (_, i) => i)
             },
-            margin: { t: 50, l: 100 }
+            height: 400,
+            margin: {
+                l: 100,
+                r: 50,
+                b: 100,
+                t: 50,
+                pad: 4
+            }
         };
 
         const plotData = [{

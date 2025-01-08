@@ -810,6 +810,21 @@ def modify_entry(entry_id):
     finally:
         db.close()
 
+def normalize_settings(settings_dict):
+    """Normalize settings dictionary for consistent comparison"""
+    return {
+        "points": {
+            "in_office": int(settings_dict["points"]["in_office"]),
+            "remote": int(settings_dict["points"]["remote"]),
+            "sick": int(settings_dict["points"].get("sick", 5)),
+            "leave": int(settings_dict["points"].get("leave", 5))
+        },
+        "late_bonus": float(settings_dict["late_bonus"]),
+        "remote_days": {
+            user: sorted(days) for user, days in settings_dict.get("remote_days", {}).items()
+        }
+    }
+
 @app.route("/settings", methods=["GET", "POST"])
 @login_required
 def manage_settings():
@@ -830,44 +845,45 @@ def manage_settings():
                                 core_users=CORE_USERS)
         else:
             old_settings = db.query(Settings).first()
+            new_settings = request.json
+            
+            # Normalize both old and new settings for comparison
             if old_settings:
-                old_data = {
+                old_data = normalize_settings({
                     "points": old_settings.points,
                     "late_bonus": old_settings.late_bonus,
                     "remote_days": old_settings.remote_days
-                }
+                })
             
-            new_settings = request.json
-            
-            # Validate remote days
-            if 'remote_days' in new_settings:
-                for user, days in new_settings['remote_days'].items():
-                    if not isinstance(days, list):
-                        return jsonify({"error": "Invalid remote days format"}), 400
-                    new_settings['remote_days'][user] = [
-                        day.lower() for day in days 
-                        if day.lower() in ['mon', 'tue', 'wed', 'thu', 'fri']
-                    ]
-            
+            # Normalize and validate new settings
+            try:
+                normalized_new = normalize_settings(new_settings)
+            except (KeyError, ValueError) as e:
+                return jsonify({"error": f"Invalid settings format: {str(e)}"}), 400
+
+            # Update database
             if old_settings:
-                old_settings.points = new_settings["points"]
-                old_settings.late_bonus = new_settings["late_bonus"]
-                old_settings.remote_days = new_settings["remote_days"]
+                old_settings.points = normalized_new["points"]
+                old_settings.late_bonus = normalized_new["late_bonus"]
+                old_settings.remote_days = normalized_new["remote_days"]
             else:
-                settings = Settings(**new_settings)
+                settings = Settings(**normalized_new)
                 db.add(settings)
             
             db.commit()
             
-            log_audit(
-                "update_settings",
-                session['user'],
-                "Updated point settings",
-                old_data=old_data if old_settings else None,
-                new_data=new_settings
-            )
+            # Log the changes if there are any differences
+            if not old_settings or old_data != normalized_new:
+                log_audit(
+                    "update_settings",
+                    session['user'],
+                    "Updated point settings",
+                    old_data=old_data if old_settings else None,
+                    new_data=normalized_new
+                )
             
             return jsonify({"message": "Settings updated successfully"})
+            
     except Exception as e:
         db.rollback()
         app.logger.error(f"Error managing settings: {str(e)}")

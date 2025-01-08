@@ -1,0 +1,318 @@
+{% extends "base.html" %}
+{% block title %}Settings{% endblock %}
+
+{% block content %}
+<h1>Championship Settings</h1>
+
+<div class="settings-container">
+    <div class="settings-section">
+        <h2>Points & Bonuses</h2>
+        <form id="settingsForm">
+            <!-- Basic point settings -->
+            <div class="form-group">
+                <label for="in_office">In Office Points:</label>
+                <input type="number" id="in_office" name="points.in_office" value="{{ settings.points.in_office }}" min="0" max="20">
+            </div>
+            <div class="form-group">
+                <label for="remote">Remote Work Points:</label>
+                <input type="number" id="remote" name="points.remote" value="{{ settings.points.remote }}" min="0" max="20">
+            </div>
+            <div class="form-group">
+                <label for="early_bonus">Early Arrival Bonus:</label>
+                <input type="number" id="early_bonus" name="early_bonus" value="{{ settings.early_bonus }}" min="0" max="5">
+            </div>
+
+            <!-- Remote work days configuration -->
+            <h3>Remote Work Early Bonus Days</h3>
+            <p class="helper-text">Select days when remote workers can earn early bonus points</p>
+            <div class="remote-days-table">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>User</th>
+                            <th>Mon</th>
+                            <th>Tue</th>
+                            <th>Wed</th>
+                            <th>Thu</th>
+                            <th>Fri</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for user in core_users %}
+                        <tr class="user-row" data-user="{{ user }}">
+                            <td>{{ user }}</td>
+                            {% for day in ['mon', 'tue', 'wed', 'thu', 'fri'] %}
+                            <td>
+                                <input type="checkbox" 
+                                       name="remote_days.{{ user }}"
+                                       value="{{ day }}"
+                                       {% if day in settings.remote_days.get(user, []) %}checked{% endif %}>
+                            </td>
+                            {% endfor %}
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            
+            <button type="submit" class="save-button">Save All Settings</button>
+        </form>
+    </div>
+
+    <div class="scoring-explanation">
+        <h2>How Scoring Works</h2>
+        
+        <h3>Daily Scoring</h3>
+        <p>Points are awarded based on:</p>
+        <ul>
+            <li>Base points for attendance type</li>
+            <li>Early arrival bonus applies to:
+                <ul>
+                    <li>In-office attendance (always)</li>
+                    <li>Remote work on designated remote days (per user)</li>
+                </ul>
+            </li>
+        </ul>
+        
+        <div class="example-box">
+            <h4>Example Calculations</h4>
+            <table class="example-table">
+                <tr>
+                    <th>Scenario</th>
+                    <th>Calculation</th>
+                    <th>Total</th>
+                </tr>
+                <tr>
+                    <td>1st In Office</td>
+                    <td>{{ settings.points.in_office }} + (4 × {{ settings.early_bonus }})</td>
+                    <td>{{ settings.points.in_office + (4 * settings.early_bonus) }}</td>
+                </tr>
+                <tr>
+                    <td>1st Remote (eligible day)</td>
+                    <td>{{ settings.points.remote }} + (4 × {{ settings.early_bonus }})</td>
+                    <td>{{ settings.points.remote + (4 * settings.early_bonus) }}</td>
+                </tr>
+                <tr>
+                    <td>Remote (non-eligible day)</td>
+                    <td>{{ settings.points.remote }}</td>
+                    <td>{{ settings.points.remote }}</td>
+                </tr>
+            </table>
+        </div>
+
+        <div class="example-box">
+            <h4>Remote Work Early Bonus Rules</h4>
+            <ul>
+                <li>Early bonus points are awarded for remote work only on designated days</li>
+                <li>Each user can have different eligible remote days</li>
+                <li>Early bonus calculation is identical to in-office bonus</li>
+                <li>Position is determined by submission time regardless of work type</li>
+            </ul>
+        </div>
+    </div>
+</div>
+
+<style>
+.settings-container {
+    display: grid;
+    grid-template-columns: 1.2fr 1fr;
+    gap: 40px;
+    align-items: start;
+}
+
+.remote-days-table {
+    margin: 20px 0;
+    overflow-x: auto;
+}
+
+.remote-days-table table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.remote-days-table td {
+    text-align: center;
+    padding: 10px;
+}
+
+.remote-days-table input[type="checkbox"] {
+    transform: scale(1.3);
+    cursor: pointer;
+}
+
+.helper-text {
+    color: #666;
+    font-size: 0.9em;
+    margin: 5px 0 15px;
+}
+
+/* ...existing styles... */
+
+.example-box {
+    background: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-radius: 6px;
+    padding: 15px;
+    margin: 15px 0;
+}
+
+.example-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 10px 0;
+}
+
+.example-table th {
+    background: var(--primary-color);
+    color: white;
+    padding: 8px;
+}
+
+.example-table td {
+    padding: 8px;
+    border-bottom: 1px solid #dee2e6;
+}
+
+.example-box .calculation {
+    font-family: monospace;
+    background: #e9ecef;
+    padding: 2px 6px;
+    border-radius: 4px;
+}
+
+.scoring-explanation {
+    background: white;
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+}
+
+.scoring-explanation ul {
+    list-style-type: none;
+    padding-left: 20px;
+}
+
+.scoring-explanation ul li {
+    margin: 8px 0;
+    position: relative;
+}
+
+.scoring-explanation ul li::before {
+    content: "•";
+    color: var(--accent-color);
+    font-weight: bold;
+    position: absolute;
+    left: -15px;
+}
+
+.remote-days-table input[type="checkbox"] {
+    transform: scale(1.3);
+    cursor: pointer;
+    margin: 0;
+    padding: 0;
+}
+
+.remote-days-table th {
+    padding: 12px;
+    text-align: center;
+    background: var(--primary-color);
+    color: white;
+}
+
+.remote-days-table td {
+    text-align: center;
+    padding: 12px;
+    border: 1px solid #dee2e6;
+}
+
+.remote-days-table tr:nth-child(even) {
+    background: #f8f9fa;
+}
+
+.remote-days-table tr:hover {
+    background: #e9ecef;
+}
+</style>
+
+<script>
+document.getElementById('settingsForm').addEventListener('submit', async (event) => {
+    event.preventDefault();
+    
+    // Collect basic settings
+    const formData = new FormData(event.target);
+    const settings = {
+        points: {
+            in_office: parseInt(formData.get('points.in_office')),
+            remote: parseInt(formData.get('points.remote')),
+            sick: 5,
+            leave: 5
+        },
+        early_bonus: parseInt(formData.get('early_bonus')),
+        remote_days: {}
+    };
+    
+    // Collect remote days settings
+    document.querySelectorAll('.user-row').forEach(row => {
+        const user = row.dataset.user;
+        const days = [];
+        row.querySelectorAll('input[type="checkbox"]:checked').forEach(checkbox => {
+            days.push(checkbox.value);
+        });
+        settings.remote_days[user] = days;
+    });
+    
+    try {
+        const response = await fetch('/settings', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(settings)
+        });
+        
+        if (!response.ok) throw new Error('Failed to save settings');
+        
+        const result = await response.json();
+        alert(result.message);
+        
+        // Update examples and calculations without reloading
+        updateScoringExamples(settings);
+    } catch (error) {
+        alert('Error saving settings: ' + error.message);
+    }
+});
+
+function updateScoringExamples(settings) {
+    // Update example calculations in the scoring explanation section
+    const inOfficeFirst = settings.points.in_office + (4 * settings.early_bonus);
+    const inOfficeSecond = settings.points.in_office + (3 * settings.early_bonus);
+    const remoteBonus = settings.points.remote + (4 * settings.early_bonus);
+    
+    // Update the example table
+    document.querySelector('.example-table tbody').innerHTML = `
+        <tr>
+            <td>1st</td>
+            <td>In Office</td>
+            <td>${settings.points.in_office} + (4 × ${settings.early_bonus})</td>
+            <td>${inOfficeFirst}</td>
+        </tr>
+        <tr>
+            <td>2nd</td>
+            <td>In Office</td>
+            <td>${settings.points.in_office} + (3 × ${settings.early_bonus})</td>
+            <td>${inOfficeSecond}</td>
+        </tr>
+        <tr>
+            <td>1st</td>
+            <td>Remote (eligible day)</td>
+            <td>${settings.points.remote} + (4 × ${settings.early_bonus})</td>
+            <td>${remoteBonus}</td>
+        </tr>
+        <tr>
+            <td>N/A</td>
+            <td>Remote (non-eligible)</td>
+            <td>${settings.points.remote}</td>
+            <td>${settings.points.remote}</td>
+        </tr>
+    `;
+}
+</script>
+{% endblock %}

@@ -1,0 +1,104 @@
+{% extends "base.html" %}
+{% block title %}Log Attendance{% endblock %}
+
+{% block content %}
+<h1>Log Attendance</h1>
+<form id="logForm">
+    <div class="form-group">
+        <label for="date">Date:</label>
+        <input type="date" id="date" name="date" required>
+    </div>
+    <div class="form-group">
+        <label for="time">Time Started:</label>
+        <input type="time" id="time" name="time" required>
+    </div>
+    <div class="form-group">
+        <label for="name">Name:</label>
+        <input type="text" 
+               id="name" 
+               name="name" 
+               list="namesList" 
+               autocomplete="off"
+               required>
+        <datalist id="namesList"></datalist>
+    </div>
+    <div class="form-group">
+        <label for="status">Status:</label>
+        <select id="status" name="status" required>
+            <option value="in-office">In Office</option>
+            <option value="remote">Remote</option>
+            <option value="sick">Sick</option>
+            <option value="leave">Leave</option>
+        </select>
+    </div>
+    <button type="submit">Submit</button>
+</form>
+<div id="result" class="message" style="display: none;"></div>
+
+<script>
+const form = document.getElementById('logForm');
+const nameInput = document.getElementById('name');
+
+// Replace loadNames function with this version
+async function loadNames() {
+    const response = await fetch('/names');
+    const names = await response.json();
+    const dataList = document.getElementById('namesList');
+    dataList.innerHTML = names
+        .map(name => `<option value="${name}">`)
+        .join('');
+}
+
+form.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const data = {
+        date: document.getElementById('date').value,
+        time: document.getElementById('time').value,
+        name: nameInput.value,
+        status: document.getElementById('status').value
+    };
+    
+    try {
+        const response = await fetch('/log', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+        });
+        
+        const result = await response.json();
+        const resultDiv = document.getElementById('result');
+        resultDiv.innerText = result.message;
+        resultDiv.className = `message ${result.type}`;
+        resultDiv.style.display = 'block';
+        
+        if (result.type === 'success') {
+            form.reset();
+            document.getElementById('date').valueAsDate = new Date();
+            document.getElementById('time').value = new Date().toLocaleTimeString('en-GB', { 
+                hour: '2-digit', 
+                minute: '2-digit',
+                hour12: false 
+            });
+        }
+        
+        setTimeout(() => {
+            resultDiv.style.display = 'none';
+        }, 5000);
+    } catch (error) {
+        console.error('Error:', error);
+    }
+});
+
+// Initialize
+document.getElementById('date').valueAsDate = new Date();
+document.getElementById('time').value = new Date().toLocaleTimeString('en-GB', { 
+    hour: '2-digit', 
+    minute: '2-digit',
+    hour12: false 
+});
+loadNames();
+</script>
+
+<!-- Add autocomplete library -->
+<script src="https://cdn.jsdelivr.net/npm/@tarekraafat/autocomplete.js@10.2.7/dist/autoComplete.min.js"></script>
+{% endblock %}

@@ -1,0 +1,166 @@
+{% extends "base.html" %}
+{% block title %}Audit Trail{% endblock %}
+
+{% block content %}
+<h1>System Audit Trail</h1>
+
+<div class="audit-container">
+    <table>
+        <thead>
+            <tr>
+                <th>Time</th>
+                <th>User</th>
+                <th>Action</th>
+                <th>Details</th>
+                <th>Changes</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for entry in entries|reverse %}
+            <tr class="audit-row {{ entry.action|lower }}">
+                <td>{{ entry.timestamp|replace('T', ' ') }}</td>
+                <td>{{ entry.user }}</td>
+                <td>
+                    <span class="action-badge">{{ entry.action }}</span>
+                </td>
+                <td>{{ entry.details }}</td>
+                <td>
+                    {% if entry.changes %}
+                    <div class="changes-list">
+                        {% for change in entry.changes %}
+                        <div class="change-item">
+                            <span class="field-name">{{ change.field }}:</span>
+                            <span class="old-value">{{ change.old }}</span>
+                            <span class="arrow">→</span>
+                            <span class="new-value">{{ change.new }}</span>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<style>
+.audit-container {
+    background: white;
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    margin-top: 20px;
+}
+
+.audit-row {
+    transition: background-color 0.2s ease;
+}
+
+.audit-row:hover {
+    background-color: #f8f9fa;
+}
+
+.action-badge {
+    padding: 4px 8px;
+    border-radius: 12px;
+    font-size: 0.9em;
+    font-weight: 500;
+}
+
+.audit-row.login .action-badge {
+    background-color: var(--accent-color);
+    color: white;
+}
+
+.audit-row.logout .action-badge {
+    background-color: #6c757d;
+    color: white;
+}
+
+.audit-row.register .action-badge {
+    background-color: var(--success-color);
+    color: white;
+}
+
+.audit-row.log_attendance .action-badge {
+    background-color: #17a2b8;
+    color: white;
+}
+
+.audit-row.modify_entry .action-badge {
+    background-color: #ffc107;
+    color: #000;
+}
+
+.audit-pagination {
+    margin-top: 20px;
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+}
+
+.timestamp {
+    font-family: monospace;
+    color: #666;
+}
+
+/* Add fade-in animation */
+.audit-container {
+    animation: fadeIn 0.3s ease-out;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.changes-list {
+    font-size: 0.9em;
+}
+
+.change-item {
+    margin: 4px 0;
+    padding: 4px;
+    background: #f8f9fa;
+    border-radius: 4px;
+}
+
+.field-name {
+    font-weight: bold;
+    color: var(--primary-color);
+}
+
+.old-value {
+    color: var(--warning-color);
+    text-decoration: line-through;
+    margin: 0 4px;
+}
+
+.arrow {
+    color: #666;
+    margin: 0 4px;
+}
+
+.new-value {
+    color: var(--success-color);
+}
+</style>
+
+<script>
+// Format timestamps to be more readable
+document.addEventListener('DOMContentLoaded', () => {
+    const timestamps = document.querySelectorAll('td:first-child');
+    timestamps.forEach(cell => {
+        const date = new Date(cell.textContent);
+        cell.textContent = date.toLocaleString();
+    });
+});
+</script>
+{% endblock %}

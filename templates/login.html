@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}Login{% endblock %}
+
+{% block content %}
+<div class="auth-container">
+    <h1>Login</h1>
+    <div class="warning-box">
+        ⚠️ This is a demo system - Do not use your real password! Use "demo" as the password.
+    </div>
+    <form method="POST" class="auth-form">
+        <div class="form-group">
+            <label for="username">Username:</label>
+            <input type="text" id="username" name="username" required>
+        </div>
+        <div class="form-group">
+            <label for="password">Password:</label>
+            <input type="password" id="password" name="password" required>
+        </div>
+        {% if error %}
+        <div class="error-message">{{ error }}</div>
+        {% endif %}
+        <button type="submit">Login</button>
+    </form>
+    <div class="auth-links">
+        <a href="{{ url_for('register') }}">Register new account</a>
+    </div>
+</div>
+{% endblock %}

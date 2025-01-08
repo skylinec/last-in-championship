@@ -1,0 +1,375 @@
+{% extends "base.html" %}
+{% block title %}Data Visualizations{% endblock %}
+
+{% block head %}
+<script src="https://cdn.plot.ly/plotly-2.24.1.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
+<style>
+.viz-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(500px, 1fr));
+    gap: 20px;
+    padding: 20px;
+}
+
+.viz-card {
+    background: white;
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+}
+
+.viz-card.wide {
+    grid-column: 1 / -1;
+}
+
+.controls {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 20px;
+    justify-content: center;
+    padding: 20px;
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+}
+
+select {
+    padding: 8px;
+    border-radius: 4px;
+    border: 1px solid #ddd;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="controls">
+    <select id="dateRange" onchange="updateCharts()">
+        <option value="7">Last 7 Days</option>
+        <option value="30">Last 30 Days</option>
+        <option value="90">Last Quarter</option>
+        <option value="all">All Time</option>
+    </select>
+    <select id="userFilter" onchange="updateCharts()">
+        <option value="all">All Users</option>
+        {% for user in core_users %}
+        <option value="{{ user }}">{{ user }}</option>
+        {% endfor %}
+    </select>
+</div>
+
+<div class="viz-grid">
+    <div class="viz-card wide">
+        <h3>Weekly Attendance Pattern</h3>
+        <div id="heatmap"></div>
+    </div>
+    
+    <div class="viz-card">
+        <h3>Status Distribution</h3>
+        <div id="statusPie"></div>
+    </div>
+    
+    <div class="viz-card">
+        <h3>Points Progression</h3>
+        <div id="pointsLine"></div>
+    </div>
+    
+    <div class="viz-card wide">
+        <h3>Daily Activity Timeline</h3>
+        <div id="timeline"></div>
+    </div>
+    
+    <div class="viz-card">
+        <h3>Early Bird Analysis</h3>
+        <div id="earlyBird"></div>
+    </div>
+    
+    <div class="viz-card">
+        <h3>User Comparison</h3>
+        <div id="comparison"></div>
+    </div>
+</div>
+
+<script>
+async function createHeatmap(data) {
+    const chartDiv = document.getElementById('heatmap');
+    const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
+    const hours = Array.from({length: 12}, (_, i) => `${i + 7}:00`);
+    
+    // Initialize empty matrix
+    const values = days.map(() => Array(hours.length).fill(0));
+    
+    // Fill in actual values
+    if (data) {
+        Object.entries(data).forEach(([key, count]) => {
+            const [day, hour] = key.split('-');
+            const dayIndex = days.indexOf(day);
+            const hourIndex = hours.indexOf(hour);
+            if (dayIndex !== -1 && hourIndex !== -1) {
+                values[dayIndex][hourIndex] = count;
+            }
+        });
+    }
+
+    const layout = {
+        title: 'Arrival Time Patterns',
+        xaxis: { 
+            title: 'Hour',
+            type: 'category',
+            fixedrange: true
+        },
+        yaxis: { 
+            title: 'Day',
+            type: 'category',
+            fixedrange: true
+        },
+        margin: { t: 50, l: 100, r: 50, b: 50 },
+        height: 400,
+        width: null  // This will make it responsive
+    };
+
+    const config = {
+        responsive: true,
+        displayModeBar: false
+    };
+
+    try {
+        await Plotly.newPlot('heatmap', [{
+            z: values,
+            x: hours,
+            y: days,
+            type: 'heatmap',
+            colorscale: 'Viridis',
+            showscale: true,
+            hoverongaps: false
+        }], layout, config);
+        
+        // Clear loading message after successful plot
+        chartDiv.classList.remove('loading');
+    } catch (error) {
+        chartDiv.innerHTML = `<p class="error">Failed to create heatmap chart: ${error.message}</p>`;
+        throw error;
+    }
+}
+
+async function createStatusPie(data) {
+    const chartDiv = document.getElementById('statusPie');
+    try {
+        const labels = Object.keys(data).map(key => key.replace('_', ' '));
+        const values = Object.values(data);
+        const layout = {
+            title: 'Status Distribution',
+            height: 400
+        };
+        await Plotly.newPlot('statusPie', [{
+            values: values,
+            labels: labels,
+            type: 'pie'
+        }], layout);
+        chartDiv.classList.remove('loading');
+    } catch (error) {
+        throw error;
+    }
+}
+
+async function createPointsLine(data) {
+    const chartDiv = document.getElementById('pointsLine');
+    const dates = Object.keys(data).sort();
+    const points = dates.map(date => data[date]);
+
+    const layout = {
+        title: 'Average Points Over Time',
+        xaxis: { title: 'Date' },
+        yaxis: { title: 'Points' },
+        height: 400
+    };
+
+    try {
+        await Plotly.newPlot('pointsLine', [{
+            x: dates,
+            y: points,
+            type: 'scatter',
+            mode: 'lines+markers'
+        }], layout);
+        chartDiv.classList.remove('loading');
+    } catch (error) {
+        throw error;
+    }
+}
+
+async function createTimeline(data) {
+    const chartDiv = document.getElementById('timeline');
+    const dates = Object.keys(data).sort();
+    const inOffice = dates.map(date => data[date].in_office);
+    const remote = dates.map(date => data[date].remote);
+
+    const layout = {
+        title: 'Daily Activity',
+        barmode: 'stack',
+        xaxis: { title: 'Date' },
+        yaxis: { title: 'Count' },
+        height: 400
+    };
+
+    try {
+        await Plotly.newPlot('timeline', [
+            {
+                x: dates,
+                y: inOffice,
+                name: 'In Office',
+                type: 'bar'
+            },
+            {
+                x: dates,
+                y: remote,
+                name: 'Remote',
+                type: 'bar'
+            }
+        ], layout);
+        chartDiv.classList.remove('loading');
+    } catch (error) {
+        throw error;
+    }
+}
+
+async function createEarlyBirdChart(data) {
+    const chartDiv = document.getElementById('earlyBird');
+    const names = Object.keys(data);
+    const percentages = names.map(name => data[name].early_percentage);
+    const totalDays = names.map(name => data[name].total_days);
+
+    const layout = {
+        title: 'Early Arrival Analysis',
+        xaxis: { title: 'Name' },
+        yaxis: { title: 'Early Arrival %' },
+        height: 400
+    };
+
+    try {
+        await Plotly.newPlot('earlyBird', [{
+            x: names,
+            y: percentages,
+            type: 'bar',
+            text: totalDays.map(days => `${days} days`),
+            textposition: 'auto'
+        }], layout);
+        chartDiv.classList.remove('loading');
+    } catch (error) {
+        throw error;
+    }
+}
+
+async function createComparison(data) {
+    const chartDiv = document.getElementById('comparison');
+    const names = Object.keys(data);
+    const inOfficePercent = names.map(name => data[name].in_office_percentage);
+    const remotePercent = names.map(name => data[name].remote_percentage);
+
+    const layout = {
+        title: 'Work Pattern Comparison',
+        barmode: 'group',
+        xaxis: { title: 'Name' },
+        yaxis: { title: 'Percentage' },
+        height: 400
+    };
+
+    try {
+        await Plotly.newPlot('comparison', [
+            {
+                x: names,
+                y: inOfficePercent,
+                name: 'In Office %',
+                type: 'bar'
+            },
+            {
+                x: names,
+                y: remotePercent,
+                name: 'Remote %',
+                type: 'bar'
+            }
+        ], layout);
+        chartDiv.classList.remove('loading');
+    } catch (error) {
+        throw error;
+    }
+}
+
+async function updateCharts() {
+    // Add loading class to chart containers
+    const charts = document.querySelectorAll('.viz-card > div');
+    charts.forEach(chart => {
+        chart.innerHTML = '';
+        chart.classList.add('loading');
+    });
+
+    try {
+        const range = document.getElementById('dateRange').value;
+        const user = document.getElementById('userFilter').value;
+        const response = await fetch(`/visualization-data?range=${range}&user=${user}`);
+        
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        
+        // Create each chart in a try-catch block
+        const createCharts = [
+            { func: createHeatmap, data: data.weeklyPatterns, id: 'heatmap' },
+            { func: createStatusPie, data: data.statusCounts, id: 'statusPie' },
+            { func: createPointsLine, data: data.pointsProgress, id: 'pointsLine' },
+            { func: createTimeline, data: data.dailyActivity, id: 'timeline' },
+            { func: createEarlyBirdChart, data: data.earlyBirdAnalysis, id: 'earlyBird' },
+            { func: createComparison, data: data.userComparison, id: 'comparison' }
+        ];
+
+        for (const chart of createCharts) {
+            try {
+                await chart.func(chart.data);
+                // Loading class will be removed by each chart function
+            } catch (error) {
+                console.error(`Error creating ${chart.id}:`, error);
+                const chartDiv = document.getElementById(chart.id);
+                chartDiv.classList.remove('loading');
+                chartDiv.innerHTML = `<p class="error">Failed to create ${chart.id} chart</p>`;
+            }
+        }
+    } catch (error) {
+        console.error('Error updating charts:', error);
+        charts.forEach(chart => {
+            chart.classList.remove('loading');
+            chart.innerHTML = `<p class="error">${error.message}</p>`;
+        });
+    }
+}
+
+// Update loading and error styling
+document.head.insertAdjacentHTML('beforeend', `
+    <style>
+        .error {
+            color: var(--warning-color);
+            text-align: center;
+            padding: 20px;
+        }
+        .loading {
+            min-height: 200px;
+            position: relative;
+        }
+        .loading::after {
+            content: 'Loading chart data...';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: var(--accent-color);
+        }
+    </style>
+`);
+
+// Initialize charts with better error handling
+document.addEventListener('DOMContentLoaded', () => {
+    updateCharts().catch(console.error);
+});
+</script>
+{% endblock %}

@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+{% block title %}Daily Rankings{% endblock %}
+
+{% block content %}
+<h1>Rankings for {{ date }}</h1>
+
+<div class="date-selector">
+    <button onclick="changeDate(-1)">Previous Day</button>
+    <input type="date" id="dateSelect" value="{{ date }}" onchange="loadDate(this.value)">
+    <button onclick="changeDate(1)">Next Day</button>
+</div>
+
+<div class="rankings-container">
+    <table>
+        <thead>
+            <tr>
+                <th>Position</th>
+                <th>Name</th>
+                <th>Time</th>
+                <th>Status</th>
+                <th>Points</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for entry in rankings %}
+            <tr class="rank-row {% if entry.status == 'in-office' %}in-office{% endif %}">
+                <td>{{ loop.index }}</td>
+                <td>{{ entry.name }}</td>
+                <td>{{ entry.time }}</td>
+                <td>{{ entry.status }}</td>
+                <td>{{ entry.points }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<script>
+function changeDate(delta) {
+    const dateInput = document.getElementById('dateSelect');
+    const currentDate = new Date(dateInput.value);
+    currentDate.setDate(currentDate.getDate() + delta);
+    dateInput.value = currentDate.toISOString().split('T')[0];
+    loadDate(dateInput.value);
+}
+
+function loadDate(date) {
+    window.location.href = `/rankings/day/${date}`;
+}
+</script>
+
+<style>
+.date-selector {
+    margin: 20px 0;
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    justify-content: center;
+}
+
+.rankings-container {
+    margin-top: 20px;
+}
+
+.rank-row.in-office {
+    font-weight: bold;
+}
+</style>
+{% endblock %}

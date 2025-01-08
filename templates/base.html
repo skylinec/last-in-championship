@@ -516,6 +516,15 @@
             }
         };
         
+        // Initialize toggle state from URL or localStorage
+        const urlParams = new URLSearchParams(window.location.search);
+        const urlMode = urlParams.get('mode');
+        const savedMode = localStorage.getItem('championshipMode');
+        const isLastIn = urlMode ? urlMode === 'last-in' : (savedMode ? savedMode === 'last-in' : true);
+        
+        toggle.checked = isLastIn;
+        updateModeDisplay(isLastIn);
+        
         function updateModeDisplay(isLastIn) {
             const mode = isLastIn ? modes.late : modes.early;
             label.textContent = mode.label;
@@ -525,12 +534,11 @@
             // Store the mode preference
             localStorage.setItem('championshipMode', isLastIn ? 'last-in' : 'early-bird');
             
-            // Get current points display elements
-            const pointsElements = document.querySelectorAll('.points-display');
-            pointsElements.forEach(el => {
-                el.classList.toggle('reverse-points', !isLastIn);
-            });
-
+            // Update current URL with new mode
+            const url = new URL(window.location.href);
+            url.searchParams.set('mode', isLastIn ? 'last-in' : 'early-bird');
+            history.replaceState(null, '', url.toString());
+            
             // Update all ranking links to include the mode
             document.querySelectorAll('a[href*="/rankings/"]').forEach(link => {
                 const url = new URL(link.href, window.location.origin);
@@ -539,20 +547,14 @@
             });
         }
         
-        // Initialize with last-in mode
-        toggle.checked = true;
-        updateModeDisplay(true);
-        
         toggle.addEventListener('change', function() {
             const isLastIn = this.checked;
             updateModeDisplay(isLastIn);
             
-            // If on a rankings page, reload with new mode parameter
+            // If on a rankings or visualisations page, reload with new mode
             const path = window.location.pathname;
             if (path.includes('rankings') || path.includes('visualisations')) {
-                const url = new URL(window.location.href);
-                url.searchParams.set('mode', isLastIn ? 'last-in' : 'early-bird');
-                window.location.href = url.toString();
+                window.location.reload();
             }
         });
     });

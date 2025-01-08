@@ -30,9 +30,9 @@
                         {% for change in entry.changes %}
                         <div class="change-item">
                             <span class="field-name">{{ change.field }}:</span>
-                            <span class="old-value">{{ change.old }}</span>
+                            <span class="old-value">{{ change.old|default('null', true) }}</span>
                             <span class="arrow">→</span>
-                            <span class="new-value">{{ change.new }}</span>
+                            <span class="new-value">{{ change.new|default('null', true) }}</span>
                         </div>
                         {% endfor %}
                     </div>

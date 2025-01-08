@@ -41,7 +41,7 @@ class AuditLog(Base):
     user = Column(String, nullable=False)
     action = Column(String, nullable=False)
     details = Column(String)
-    changes = Column(JSON)
+    changes = Column(JSON, nullable=True)  # Make sure nullable is True
 
 # Create tables
 Base.metadata.create_all(bind=engine)
@@ -120,14 +120,29 @@ def save_settings(settings_data):
     db.close()
 
 def log_audit(action, user, details, old_data=None, new_data=None):
-    """Log audit entry to database"""
+    """Log audit entry to database with proper change tracking"""
     db = SessionLocal()
     try:
+        changes = None
+        if old_data and new_data:
+            changes = []
+            # Compare old and new data to generate change list
+            all_keys = set(old_data.keys()) | set(new_data.keys())
+            for key in all_keys:
+                old_value = old_data.get(key)
+                new_value = new_data.get(key)
+                if old_value != new_value:
+                    changes.append({
+                        "field": key,
+                        "old": old_value,
+                        "new": new_value
+                    })
+
         audit_entry = AuditLog(
             user=user,
             action=action,
             details=details,
-            changes={"old": old_data, "new": new_data} if old_data or new_data else None
+            changes=changes if changes else None
         )
         db.add(audit_entry)
         db.commit()
@@ -248,15 +263,23 @@ def view_audit():
     try:
         # Get all audit logs ordered by timestamp (most recent first)
         audit_entries = db.query(AuditLog).order_by(AuditLog.timestamp.desc()).all()
-        return render_template("audit.html", entries=[
-            {
+        entries = []
+        for entry in audit_entries:
+            audit_data = {
                 "timestamp": entry.timestamp.isoformat(),
                 "user": entry.user,
                 "action": entry.action,
                 "details": entry.details,
-                "changes": entry.changes
-            } for entry in audit_entries
-        ])
+                "changes": []
+            }
+            
+            # Format changes if they exist
+            if entry.changes and isinstance(entry.changes, list):
+                audit_data["changes"] = entry.changes
+            
+            entries.append(audit_data)
+        
+        return render_template("audit.html", entries=entries)
     finally:
         db.close()
 

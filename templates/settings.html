@@ -86,33 +86,33 @@
                 </tr>
                 <tr>
                     <td>Last In Office (5th person)</td>
-                    <td>10 + (5 × {{ settings.late_bonus }})</td>
-                    <td>{{ 10 + (5 * settings.late_bonus) }}</td>
+                    <td>{{ settings.points.in_office }} + (5 × {{ settings.late_bonus }})</td>
+                    <td>{{ settings.points.in_office + (5 * settings.late_bonus) }}</td>
                 </tr>
                 <tr>
                     <td>Second-to-Last (4th person)</td>
-                    <td>10 + (4 × {{ settings.late_bonus }})</td>
-                    <td>{{ 10 + (4 * settings.late_bonus) }}</td>
+                    <td>{{ settings.points.in_office }} + (4 × {{ settings.late_bonus }})</td>
+                    <td>{{ settings.points.in_office + (4 * settings.late_bonus) }}</td>
                 </tr>
                 <tr>
                     <td>Last Remote (eligible day)</td>
-                    <td>10 + (5 × {{ settings.late_bonus }})</td>
-                    <td>{{ 10 + (5 * settings.late_bonus) }}</td>
+                    <td>{{ settings.points.remote }} + (5 × {{ settings.late_bonus }})</td>
+                    <td>{{ settings.points.remote + (5 * settings.late_bonus) }}</td>
                 </tr>
                 <tr>
                     <td>Remote (non-eligible day)</td>
-                    <td>10 (base only)</td>
-                    <td>10</td>
+                    <td>{{ settings.points.remote }} (base only)</td>
+                    <td>{{ settings.points.remote }}</td>
                 </tr>
                 <tr>
                     <td>Sick Day</td>
-                    <td>5 (base only)</td>
-                    <td>5</td>
+                    <td>{{ settings.points.sick }} (base only)</td>
+                    <td>{{ settings.points.sick }}</td>
                 </tr>
                 <tr>
                     <td>Annual Leave</td>
-                    <td>5 (base only)</td>
-                    <td>5</td>
+                    <td>{{ settings.points.leave }} (base only)</td>
+                    <td>{{ settings.points.leave }}</td>
                 </tr>
             </table>
         </div>
@@ -120,11 +120,14 @@
         <div class="example-box">
             <h4>Scoring Notes</h4>
             <ul>
+                <li>Base in-office points: {{ settings.points.in_office }}</li>
+                <li>Base remote work points: {{ settings.points.remote }}</li>
+                <li>Position multiplier: {{ settings.late_bonus }}× per position</li>
                 <li>Rankings are based only on in-office and eligible remote work days</li>
-                <li>Sick days and leave days don't affect your average score</li>
-                <li>Later arrivals earn more points (multiplied by position number)</li>
+                <li>Maximum bonus (5 people): {{ 5 * settings.late_bonus }} points</li>
                 <li>Remote work only earns position bonus on designated days</li>
-                <li>Weekly and monthly scores are averages of daily scores (excluding sick/leave)</li>
+                <li>Weekly and monthly scores are averages of daily scores</li>
+                <li>Sick and leave days do not affect rankings</li>
             </ul>
         </div>
     </div>

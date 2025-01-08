@@ -143,7 +143,7 @@ import uuid
 from flask import Flask, request, jsonify, render_template, render_template_string, session, redirect, url_for
 from functools import wraps
 
-# Replace JSON file constants with database config
+# Core users list
 CORE_USERS = ['Matt', 'Kushal', 'Nathan', 'Michael', 'Ben']
 
 def verify_user(username, password):
@@ -172,11 +172,6 @@ def save_user(username, password):
         return False
     finally:
         db.close()
-
-# Flask app
-app = Flask(__name__)
-app.secret_key = 'supersecretkey'  # Change this to a random secret key in production
-init_files()  # Initialize files when app starts
 
 def login_required(f):
     @wraps(f)
@@ -1126,4 +1121,6 @@ def period_filter(entry, period):
         return False
 
 if __name__ == "__main__":
+    # Create tables on startup
+    Base.metadata.create_all(bind=engine)
     app.run(debug=True)

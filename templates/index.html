@@ -71,9 +71,14 @@
     </div>
 </div>
 
-<button id="clockInButton" class="quick-action-button" onclick="clockIn()">
-    Clock In (In Office)
-</button>
+<div class="quick-action-buttons">
+    <button id="clockInButton" class="quick-action-button" onclick="clockIn('in-office')">
+        Clock In (In Office)
+    </button>
+    <button id="clockInRemoteButton" class="quick-action-button remote" onclick="clockIn('remote')">
+        Clock In (Remote)
+    </button>
+</div>
 
 <style>
 .form-container {
@@ -83,25 +88,26 @@
     float: left;
 }
 
-.quick-action-button {
+.quick-action-buttons {
     position: fixed;
     bottom: 20px;
     right: 20px;
-    background: var(--accent-color);
-    color: white;
-    padding: 15px 30px;
-    border-radius: 25px;
-    border: none;
-    box-shadow: 0 2px 10px rgba(0,0,0,0.2);
-    cursor: pointer;
-    font-size: 1.1em;
-    transition: all 0.3s ease;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
     z-index: 1000;
 }
 
-.quick-action-button:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+.quick-action-button {
+    position: static;  /* Override the fixed position */
+    margin: 0;        /* Reset margin */
+}
+
+.quick-action-button.remote {
+    background: var(--success-color);
+}
+
+.quick-action-button.remote:hover {
     background: var(--primary-color);
 }
 
@@ -213,13 +219,13 @@ async function loadNames() {
         .join('');
 }
 
-async function clockIn() {
+async function clockIn(status) {
     const now = new Date();
     const data = {
         date: now.toISOString().split('T')[0],
         time: now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }),
         name: '{{ session.user }}',
-        status: 'in-office'
+        status: status
     };
     
     try {
@@ -236,12 +242,14 @@ async function clockIn() {
         resultDiv.style.display = 'block';
         
         if (result.type === 'success') {
-            // Disable the clock in button for today
-            const button = document.getElementById('clockInButton');
-            button.disabled = true;
-            button.style.opacity = '0.5';
-            button.style.cursor = 'not-allowed';
-            button.title = 'Already clocked in today';
+            // Disable both clock in buttons for today
+            document.getElementById('clockInButton').disabled = true;
+            document.getElementById('clockInRemoteButton').disabled = true;
+            document.querySelectorAll('.quick-action-button').forEach(button => {
+                button.style.opacity = '0.5';
+                button.style.cursor = 'not-allowed';
+                button.title = 'Already clocked in today';
+            });
         }
         
         setTimeout(() => {
@@ -322,11 +330,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     const username = '{{ session.user }}';
     
     if (entries.some(e => e.name === username)) {
-        const button = document.getElementById('clockInButton');
-        button.disabled = true;
-        button.style.opacity = '0.5';
-        button.style.cursor = 'not-allowed';
-        button.title = 'Already clocked in today';
+        document.querySelectorAll('.quick-action-button').forEach(button => {
+            button.disabled = true;
+            button.style.opacity = '0.5';
+            button.style.cursor = 'not-allowed';
+            button.title = 'Already clocked in today';
+        });
     }
 });
 </script>

@@ -651,6 +651,25 @@ def calculate_streak_bonus(entry):
     """Calculate bonus points for consecutive late arrivals"""
     db = SessionLocal()
     try:
+        # Get entries for the last 5 working days
+        date = datetime.strptime(entry["date"], "%Y-%m-%d")
+        entries = db.query(Entry).filter(
+            Entry.name == entry["name"],
+            Entry.date < entry["date"]
+        ).order_by(Entry.date.desc()).limit(5).all()
+        
+        streak = 0
+        for e in entries:
+            e_time = datetime.strptime(e.time, "%H:%M").time()
+            if e_time >= datetime.strptime("11:00", "%H:%M").time():
+                streak += 1
+            else:
+                break
+        
+        return streak * 0.5  # 0.5 points per day of streak
+    finally:
+        db.close()
+
 def get_week_bounds(date_str):
     """Get the start and end dates for a week"""
     try:

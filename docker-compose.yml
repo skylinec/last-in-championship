@@ -8,6 +8,10 @@ services:
     environment:
       - FLASK_ENV=production
       - SECRET_KEY=${SECRET_KEY}
+      - DATABASE_URL=postgresql://user:password@db:5432/championship
+    depends_on:
+      db:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 30s
@@ -23,5 +27,19 @@ services:
     depends_on:
       - web
 
+  db:
+    image: postgres:14-alpine
+    environment:
+      - POSTGRES_USER=user
+      - POSTGRES_PASSWORD=password
+      - POSTGRES_DB=championship
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U user -d championship"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
 volumes:
-  data:
+  postgres_data:

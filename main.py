@@ -1,3 +1,141 @@
+from flask import Flask, request, jsonify, render_template, session, redirect, url_for
+from sqlalchemy import create_engine, Column, Integer, String, DateTime, Float, JSON
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import sessionmaker
+from datetime import datetime, timedelta
+import os
+import uuid
+
+# Database setup
+DATABASE_URL = os.getenv('DATABASE_URL', 'postgresql://user:password@localhost:5432/championship')
+engine = create_engine(DATABASE_URL)
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+Base = declarative_base()
+
+# Database models
+class Entry(Base):
+    __tablename__ = "entries"
+    id = Column(String, primary_key=True)
+    date = Column(String, nullable=False)
+    time = Column(String, nullable=False)
+    name = Column(String, nullable=False)
+    status = Column(String, nullable=False)
+    timestamp = Column(DateTime, default=datetime.now)
+
+class User(Base):
+    __tablename__ = "users"
+    username = Column(String, primary_key=True)
+    password = Column(String, nullable=False)
+
+class Settings(Base):
+    __tablename__ = "settings"
+    id = Column(Integer, primary_key=True)
+    points = Column(JSON, nullable=False)
+    late_bonus = Column(Float, nullable=False)
+    remote_days = Column(JSON, nullable=False)
+
+class AuditLog(Base):
+    __tablename__ = "audit_log"
+    id = Column(Integer, primary_key=True)
+    timestamp = Column(DateTime, default=datetime.now)
+    user = Column(String, nullable=False)
+    action = Column(String, nullable=False)
+    details = Column(String)
+    changes = Column(JSON)
+
+# Create tables
+Base.metadata.create_all(bind=engine)
+
+# Initialize default settings if not exists
+def init_settings():
+    db = SessionLocal()
+    if not db.query(Settings).first():
+        default_settings = Settings(
+            points={
+                "in_office": 10,
+                "remote": 8,
+                "sick": 5,
+                "leave": 5
+            },
+            late_bonus=1,
+            remote_days={}
+        )
+        db.add(default_settings)
+        db.commit()
+    db.close()
+
+# Helper functions for database operations
+def load_data():
+    db = SessionLocal()
+    entries = db.query(Entry).all()
+    data = [
+        {
+            "id": entry.id,
+            "date": entry.date,
+            "time": entry.time,
+            "name": entry.name,
+            "status": entry.status,
+            "timestamp": entry.timestamp.isoformat()
+        }
+        for entry in entries
+    ]
+    db.close()
+    return data
+
+def save_data(entries):
+    db = SessionLocal()
+    # Clear existing entries and add new ones
+    db.query(Entry).delete()
+    for entry in entries:
+        db_entry = Entry(**entry)
+        db.add(db_entry)
+    db.commit()
+    db.close()
+
+def load_settings():
+    db = SessionLocal()
+    settings = db.query(Settings).first()
+    if not settings:
+        init_settings()
+        settings = db.query(Settings).first()
+    result = {
+        "points": settings.points,
+        "late_bonus": settings.late_bonus,
+        "remote_days": settings.remote_days
+    }
+    db.close()
+    return result
+
+def save_settings(settings_data):
+    db = SessionLocal()
+    settings = db.query(Settings).first()
+    if settings:
+        settings.points = settings_data["points"]
+        settings.late_bonus = settings_data["late_bonus"]
+        settings.remote_days = settings_data["remote_days"]
+    else:
+        settings = Settings(**settings_data)
+        db.add(settings)
+    db.commit()
+    db.close()
+
+def log_audit(action, user, details, old_data=None, new_data=None):
+    db = SessionLocal()
+    audit_entry = AuditLog(
+        user=user,
+        action=action,
+        details=details,
+        changes={"old": old_data, "new": new_data} if old_data or new_data else None
+    )
+    db.add(audit_entry)
+    db.commit()
+    db.close()
+
+# Flask app setup
+app = Flask(__name__)
+app.secret_key = os.getenv('SECRET_KEY', 'supersecretkey')
+init_settings()
+
 import json
 import os
 from datetime import datetime, timedelta
@@ -82,38 +220,6 @@ def login_required(f):
             return redirect(url_for('login'))
         return f(*args, **kwargs)
     return decorated_function
-
-def log_audit(action, user, details, old_data=None, new_data=None):
-    with open(AUDIT_FILE, 'r+') as f:
-        try:
-            audit = json.load(f)
-        except json.JSONDecodeError:
-            audit = []
-        
-        audit_entry = {
-            'timestamp': datetime.now().isoformat(),
-            'user': user,
-            'action': action,
-            'details': details
-        }
-        
-        # Add change details if provided
-        if old_data and new_data:
-            changes = []
-            for key in new_data:
-                if key in old_data and old_data[key] != new_data[key]:
-                    changes.append({
-                        'field': key,
-                        'old': old_data[key],
-                        'new': new_data[key]
-                    })
-            if changes:
-                audit_entry['changes'] = changes
-        
-        audit.append(audit_entry)
-        f.seek(0)
-        json.dump(audit, f, indent=4)
-        f.truncate()
 
 @app.route("/login", methods=["GET", "POST"])
 def login():
@@ -516,20 +622,34 @@ def day_rankings(date=None):
 @app.route("/edit", methods=["GET"])
 @login_required
 def get_entries():
-    data = load_data()
+    db = SessionLocal()
     period = request.args.get("period", "all")
     page = int(request.args.get("page", 1))
+    per_page = 20
     
-    filtered = [entry for entry in data if period_filter(entry, period)]
-    filtered.sort(key=lambda x: (x["date"], x["time"]), reverse=True)
+    query = db.query(Entry)
+    if period != "all":
+        # Add period filtering logic here
+        pass
     
-    start_idx = (page - 1) * 20
-    end_idx = start_idx + 20
-    
-    return jsonify({
-        "entries": filtered[start_idx:end_idx],
-        "total": len(filtered)
-    })
+    total = query.count()
+    entries = query.offset((page - 1) * per_page).limit(per_page).all()
+    result = {
+        "entries": [
+            {
+                "id": e.id,
+                "date": e.date,
+                "time": e.time,
+                "name": e.name,
+                "status": e.status,
+                "timestamp": e.timestamp.isoformat()
+            }
+            for e in entries
+        ],
+        "total": total
+    }
+    db.close()
+    return jsonify(result)
 
 @app.route("/edit/<entry_id>", methods=["PATCH", "DELETE"])
 @login_required

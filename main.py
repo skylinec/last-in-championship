@@ -982,10 +982,10 @@ def manage_settings():
 def history():
     return render_template("history.html")
 
-@app.route("/visualizations")
+@app.route("/visualisations")
 @login_required
-def visualizations():
-    return render_template("visualizations.html", core_users=CORE_USERS)
+def visualisations():
+    return render_template("visualisations.html", core_users=CORE_USERS)
 
 @app.route("/visualization-data")
 @login_required

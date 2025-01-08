@@ -13,13 +13,13 @@ services:
       db:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:9000/health"]
       interval: 30s
       timeout: 10s
       retries: 3
-    command: ["gunicorn", "--bind", "0.0.0.0:8000", "main:app"]
+    command: ["gunicorn", "--bind", "0.0.0.0:9000", "main:app"]
     ports:
-      - "8000:8000"
+      - "9000:9000"
     
   nginx:
     image: nginx:alpine

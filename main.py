@@ -9,6 +9,10 @@ import psycopg2
 import psycopg2.extras  # Add this import
 import json  # Add explicit json import
 
+# Create Flask app first, before any route definitions
+app = Flask(__name__)
+app.secret_key = os.getenv('SECRET_KEY', 'supersecretkey')
+
 # Database setup
 DATABASE_URL = os.getenv('DATABASE_URL', 'postgresql://user:password@localhost:5432/championship')
 engine = create_engine(DATABASE_URL)
@@ -260,10 +264,6 @@ def log_audit(action, user, details, old_data=None, new_data=None):
         db.close()
 
 # Flask app setup
-app = Flask(__name__)
-app.secret_key = os.getenv('SECRET_KEY', 'supersecretkey')
-init_settings()
-
 import json
 import os
 from datetime import datetime, timedelta
@@ -1472,13 +1472,13 @@ def clear_database():
         db.close()
 
 # Move all initialization code to the bottom
-Base.metadata.create_all(bind=engine)
-migrate_database()
+def initialize_app():
+    Base.metadata.create_all(bind=engine)
+    migrate_database()
+    init_settings()
 
-# Create Flask app and initialize settings
-app = Flask(__name__)
-app.secret_key = os.getenv('SECRET_KEY', 'supersecretkey')
-init_settings()
+# Call initialization at the bottom
+initialize_app()
 
 if __name__ == "__main__":
     app.run(debug=True)

@@ -813,27 +813,48 @@ def day_rankings(date=None):
                          rankings=rankings,
                          date=date)
 
+# Update the get_entries route to handle the new filters
 @app.route("/edit", methods=["GET"])
 @login_required
 def get_entries():
     db = SessionLocal()
     try:
-        period = request.args.get("period", "all")
+        # Get filter parameters
         page = int(request.args.get("page", 1))
         per_page = 20
         
         query = db.query(Entry)
         
-        # Add period filtering
-        if period == "today":
-            query = query.filter(Entry.date == datetime.now().date().isoformat())
-        elif period == "week":
-            week_start = datetime.now().date() - timedelta(days=datetime.now().weekday())
-            query = query.filter(Entry.date >= week_start.isoformat())
-        elif period == "month":
-            month_start = datetime.now().date().replace(day=1)
-            query = query.filter(Entry.date >= month_start.isoformat())
-        
+        # Handle period filter
+        periods = request.args.get("period", "all").split(',')
+        if "all" not in periods:
+            if "today" in periods:
+                query = query.filter(Entry.date == datetime.now().date().isoformat())
+            elif "week" in periods:
+                week_start = datetime.now().date() - timedelta(days=datetime.now().weekday())
+                query = query.filter(Entry.date >= week_start.isoformat())
+            elif "month" in periods:
+                month_start = datetime.now().date().replace(day=1)
+                query = query.filter(Entry.date >= month_start.isoformat())
+
+        # Handle user filter
+        users = request.args.get("user", "all").split(',')
+        if "all" not in users:
+            query = query.filter(Entry.name.in_(users))
+
+        # Handle status filter
+        statuses = request.args.get("status", "all").split(',')
+        if "all" not in statuses:
+            query = query.filter(Entry.status.in_(statuses))
+
+        # Handle date range
+        from_date = request.args.get("from")
+        to_date = request.args.get("to")
+        if from_date:
+            query = query.filter(Entry.date >= from_date)
+        if to_date:
+            query = query.filter(Entry.date <= to_date)
+
         # Get total count for pagination
         total = query.count()
         
@@ -849,11 +870,13 @@ def get_entries():
                 "date": e.date,
                 "time": e.time,
                 "name": e.name,
-                "status": e.status,
-                "timestamp": e.timestamp.isoformat()
+                "status": e.status
             } for e in entries],
             "total": total
         })
+    except Exception as e:
+        app.logger.error(f"Error getting entries: {str(e)}")
+        return jsonify({"error": str(e)}), 500
     finally:
         db.close()
 

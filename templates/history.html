@@ -48,6 +48,12 @@
     </div>
 </div>
 
+<div class="pagination">
+    <button class="btn-nav" onclick="changePage(-1)">&laquo; Previous</button>
+    <span>Page <span id="currentPage">1</span> of <span id="totalPages">1</span></span>
+    <button class="btn-nav" onclick="changePage(1)">Next &raquo;</button>
+</div>
+
 <div id="dailyRankings" class="rankings-panel" style="display: none;">
     <h2>Today's Rankings</h2>
     <table class="rankings-table"></table>
@@ -85,16 +91,19 @@ async function loadHistory() {
 
     try {
         const params = new URLSearchParams({
-            period: periods.join(','),
             page: currentPage,
-            user: users.join(','),
-            status: statuses.join(','),
             from: fromDate,
             to: toDate
         });
 
+        // Only add non-default filters
+        if (!periods.includes('all')) params.append('period', periods.join(','));
+        if (!users.includes('all')) params.append('user', users.join(','));
+        if (!statuses.includes('all')) params.append('status', statuses.join(','));
+
         const response = await fetch(`/edit?${params}`);
         const data = await response.json();
+        
         updateTable(data.entries);
         updatePagination(data.total);
         
@@ -227,16 +236,17 @@ async function deleteEntry(id) {
 }
 
 function updatePagination(totalItems) {
-    const totalPages = Math.ceil(totalItems / ITEMS_PER_PAGE);
+    const totalPages = Math.ceil(totalItems / ITEMS_PER_PAGE) || 1;
     document.getElementById('currentPage').textContent = currentPage;
     document.getElementById('totalPages').textContent = totalPages;
     
-    // Disable/enable navigation buttons
     const prevButton = document.querySelector('.btn-nav:first-of-type');
     const nextButton = document.querySelector('.btn-nav:last-of-type');
     
-    prevButton.disabled = currentPage <= 1;
-    nextButton.disabled = currentPage >= totalPages;
+    if (prevButton && nextButton) {
+        prevButton.disabled = currentPage <= 1;
+        nextButton.disabled = currentPage >= totalPages;
+    }
 }
 
 function changePage(delta) {

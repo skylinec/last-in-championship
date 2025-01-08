@@ -30,12 +30,14 @@
                         {% for change in entry.changes %}
                         <div class="change-item">
                             <span class="field-name">{{ change.field }}:</span>
-                            <span class="old-value">{{ change.old|default('null', true) }}</span>
+                            <span class="old-value">{{ change.old if change.old != "None" else "—" }}</span>
                             <span class="arrow">→</span>
-                            <span class="new-value">{{ change.new|default('null', true) }}</span>
+                            <span class="new-value">{{ change.new if change.new != "None" else "—" }}</span>
                         </div>
                         {% endfor %}
                     </div>
+                    {% else %}
+                    <span class="no-changes">No changes</span>
                     {% endif %}
                 </td>
             </tr>
@@ -130,26 +132,34 @@
     padding: 4px;
     background: #f8f9fa;
     border-radius: 4px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
 }
 
 .field-name {
     font-weight: bold;
     color: var(--primary-color);
+    min-width: 80px;
 }
 
 .old-value {
     color: var(--warning-color);
     text-decoration: line-through;
-    margin: 0 4px;
-}
-
-.arrow {
-    color: #666;
-    margin: 0 4px;
 }
 
 .new-value {
     color: var(--success-color);
+}
+
+.arrow {
+    color: #666;
+    font-family: monospace;
+}
+
+.no-changes {
+    color: #666;
+    font-style: italic;
 }
 </style>
 

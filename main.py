@@ -135,27 +135,35 @@ def log_audit(action, user, details, old_data=None, new_data=None):
     """Log audit entry to database with proper change tracking"""
     db = SessionLocal()
     try:
-        # Ensure data is JSON serializable
+        # Ensure data is JSON serializable and handle None values
+        def clean_value(v):
+            if v is None:
+                return "None"
+            if isinstance(v, (datetime, date)):
+                return v.isoformat()
+            return str(v)
+
         if old_data:
-            old_data = {k: str(v) if isinstance(v, (datetime, date)) else v 
-                       for k, v in old_data.items()}
+            old_data = {k: clean_value(v) for k, v in old_data.items()}
         if new_data:
-            new_data = {k: str(v) if isinstance(v, (datetime, date)) else v 
-                       for k, v in new_data.items()}
+            new_data = {k: clean_value(v) for k, v in new_data.items()}
 
         changes = None
         if old_data and new_data:
             changes = []
             all_keys = set(old_data.keys()) | set(new_data.keys())
             for key in all_keys:
-                old_value = old_data.get(key)
-                new_value = new_data.get(key)
+                old_value = old_data.get(key, "None")
+                new_value = new_data.get(key, "None")
                 if old_value != new_value:
                     changes.append({
                         "field": key,
                         "old": old_value,
                         "new": new_value
                     })
+            # Only set changes if there are actual changes
+            if not changes:
+                changes = None
 
         audit_entry = AuditLog(
             user=user,

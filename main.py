@@ -553,36 +553,49 @@ def parse_uk_date(date_str):
 def calculate_daily_score(entry, settings, position=None, total_entries=None):
     """Calculate score for a single day's entry with all bonuses"""
     status = entry["status"].replace("-", "_")
-    
-    # Base points for attendance type
     base_points = settings["points"][status]
     position_bonus = 0
     
-    # Add position bonus for in-office or eligible remote work
     if position is not None and total_entries is not None:
-        if status == "in_office" or (
-            status == "remote" and 
-            is_eligible_remote_day(entry, settings)
-        ):
-            # Check championship mode
-            is_last_in = request.args.get('mode', 'last-in') == 'last-in'
+        if status == "in_office" or (status == "remote" and is_eligible_remote_day(entry, settings)):
+            # Always use last-in scoring (higher position = more points)
+            position_bonus = position * settings["late_bonus"]
             
-            if is_last_in:
-                # Last person (highest position) gets maximum bonus
-                position_bonus = position * settings["late_bonus"]
-            else:
-                # First person (position 1) gets maximum bonus, decreasing after
-                position_bonus = (total_entries - position + 1) * settings["late_bonus"]
+            # Add special bonuses based on timing
+            arrival_time = datetime.strptime(entry["time"], "%H:%M").time()
+            if arrival_time >= datetime.strptime("17:00", "%H:%M").time():
+                position_bonus *= 1.5  # 50% bonus for after 5 PM
+            elif arrival_time <= datetime.strptime("08:00", "%H:%M").time():
+                position_bonus *= 0.5  # 50% penalty for before 8 AM
     
-    # Add fixed bonuses for sick and leave
-    bonus = 0
-    if status == "sick" and "sick_bonus" in settings:
-        bonus = settings["sick_bonus"]
-    elif status == "leave" and "leave_bonus" in settings:
-        bonus = settings["leave_bonus"]
+    # Add streak bonus (if applicable)
+    streak_bonus = calculate_streak_bonus(entry)
     
-    total_points = base_points + position_bonus + bonus
+    total_points = base_points + position_bonus + streak_bonus
     return total_points
+
+def calculate_streak_bonus(entry):
+    """Calculate bonus points for consecutive late arrivals"""
+    db = SessionLocal()
+    try:
+        # Get entries for the last 5 working days
+        date = datetime.strptime(entry["date"], "%Y-%m-%d")
+        entries = db.query(Entry).filter(
+            Entry.name == entry["name"],
+            Entry.date < entry["date"]
+        ).order_by(Entry.date.desc()).limit(5).all()
+        
+        streak = 0
+        for e in entries:
+            e_time = datetime.strptime(e.time, "%H:%M").time()
+            if e_time >= datetime.strptime("11:00", "%H:%M").time():
+                streak += 1
+            else:
+                break
+        
+        return streak * 0.5  # 0.5 points per day of streak
+    finally:
+        db.close()
 
 def is_eligible_remote_day(entry, settings):
     """Check if this is an eligible remote work day for late bonus"""

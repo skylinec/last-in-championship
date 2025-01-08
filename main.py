@@ -93,13 +93,6 @@ def migrate_database():
 # Add at the top with other imports
 from sqlalchemy import inspect
 
-# Modify the initialization sequence
-Base.metadata.create_all(bind=engine)
-migrate_database()
-init_settings()
-app = Flask(__name__)
-app.secret_key = os.getenv('SECRET_KEY', 'supersecretkey')
-
 # Initialize default settings if not exists
 def init_settings():
     db = SessionLocal()
@@ -1478,8 +1471,14 @@ def clear_database():
     finally:
         db.close()
 
+# Move all initialization code to the bottom
+Base.metadata.create_all(bind=engine)
+migrate_database()
+
+# Create Flask app and initialize settings
+app = Flask(__name__)
+app.secret_key = os.getenv('SECRET_KEY', 'supersecretkey')
+init_settings()
+
 if __name__ == "__main__":
-    # Create tables on startup
-    Base.metadata.create_all(bind=engine)
-    migrate_database()  # Add this line
     app.run(debug=True)

@@ -1385,6 +1385,32 @@ def import_data():
     finally:
         db.close()
 
+@app.route("/clear-database", methods=["POST"])
+@login_required
+def clear_database():
+    db = SessionLocal()
+    try:
+        # Clear all tables
+        db.query(Entry).delete()
+        db.query(Settings).delete()
+        db.query(AuditLog).delete()
+        db.commit()
+
+        log_audit(
+            "clear_database",
+            session['user'],
+            "Cleared all database tables",
+            old_data={"action": "database_clear"},
+            new_data={"action": "database_clear"}
+        )
+        
+        return jsonify({"message": "Database cleared successfully"})
+    except Exception as e:
+        db.rollback()
+        return jsonify({"error": str(e)}), 500
+    finally:
+        db.close()
+
 if __name__ == "__main__":
     # Create tables on startup
     Base.metadata.create_all(bind=engine)

@@ -272,6 +272,71 @@
             cursor: not-allowed;
             transform: none;
         }
+
+        .championship-mode {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-left: auto;
+            margin-right: 20px;
+        }
+
+        .mode-label {
+            color: white;
+            font-size: 0.9em;
+        }
+
+        .switch {
+            position: relative;
+            display: inline-block;
+            width: 60px;
+            height: 30px;
+        }
+
+        .switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: var(--success-color);
+            transition: .4s;
+            border-radius: 34px;
+        }
+
+        .slider:before {
+            position: absolute;
+            content: "1st";
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            color: white;
+            height: 22px;
+            width: 22px;
+            left: 4px;
+            bottom: 4px;
+            background-color: white;
+            color: var(--success-color);
+            transition: .4s;
+            border-radius: 50%;
+        }
+
+        input:checked + .slider {
+            background-color: var(--warning-color);
+        }
+
+        input:checked + .slider:before {
+            transform: translateX(30px);
+            content: "↓";
+        }
     </style>
     {% block head %}{% endblock %}
 </head>
@@ -299,6 +364,13 @@
                     <a href="/audit">Audit Trail</a>
                     <a href="/maintenance">Maintenance</a>
                 </div>
+            </div>
+            <div class="championship-mode">
+                <label class="switch">
+                    <input type="checkbox" id="championshipToggle">
+                    <span class="slider"></span>
+                </label>
+                <span class="mode-label">Last-In Mode</span>
             </div>
             <div class="user-info">
                 {{ session.user }} | <a href="{{ url_for('logout') }}">Logout</a>
@@ -409,6 +481,34 @@
             disableClockInButtons();
         }
     });
+
+    // Championship mode toggle functionality
+    document.addEventListener('DOMContentLoaded', function() {
+        const toggle = document.getElementById('championshipToggle');
+        const label = document.querySelector('.mode-label');
+        
+        // Check localStorage for saved preference
+        const isLastIn = localStorage.getItem('championshipMode') !== 'first-in';
+        toggle.checked = isLastIn;
+        updateModeLabel(isLastIn);
+        
+        toggle.addEventListener('change', function() {
+            const isLastIn = this.checked;
+            localStorage.setItem('championshipMode', isLastIn ? 'last-in' : 'first-in');
+            updateModeLabel(isLastIn);
+            
+            // Reload the page if we're on a rankings or visualization page
+            const path = window.location.pathname;
+            if (path.includes('rankings') || path.includes('visualisations')) {
+                window.location.reload();
+            }
+        });
+    });
+
+    function updateModeLabel(isLastIn) {
+        const label = document.querySelector('.mode-label');
+        label.textContent = isLastIn ? 'Last-In Mode' : 'First-In Mode';
+    }
     </script>
     {% endif %}
 

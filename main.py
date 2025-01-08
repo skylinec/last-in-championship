@@ -556,17 +556,23 @@ def calculate_daily_score(entry, settings, position=None, total_entries=None):
     
     # Base points for attendance type
     base_points = settings["points"][status]
-    late_bonus = 0
+    position_bonus = 0
     
-    # Add late bonus for in-office or eligible remote work
+    # Add position bonus for in-office or eligible remote work
     if position is not None and total_entries is not None:
         if status == "in_office" or (
             status == "remote" and 
             is_eligible_remote_day(entry, settings)
         ):
-            # Higher position = later arrival = more points
-            # Last person (highest position) gets maximum bonus (4)
-            late_bonus = position * settings["late_bonus"]
+            # Check championship mode
+            is_last_in = request.args.get('mode', 'last-in') == 'last-in'
+            
+            if is_last_in:
+                # Last person (highest position) gets maximum bonus
+                position_bonus = position * settings["late_bonus"]
+            else:
+                # First person (position 1) gets maximum bonus, decreasing after
+                position_bonus = (total_entries - position + 1) * settings["late_bonus"]
     
     # Add fixed bonuses for sick and leave
     bonus = 0
@@ -575,7 +581,7 @@ def calculate_daily_score(entry, settings, position=None, total_entries=None):
     elif status == "leave" and "leave_bonus" in settings:
         bonus = settings["leave_bonus"]
     
-    total_points = base_points + late_bonus + bonus
+    total_points = base_points + position_bonus + bonus
     return total_points
 
 def is_eligible_remote_day(entry, settings):
@@ -624,6 +630,8 @@ def get_week_bounds(date_str):
 @login_required
 def view_rankings(period, date_str=None):
     try:
+        # Get championship mode from query parameter
+        mode = request.args.get('mode', 'last-in')
         # Get current date (either from URL or today)
         if date_str:
             current_date = datetime.strptime(date_str, '%Y-%m-%d')
@@ -1034,6 +1042,8 @@ def visualisations():
 @login_required
 def get_visualization_data():
     try:
+        # Add mode to visualization data request
+        mode = request.args.get('mode', 'last-in')
         data = load_data()
         if not data:
             return jsonify({

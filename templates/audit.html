@@ -4,6 +4,47 @@
 {% block content %}
 <h1>System Audit Trail</h1>
 
+<div class="filters-container">
+    <form id="filterForm" class="filters">
+        <div class="filter-group">
+            <label for="action">Action:</label>
+            <select name="action" id="action">
+                <option value="all" {% if selected_action == 'all' %}selected{% endif %}>All Actions</option>
+                {% for action in actions %}
+                <option value="{{ action }}" {% if action == selected_action %}selected{% endif %}>
+                    {{ action|replace('_', ' ')|title }}
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+        
+        <div class="filter-group">
+            <label for="user">User:</label>
+            <select name="user" id="user">
+                <option value="all" {% if selected_user == 'all' %}selected{% endif %}>All Users</option>
+                {% for user in users %}
+                <option value="{{ user }}" {% if user == selected_user %}selected{% endif %}>
+                    {{ user }}
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+        
+        <div class="filter-group">
+            <label for="from">From:</label>
+            <input type="date" id="from" name="from" value="{{ date_from }}">
+        </div>
+        
+        <div class="filter-group">
+            <label for="to">To:</label>
+            <input type="date" id="to" name="to" value="{{ date_to }}">
+        </div>
+        
+        <button type="submit">Apply Filters</button>
+        <button type="button" onclick="resetFilters()">Reset</button>
+    </form>
+</div>
+
 <div class="audit-container">
     <table>
         <thead>
@@ -44,6 +85,18 @@
             {% endfor %}
         </tbody>
     </table>
+</div>
+
+<div class="pagination">
+    {% if total_pages > 1 %}
+        {% for p in range(1, total_pages + 1) %}
+            <a href="#" 
+               onclick="changePage({{ p }})"
+               class="page-link {% if p == current_page %}active{% endif %}">
+                {{ p }}
+            </a>
+        {% endfor %}
+    {% endif %}
 </div>
 
 <style>
@@ -161,9 +214,83 @@
     color: #666;
     font-style: italic;
 }
+
+/* Add to existing styles */
+.filters-container {
+    background: white;
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    margin-bottom: 20px;
+}
+
+.filters {
+    display: flex;
+    gap: 15px;
+    align-items: flex-end;
+    flex-wrap: wrap;
+}
+
+.filter-group {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.filter-group label {
+    font-size: 0.9em;
+    color: #666;
+}
+
+.pagination {
+    display: flex;
+    justify-content: center;
+    gap: 5px;
+    margin-top: 20px;
+}
+
+.page-link {
+    padding: 8px 12px;
+    border-radius: 4px;
+    background: white;
+    color: var(--primary-color);
+    text-decoration: none;
+    transition: all 0.3s ease;
+}
+
+.page-link:hover {
+    background: var(--accent-color);
+    color: white;
+}
+
+.page-link.active {
+    background: var(--primary-color);
+    color: white;
+}
 </style>
 
 <script>
+document.getElementById('filterForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+    applyFilters();
+});
+
+function applyFilters(page = 1) {
+    const form = document.getElementById('filterForm');
+    const formData = new FormData(form);
+    const params = new URLSearchParams(formData);
+    params.set('page', page);
+    window.location.href = `/audit?${params.toString()}`;
+}
+
+function changePage(page) {
+    applyFilters(page);
+}
+
+function resetFilters() {
+    window.location.href = '/audit';
+}
+
 // Format timestamps to be more readable
 document.addEventListener('DOMContentLoaded', () => {
     const timestamps = document.querySelectorAll('td:first-child');

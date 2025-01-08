@@ -317,8 +317,41 @@ def view_audit():
     db = SessionLocal()
     try:
         app.logger.info("Fetching audit logs...")
-        audit_entries = db.query(AuditLog).order_by(AuditLog.timestamp.desc()).all()
-        app.logger.info(f"Found {len(audit_entries)} audit entries")
+        
+        # Get filter parameters
+        page = request.args.get('page', 1, type=int)
+        per_page = 20
+        action_filter = request.args.get('action', 'all')
+        user_filter = request.args.get('user', 'all')
+        date_from = request.args.get('from')
+        date_to = request.args.get('to')
+        
+        # Build query
+        query = db.query(AuditLog)
+        
+        # Apply filters
+        if action_filter != 'all':
+            query = query.filter(AuditLog.action == action_filter)
+        if user_filter != 'all':
+            query = query.filter(AuditLog.user == user_filter)
+        if date_from:
+            query = query.filter(AuditLog.timestamp >= date_from)
+        if date_to:
+            query = query.filter(AuditLog.timestamp <= date_to + " 23:59:59")
+            
+        # Get total count for pagination
+        total_entries = query.count()
+        total_pages = (total_entries + per_page - 1) // per_page
+        
+        # Get paginated results
+        audit_entries = query.order_by(AuditLog.timestamp.desc())\
+                           .offset((page - 1) * per_page)\
+                           .limit(per_page)\
+                           .all()
+        
+        # Get unique users and actions for filters
+        unique_users = db.query(AuditLog.user).distinct().all()
+        unique_actions = db.query(AuditLog.action).distinct().all()
         
         entries = []
         for entry in audit_entries:
@@ -331,8 +364,16 @@ def view_audit():
             }
             entries.append(audit_data)
             
-        app.logger.debug(f"First entry example: {entries[0] if entries else 'No entries'}")
-        return render_template("audit.html", entries=entries)
+        return render_template("audit.html",
+                             entries=entries,
+                             current_page=page,
+                             total_pages=total_pages,
+                             users=sorted([u[0] for u in unique_users]),
+                             actions=sorted([a[0] for a in unique_actions]),
+                             selected_action=action_filter,
+                             selected_user=user_filter,
+                             date_from=date_from,
+                             date_to=date_to)
     except Exception as e:
         app.logger.error(f"Error viewing audit log: {str(e)}")
         return render_template("error.html", message="Failed to load audit trail")

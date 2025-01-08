@@ -19,14 +19,15 @@ services:
       retries: 3
     command: ["gunicorn", "--bind", "0.0.0.0:9000", "main:app"]
     ports:
-      - "9000:9000"
+      - "${PORT:-9000}:9000"
     
   nginx:
     image: nginx:alpine
     ports:
-      - "180:80"
+      - "80:80"
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/conf.d:/etc/nginx/conf.d:ro
     depends_on:
       - web
     

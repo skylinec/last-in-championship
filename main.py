@@ -5,7 +5,8 @@ from sqlalchemy.orm import sessionmaker
 from datetime import datetime, timedelta
 import os
 import uuid
-import psycopg2  # Add this import
+import psycopg2
+import psycopg2.extras  # Add this import
 
 # Database setup
 DATABASE_URL = os.getenv('DATABASE_URL', 'postgresql://user:password@localhost:5432/championship')
@@ -16,9 +17,9 @@ Base = declarative_base()
 @event.listens_for(engine, "connect")
 def set_sqlite_pragma(dbapi_connection, connection_record):
     if isinstance(dbapi_connection, psycopg2.extensions.connection):
-        # Enable JSON type handling for PostgreSQL
-        import json
-        dbapi_connection.extensions.register_type(psycopg2.extensions.JSONB)
+        # Register the JSONB adapter and type
+        psycopg2.extras.register_default_jsonb(dbapi_connection)
+        psycopg2.extras.register_json(dbapi_connection)
 
 # Database models
 class Entry(Base):

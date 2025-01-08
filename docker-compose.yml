@@ -8,9 +8,7 @@ services:
     environment:
       - FLASK_ENV=production
       - SECRET_KEY=${SECRET_KEY}
-      - DATABASE_URL=${DATABASE_URL:-postgresql://user:password@db:5432/championship}
-    ports:
-      - ${PORT:-9000}:9000  # Make port configurable
+      - DATABASE_URL=postgresql://user:password@db:5432/championship
     depends_on:
       db:
         condition: service_healthy
@@ -20,22 +18,31 @@ services:
       timeout: 10s
       retries: 3
     command: ["gunicorn", "--bind", "0.0.0.0:9000", "main:app"]
-    restart: unless-stopped
-
+    ports:
+      - "9000:9000"
+    
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "180:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - web
+    
   db:
     image: postgres:14-alpine
     environment:
-      - POSTGRES_USER=${DB_USER:-user}
-      - POSTGRES_PASSWORD=${DB_PASSWORD:-password}
-      - POSTGRES_DB=${DB_NAME:-championship}
+      - POSTGRES_USER=user
+      - POSTGRES_PASSWORD=password
+      - POSTGRES_DB=championship
     volumes:
-      - postgres_data:/var/lib/postgresql/data  # Use named volume instead of local directory
+      - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-user} -d ${DB_NAME:-championship}"]
+      test: ["CMD-SHELL", "pg_isready -U user -d championship"]
       interval: 10s
       timeout: 5s
       retries: 5
-    restart: unless-stopped
 
 volumes:
   postgres_data:

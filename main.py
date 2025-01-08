@@ -120,16 +120,22 @@ def save_settings(settings_data):
     db.close()
 
 def log_audit(action, user, details, old_data=None, new_data=None):
+    """Log audit entry to database"""
     db = SessionLocal()
-    audit_entry = AuditLog(
-        user=user,
-        action=action,
-        details=details,
-        changes={"old": old_data, "new": new_data} if old_data or new_data else None
-    )
-    db.add(audit_entry)
-    db.commit()
-    db.close()
+    try:
+        audit_entry = AuditLog(
+            user=user,
+            action=action,
+            details=details,
+            changes={"old": old_data, "new": new_data} if old_data or new_data else None
+        )
+        db.add(audit_entry)
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        app.logger.error(f"Error logging audit: {str(e)}")
+    finally:
+        db.close()
 
 # Flask app setup
 app = Flask(__name__)
@@ -238,9 +244,21 @@ def logout():
 @app.route("/audit")
 @login_required
 def view_audit():
-    with open(AUDIT_FILE, 'r') as f:
-        audit = json.load(f)
-    return render_template("audit.html", entries=audit)
+    db = SessionLocal()
+    try:
+        # Get all audit logs ordered by timestamp (most recent first)
+        audit_entries = db.query(AuditLog).order_by(AuditLog.timestamp.desc()).all()
+        return render_template("audit.html", entries=[
+            {
+                "timestamp": entry.timestamp.isoformat(),
+                "user": entry.user,
+                "action": entry.action,
+                "details": entry.details,
+                "changes": entry.changes
+            } for entry in audit_entries
+        ])
+    finally:
+        db.close()
 
 @app.route("/check_attendance")
 def check_attendance():
@@ -416,7 +434,7 @@ def get_week_bounds(date_str):
             # Parse ISO week format (e.g., "2024-W01")
             year, week = map(int, date_str.replace('-W', '-').split('-'))
             # Use ISO calendar to get the correct date
-            first_day = datetime.strptime(f'{year}-W{week}-1', '%Y-W%W-%w').date()
+            first_day = datetime.strptime(f'{year}-W%W-%w', '%Y-W%W-%w').date()
             first_day = datetime.combine(first_day, datetime.min.time())
         else:
             # Parse regular date and find its week
@@ -619,33 +637,45 @@ def day_rankings(date=None):
 @login_required
 def get_entries():
     db = SessionLocal()
-    period = request.args.get("period", "all")
-    page = int(request.args.get("page", 1))
-    per_page = 20
-    
-    query = db.query(Entry)
-    if period != "all":
-        # Add period filtering logic here
-        pass
-    
-    total = query.count()
-    entries = query.offset((page - 1) * per_page).limit(per_page).all()
-    result = {
-        "entries": [
-            {
+    try:
+        period = request.args.get("period", "all")
+        page = int(request.args.get("page", 1))
+        per_page = 20
+        
+        query = db.query(Entry)
+        
+        # Add period filtering
+        if period == "today":
+            query = query.filter(Entry.date == datetime.now().date().isoformat())
+        elif period == "week":
+            week_start = datetime.now().date() - timedelta(days=datetime.now().weekday())
+            query = query.filter(Entry.date >= week_start.isoformat())
+        elif period == "month":
+            month_start = datetime.now().date().replace(day=1)
+            query = query.filter(Entry.date >= month_start.isoformat())
+        
+        # Get total count for pagination
+        total = query.count()
+        
+        # Get paginated entries
+        entries = query.order_by(Entry.date.desc(), Entry.time.desc())\
+                      .offset((page - 1) * per_page)\
+                      .limit(per_page)\
+                      .all()
+        
+        return jsonify({
+            "entries": [{
                 "id": e.id,
                 "date": e.date,
                 "time": e.time,
                 "name": e.name,
                 "status": e.status,
                 "timestamp": e.timestamp.isoformat()
-            }
-            for e in entries
-        ],
-        "total": total
-    }
-    db.close()
-    return jsonify(result)
+            } for e in entries],
+            "total": total
+        })
+    finally:
+        db.close()
 
 @app.route("/edit/<entry_id>", methods=["PATCH", "DELETE"])
 @login_required
@@ -725,32 +755,67 @@ def modify_entry(entry_id):
 @app.route("/settings", methods=["GET", "POST"])
 @login_required
 def manage_settings():
-    if request.method == "GET":
-        settings = load_settings()
-        return render_template("settings.html", settings=settings, core_users=CORE_USERS)
-    else:
-        old_settings = load_settings()
-        new_settings = request.json
-        
-        # Validate remote days
-        if 'remote_days' in new_settings:
-            for user, days in new_settings['remote_days'].items():
-                if not isinstance(days, list):
-                    return jsonify({"error": "Invalid remote days format"}), 400
-                new_settings['remote_days'][user] = [
-                    day.lower() for day in days 
-                    if day.lower() in ['mon', 'tue', 'wed', 'thu', 'fri']
-                ]
-        
-        save_settings(new_settings)
-        log_audit(
-            "update_settings",
-            session['user'],
-            "Updated point settings",
-            old_data=old_settings,
-            new_data=new_settings
-        )
-        return jsonify({"message": "Settings updated successfully"})
+    db = SessionLocal()
+    try:
+        if request.method == "GET":
+            settings = db.query(Settings).first()
+            if not settings:
+                init_settings()
+                settings = db.query(Settings).first()
+                
+            return render_template("settings.html", 
+                                settings={
+                                    "points": settings.points,
+                                    "late_bonus": settings.late_bonus,
+                                    "remote_days": settings.remote_days
+                                },
+                                core_users=CORE_USERS)
+        else:
+            old_settings = db.query(Settings).first()
+            if old_settings:
+                old_data = {
+                    "points": old_settings.points,
+                    "late_bonus": old_settings.late_bonus,
+                    "remote_days": old_settings.remote_days
+                }
+            
+            new_settings = request.json
+            
+            # Validate remote days
+            if 'remote_days' in new_settings:
+                for user, days in new_settings['remote_days'].items():
+                    if not isinstance(days, list):
+                        return jsonify({"error": "Invalid remote days format"}), 400
+                    new_settings['remote_days'][user] = [
+                        day.lower() for day in days 
+                        if day.lower() in ['mon', 'tue', 'wed', 'thu', 'fri']
+                    ]
+            
+            if old_settings:
+                old_settings.points = new_settings["points"]
+                old_settings.late_bonus = new_settings["late_bonus"]
+                old_settings.remote_days = new_settings["remote_days"]
+            else:
+                settings = Settings(**new_settings)
+                db.add(settings)
+            
+            db.commit()
+            
+            log_audit(
+                "update_settings",
+                session['user'],
+                "Updated point settings",
+                old_data=old_data if old_settings else None,
+                new_data=new_settings
+            )
+            
+            return jsonify({"message": "Settings updated successfully"})
+    except Exception as e:
+        db.rollback()
+        app.logger.error(f"Error managing settings: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+    finally:
+        db.close()
 
 @app.route("/history")
 @login_required
@@ -1017,75 +1082,6 @@ def calculate_trends(data):
     
     # Calculate trends...
     return trends
-
-def load_data():
-    """Load data with better error handling"""
-    try:
-        with open(data_file, "r") as file:
-            data = json.load(file)
-            # Ensure all entries have IDs
-            for entry in data:
-                if "id" not in entry:
-                    entry["id"] = str(uuid.uuid4())
-            return data
-    except (FileNotFoundError, json.JSONDecodeError):
-        # If file doesn't exist or is corrupted, create new
-        empty_data = []
-        save_data(empty_data)
-        return empty_data
-
-def save_data(data):
-    with open(data_file, "w") as file:
-        json.dump(data, file, indent=4)
-
-def load_settings():
-    """Load settings with better error handling and migration"""
-    try:
-        with open(SETTINGS_FILE, "r") as file:
-            settings = json.load(file)
-            
-            # Migrate old settings format to new
-            if 'early_bonus' in settings and 'late_bonus' not in settings:
-                settings['late_bonus'] = settings.pop('early_bonus')
-            
-            # Ensure all required settings exist with defaults
-            defaults = {
-                'late_bonus': 1,
-                'sick_bonus': 2,
-                'leave_bonus': 2,
-                'remote_days': {},
-                'points': {
-                    "in_office": 10,
-                    "remote": 8,
-                    "sick": 5,
-                    "leave": 5
-                }
-            }
-            
-            for key, value in defaults.items():
-                if key not in settings:
-                    settings[key] = value
-            
-            return settings
-    except (FileNotFoundError, json.JSONDecodeError):
-        default_settings = {
-            "points": {
-                "in_office": 10,
-                "remote": 8,
-                "sick": 5,
-                "leave": 5
-            },
-            "late_bonus": 1,
-            "sick_bonus": 2,
-            "leave_bonus": 2,
-            "remote_days": {}
-        }
-        save_settings(default_settings)
-        return default_settings
-
-def save_settings(settings):
-    with open(SETTINGS_FILE, "w") as file:
-        json.dump(settings, file, indent=4)
 
 def in_period(entry, period, current_date):
     """Check if entry falls within the specified period"""

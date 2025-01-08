@@ -67,6 +67,36 @@
         </form>
     </div>
 
+    <!-- Add new Core Users section before scoring explanation -->
+    <div class="settings-section">
+        <h2>Core Users</h2>
+        <p class="helper-text">Select users who should be included in attendance tracking and warnings</p>
+        <div class="core-users-table">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Registered User</th>
+                        <th>Core Member</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for registered_user in registered_users %}
+                    <tr>
+                        <td>{{ registered_user }}</td>
+                        <td>
+                            <input type="checkbox" 
+                                   class="core-user-checkbox"
+                                   name="core_users"
+                                   value="{{ registered_user }}"
+                                   {% if registered_user in core_users %}checked{% endif %}>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
     <div class="scoring-explanation">
         <h2>How Scoring Works</h2>
         
@@ -261,6 +291,26 @@
 .remote-days-table tr:hover {
     background: #e9ecef;
 }
+
+.core-users-table {
+    margin: 20px 0;
+    overflow-x: auto;
+}
+
+.core-users-table table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.core-users-table td {
+    text-align: left;
+    padding: 10px;
+}
+
+.core-users-table input[type="checkbox"] {
+    transform: scale(1.3);
+    cursor: pointer;
+}
 </style>
 
 <script>
@@ -277,7 +327,9 @@ document.getElementById('settingsForm').addEventListener('submit', async (event)
             leave: parseInt(formData.get('points.leave'))
         },
         late_bonus: parseInt(formData.get('late_bonus')),
-        remote_days: {}
+        remote_days: {},
+        core_users: Array.from(document.querySelectorAll('.core-user-checkbox:checked'))
+                       .map(checkbox => checkbox.value)
     };
     
     // Collect remote days settings

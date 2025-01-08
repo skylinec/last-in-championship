@@ -43,6 +43,7 @@ class Settings(Base):
     points = Column(JSON, nullable=False)
     late_bonus = Column(Float, nullable=False)
     remote_days = Column(JSON, nullable=False)
+    core_users = Column(JSON, nullable=False)  # Add this line
 
 class AuditLog(Base):
     __tablename__ = "audit_log"
@@ -71,7 +72,8 @@ def init_settings():
                 "leave": 5
             },
             late_bonus=1,
-            remote_days={}
+            remote_days={},
+            core_users=["Matt", "Kushal", "Nathan", "Michael", "Ben"]  # Add default core users
         )
         db.add(default_settings)
         db.commit()
@@ -404,7 +406,7 @@ def check_attendance():
         today = datetime.now().date().isoformat()
         today_entries = db.query(Entry).filter_by(date=today).all()
         present_users = [entry.name for entry in today_entries]
-        missing_users = [user for user in CORE_USERS if user not in present_users]
+        missing_users = [user for user in get_core_users() if user not in present_users]
         return jsonify(missing_users)
     finally:
         db.close()
@@ -914,45 +916,44 @@ def manage_settings():
             if not settings:
                 init_settings()
                 settings = db.query(Settings).first()
-                
+            
+            # Get all registered users
+            registered_users = [user[0] for user in db.query(User.username).all()]
+            
             return render_template("settings.html", 
                                 settings={
                                     "points": settings.points,
                                     "late_bonus": settings.late_bonus,
                                     "remote_days": settings.remote_days
                                 },
-                                core_users=CORE_USERS)
+                                core_users=settings.core_users,
+                                registered_users=registered_users)
         else:
             old_settings = db.query(Settings).first()
             new_settings = request.json
-            
-            # Log the original values for debugging
-            app.logger.debug(f"Original old settings: {old_settings.__dict__ if old_settings else None}")
-            app.logger.debug(f"Original new settings: {new_settings}")
             
             # Normalize both old and new settings for comparison
             if old_settings:
                 old_data = {
                     "points": dict(old_settings.points),
                     "late_bonus": float(old_settings.late_bonus),
-                    "remote_days": dict(old_settings.remote_days)
+                    "remote_days": dict(old_settings.remote_days),
+                    "core_users": list(old_settings.core_users)
                 }
             
             # Update database and get normalized new settings
             normalized_new = {
-                "points": {
-                    k: int(v) for k, v in new_settings["points"].items()
-                },
+                "points": {k: int(v) for k, v in new_settings["points"].items()},
                 "late_bonus": float(new_settings["late_bonus"]),
-                "remote_days": {
-                    k: sorted(v) for k, v in new_settings.get("remote_days", {}).items()
-                }
+                "remote_days": {k: sorted(v) for k, v in new_settings.get("remote_days", {}).items()},
+                "core_users": sorted(new_settings.get("core_users", []))
             }
 
             if old_settings:
                 old_settings.points = normalized_new["points"]
                 old_settings.late_bonus = normalized_new["late_bonus"]
                 old_settings.remote_days = normalized_new["remote_days"]
+                old_settings.core_users = normalized_new["core_users"]
             else:
                 settings = Settings(**normalized_new)
                 db.add(settings)
@@ -963,7 +964,7 @@ def manage_settings():
             log_audit(
                 "update_settings",
                 session['user'],
-                "Updated point settings",
+                "Updated settings",
                 old_data=old_data if old_settings else None,
                 new_data=normalized_new
             )
@@ -974,6 +975,15 @@ def manage_settings():
         db.rollback()
         app.logger.error(f"Error managing settings: {str(e)}")
         return jsonify({"error": str(e)}), 500
+    finally:
+        db.close()
+
+# Replace the hardcoded CORE_USERS with a function
+def get_core_users():
+    db = SessionLocal()
+    try:
+        settings = db.query(Settings).first()
+        return settings.core_users if settings else []
     finally:
         db.close()
 

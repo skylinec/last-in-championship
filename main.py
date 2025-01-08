@@ -1,5 +1,5 @@
 from flask import Flask, request, jsonify, render_template, session, redirect, url_for
-from sqlalchemy import create_engine, Column, Integer, String, DateTime, Float, JSON, event
+from sqlalchemy import create_engine, Column, Integer, String, DateTime, Float, JSON, event, text
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from datetime import datetime, timedelta, date  # Add date import
@@ -62,29 +62,43 @@ Base.metadata.create_all(bind=engine)
 
 # Add this function to perform the database migration
 def migrate_database():
+    """Migrate database to add core_users column"""
     db = SessionLocal()
     try:
-        # Check if core_users column exists
-        try:
-            db.execute("SELECT core_users FROM settings LIMIT 1")
-            return  # Column exists, no migration needed
-        except:
+        inspector = inspect(engine)
+        columns = [c['name'] for c in inspector.get_columns('settings')]
+        
+        if 'core_users' not in columns:
             # Add core_users column
-            db.execute('ALTER TABLE settings ADD COLUMN core_users JSON')
+            db.execute(text('ALTER TABLE settings ADD COLUMN core_users JSON'))
             # Update existing rows with default core users
+            default_users = ["Matt", "Kushal", "Nathan", "Michael", "Ben"]
             db.execute(
-                "UPDATE settings SET core_users = :users",
-                {"users": json.dumps(["Matt", "Kushal", "Nathan", "Michael", "Ben"])}
+                text("UPDATE settings SET core_users = :users"),
+                {"users": json.dumps(default_users)}
             )
             db.commit()
             print("Added core_users column to settings table")
+        
     except Exception as e:
         db.rollback()
         print(f"Migration error: {str(e)}")
+        # If column doesn't exist, recreate the table
+        Base.metadata.drop_all(bind=engine)
+        Base.metadata.create_all(bind=engine)
+        init_settings()
     finally:
         db.close()
 
-migrate_database()  # Add this line
+# Add at the top with other imports
+from sqlalchemy import inspect
+
+# Modify the initialization sequence
+Base.metadata.create_all(bind=engine)
+migrate_database()
+init_settings()
+app = Flask(__name__)
+app.secret_key = os.getenv('SECRET_KEY', 'supersecretkey')
 
 # Initialize default settings if not exists
 def init_settings():

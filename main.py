@@ -186,6 +186,7 @@ def login():
     if request.method == "POST":
         username = request.form.get("username")
         password = request.form.get("password")
+        
         if username and password and verify_user(username, password):
             session['user'] = username
             log_audit("login", username, "Successful login")
@@ -202,22 +203,29 @@ def register():
         if not username or not password:
             return render_template("register.html", error="Username and password are required")
         
+        db = SessionLocal()
         try:
-            with open(USERS_FILE, 'r') as f:
-                users = json.load(f)
-                if username in users:
-                    return render_template("register.html", error="Username already exists")
-        except Exception as e:
-            app.logger.error(f"Error checking user: {str(e)}")
-            return render_template("register.html", error="Registration system error")
-        
-        if save_user(username, password):
+            # Check if user exists
+            existing_user = db.query(User).filter_by(username=username).first()
+            if existing_user:
+                return render_template("register.html", error="Username already exists")
+            
+            # Create new user
+            user = User(username=username, password=password)  # TODO: In production, hash the password
+            db.add(user)
+            db.commit()
+            
             session['user'] = username
             log_audit("register", username, "New user registration")
             return redirect(url_for('index'))
         
-        return render_template("register.html", error="Failed to register user")
-        
+        except Exception as e:
+            db.rollback()
+            app.logger.error(f"Error registering user: {str(e)}")
+            return render_template("register.html", error="Registration system error")
+        finally:
+            db.close()
+            
     return render_template("register.html")
 
 @app.route("/logout")

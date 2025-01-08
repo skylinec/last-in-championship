@@ -170,6 +170,7 @@
 function changePeriod(delta) {
     const period = '{{ period }}';
     const currentDate = new Date('{{ current_date }}');
+    const mode = document.getElementById('championshipToggle').checked ? 'last-in' : 'early-bird';
     
     if (period === 'day') {
         currentDate.setDate(currentDate.getDate() + delta);
@@ -181,32 +182,47 @@ function changePeriod(delta) {
         currentDate.setMonth(currentDate.getMonth() + delta);
     }
     
-    loadPeriod(currentDate.toISOString().split('T')[0]);
+    loadPeriod(currentDate.toISOString().split('T')[0], mode);
 }
 
-function loadPeriod(value) {
-    window.location.href = `/rankings/{{ period }}/${value}`;
+function loadPeriod(value, mode) {
+    const url = new URL(`/rankings/{{ period }}/${value}`, window.location.origin);
+    url.searchParams.set('mode', mode);
+    window.location.href = url.toString();
 }
 
 function loadThisWeek() {
     const today = new Date();
     const monday = new Date(today);
     monday.setDate(monday.getDate() - monday.getDay() + 1);
-    loadPeriod(monday.toISOString().split('T')[0]);
+    const mode = document.getElementById('championshipToggle').checked ? 'last-in' : 'early-bird';
+    loadPeriod(monday.toISOString().split('T')[0], mode);
 }
 
 function loadWeek(date) {
     const selected = new Date(date);
     const monday = new Date(selected);
     monday.setDate(monday.getDate() - monday.getDay() + 1);
-    loadPeriod(monday.toISOString().split('T')[0]);
+    const mode = document.getElementById('championshipToggle').checked ? 'last-in' : 'early-bird';
+    loadPeriod(monday.toISOString().split('T')[0], mode);
 }
 
-// Initialize the week selector with the current date
+// Initialize the week selector with the current date and preserve mode on date change
 document.addEventListener('DOMContentLoaded', () => {
     const weekSelect = document.getElementById('weekSelect');
+    const periodSelect = document.getElementById('periodSelect');
     if (weekSelect) {
         weekSelect.max = new Date().toISOString().split('T')[0];
+        weekSelect.addEventListener('change', (e) => {
+            const mode = document.getElementById('championshipToggle').checked ? 'last-in' : 'early-bird';
+            loadWeek(e.target.value, mode);
+        });
+    }
+    if (periodSelect) {
+        periodSelect.addEventListener('change', (e) => {
+            const mode = document.getElementById('championshipToggle').checked ? 'last-in' : 'early-bird';
+            loadPeriod(e.target.value, mode);
+        });
     }
 });
 </script>

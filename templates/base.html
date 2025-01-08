@@ -530,6 +530,13 @@
             pointsElements.forEach(el => {
                 el.classList.toggle('reverse-points', !isLastIn);
             });
+
+            // Update all ranking links to include the mode
+            document.querySelectorAll('a[href*="/rankings/"]').forEach(link => {
+                const url = new URL(link.href, window.location.origin);
+                url.searchParams.set('mode', isLastIn ? 'last-in' : 'early-bird');
+                link.href = url.toString();
+            });
         }
         
         // Initialize with last-in mode
@@ -540,10 +547,12 @@
             const isLastIn = this.checked;
             updateModeDisplay(isLastIn);
             
-            // If on a rankings page, reload to update scores
+            // If on a rankings page, reload with new mode parameter
             const path = window.location.pathname;
             if (path.includes('rankings') || path.includes('visualisations')) {
-                window.location.reload();
+                const url = new URL(window.location.href);
+                url.searchParams.set('mode', isLastIn ? 'last-in' : 'early-bird');
+                window.location.href = url.toString();
             }
         });
     });

@@ -178,21 +178,25 @@ select {
 async function createHeatmap(data) {
     const chartDiv = document.getElementById('heatmap');
     try {
-        const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
-        const hours = Array.from({length: 14}, (_, i) => `${String(i + 7).padStart(2, '0')}:00`);
+        console.log("Raw heatmap data:", data);
         
+        const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
+        const hours = Array.from({length: 13}, (_, i) => `${String(i + 7).padStart(2, '0')}:00`);
+        
+        // Initialize the matrix with zeros
         const values = days.map(() => Array(hours.length).fill(0));
         
-        if (data) {
-            Object.entries(data).forEach(([key, count]) => {
-                const [day, time] = key.split('-');
-                const dayIndex = days.indexOf(day);
-                const hourIndex = hours.indexOf(time);
-                if (dayIndex !== -1 && hourIndex !== -1) {
-                    values[dayIndex][hourIndex] = count;
-                }
-            });
+        // Fill in the values from the data
+        for (const [key, count] of Object.entries(data)) {
+            const [day, time] = key.split('-');
+            const dayIndex = days.indexOf(day);
+            const hourIndex = hours.indexOf(time);
+            if (dayIndex !== -1 && hourIndex !== -1) {
+                values[dayIndex][hourIndex] = count;
+            }
         }
+        
+        console.log("Processed values:", values);
 
         const layout = {
             title: 'Attendance Pattern by Day and Hour',
@@ -200,27 +204,18 @@ async function createHeatmap(data) {
                 title: 'Hour',
                 ticktext: hours,
                 tickvals: hours.map((_, i) => i),
-                type: 'category',
-                fixedrange: true
+                type: 'category'
             },
             yaxis: { 
                 title: 'Day',
                 ticktext: days,
                 tickvals: days.map((_, i) => i),
-                type: 'category',
-                fixedrange: true
+                type: 'category'
             },
-            margin: { t: 50, l: 100, r: 50, b: 50 },
-            height: 400,
-            width: null
+            margin: { t: 50, l: 100 }
         };
 
-        const config = {
-            responsive: true,
-            displayModeBar: false
-        };
-
-        await Plotly.newPlot('heatmap', [{
+        const plotData = [{
             z: values,
             x: hours,
             y: days,
@@ -233,13 +228,15 @@ async function createHeatmap(data) {
                 "Time: %{x}<br>" +
                 "Count: %{z}<br>" +
                 "<extra></extra>"
-        }], layout, config);
-        
+        }];
+
+        await Plotly.newPlot('heatmap', plotData, layout, {responsive: true});
         chartDiv.classList.remove('loading');
+        
     } catch (error) {
-        console.error('Heatmap data:', { data });
+        console.error('Heatmap error:', error);
+        console.error('Heatmap data:', data);
         chartDiv.innerHTML = `<p class="error">Failed to create heatmap: ${error.message}</p>`;
-        throw error;
     }
 }
 

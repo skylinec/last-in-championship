@@ -1068,19 +1068,38 @@ def calculate_weekly_patterns(data):
     """Calculate attendance patterns by day and hour"""
     patterns = {}
     try:
+        # Ensure we have a pattern for all valid day-hour combinations
+        days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday']
+        hours = [f"{h:02d}:00" for h in range(7, 20)]  # 7 AM to 8 PM
+        
+        # Initialize all combinations with zero
+        for day in days:
+            for hour in hours:
+                patterns[f"{day}-{hour}"] = 0
+        
+        # Count actual patterns
         for entry in data:
-            # Only include in-office and remote work for time patterns
             if normalize_status(entry["status"]) in ["in_office", "remote"]:
-                date = datetime.strptime(entry["date"], '%Y-%m-%d')
-                time = datetime.strptime(entry["time"], "%H:%M")
-                
-                day = date.strftime("%A")
-                hour = f"{time.hour:02d}:00"
-                
-                key = f"{day}-{hour}"
-                patterns[key] = patterns.get(key, 0) + 1
-                
-    except (ValueError, KeyError) as e:
+                try:
+                    date = datetime.strptime(entry["date"], '%Y-%m-%d')
+                    time = datetime.strptime(entry["time"], "%H:%M")
+                    
+                    # Skip weekends
+                    if date.weekday() >= 5:
+                        continue
+                    
+                    day = date.strftime("%A")
+                    hour = time.strftime("%H:00")
+                    
+                    if day in days and hour in hours:
+                        key = f"{day}-{hour}"
+                        patterns[key] = patterns.get(key, 0) + 1
+                except (ValueError, TypeError) as e:
+                    app.logger.debug(f"Error processing entry: {entry}, Error: {e}")
+                    continue
+                    
+        app.logger.debug(f"Generated patterns: {patterns}")
+    except Exception as e:
         app.logger.error(f"Error in weekly patterns: {str(e)}")
     
     return patterns

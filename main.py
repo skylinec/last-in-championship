@@ -1,5 +1,5 @@
 from flask import Flask, request, jsonify, render_template, session, redirect, url_for
-from sqlalchemy import create_engine, Column, Integer, String, DateTime, Float, JSON
+from sqlalchemy import create_engine, Column, Integer, String, DateTime, Float, JSON, event
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from datetime import datetime, timedelta
@@ -11,6 +11,13 @@ DATABASE_URL = os.getenv('DATABASE_URL', 'postgresql://user:password@localhost:5
 engine = create_engine(DATABASE_URL)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
+
+@event.listens_for(engine, "connect")
+def set_sqlite_pragma(dbapi_connection, connection_record):
+    if isinstance(dbapi_connection, psycopg2.extensions.connection):
+        # Enable JSON type handling for PostgreSQL
+        import json
+        dbapi_connection.extensions.register_type(psycopg2.extensions.JSONB)
 
 # Database models
 class Entry(Base):
@@ -42,6 +49,9 @@ class AuditLog(Base):
     action = Column(String, nullable=False)
     details = Column(String)
     changes = Column(JSON, nullable=True)  # Make sure nullable is True
+
+    def __repr__(self):
+        return f"<AuditLog {self.action} by {self.user} at {self.timestamp}>"
 
 # Create tables
 Base.metadata.create_all(bind=engine)
@@ -123,10 +133,17 @@ def log_audit(action, user, details, old_data=None, new_data=None):
     """Log audit entry to database with proper change tracking"""
     db = SessionLocal()
     try:
+        # Ensure data is JSON serializable
+        if old_data:
+            old_data = {k: str(v) if isinstance(v, (datetime, date)) else v 
+                       for k, v in old_data.items()}
+        if new_data:
+            new_data = {k: str(v) if isinstance(v, (datetime, date)) else v 
+                       for k, v in new_data.items()}
+
         changes = None
         if old_data and new_data:
             changes = []
-            # Compare old and new data to generate change list
             all_keys = set(old_data.keys()) | set(new_data.keys())
             for key in all_keys:
                 old_value = old_data.get(key)
@@ -142,13 +159,20 @@ def log_audit(action, user, details, old_data=None, new_data=None):
             user=user,
             action=action,
             details=details,
-            changes=changes if changes else None
+            changes=changes
         )
+        
         db.add(audit_entry)
         db.commit()
+        
+        # Verify the entry was saved
+        db.refresh(audit_entry)
+        app.logger.info(f"Audit log created: {audit_entry}")
+        
     except Exception as e:
         db.rollback()
         app.logger.error(f"Error logging audit: {str(e)}")
+        raise
     finally:
         db.close()
 
@@ -261,8 +285,10 @@ def logout():
 def view_audit():
     db = SessionLocal()
     try:
-        # Get all audit logs ordered by timestamp (most recent first)
+        app.logger.info("Fetching audit logs...")
         audit_entries = db.query(AuditLog).order_by(AuditLog.timestamp.desc()).all()
+        app.logger.info(f"Found {len(audit_entries)} audit entries")
+        
         entries = []
         for entry in audit_entries:
             audit_data = {
@@ -270,16 +296,15 @@ def view_audit():
                 "user": entry.user,
                 "action": entry.action,
                 "details": entry.details,
-                "changes": []
+                "changes": entry.changes if entry.changes else []
             }
-            
-            # Format changes if they exist
-            if entry.changes and isinstance(entry.changes, list):
-                audit_data["changes"] = entry.changes
-            
             entries.append(audit_data)
-        
+            
+        app.logger.debug(f"First entry example: {entries[0] if entries else 'No entries'}")
         return render_template("audit.html", entries=entries)
+    except Exception as e:
+        app.logger.error(f"Error viewing audit log: {str(e)}")
+        return render_template("error.html", message="Failed to load audit trail")
     finally:
         db.close()
 

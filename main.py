@@ -140,7 +140,6 @@ def log_audit(action, user, details, old_data=None, new_data=None):
         app.logger.debug(f"Old data: {old_data}")
         app.logger.debug(f"New data: {new_data}")
         
-        # Ensure data is JSON serializable and handle None values
         def clean_value(v):
             if v is None:
                 return "None"
@@ -159,14 +158,30 @@ def log_audit(action, user, details, old_data=None, new_data=None):
             new_data = {k: clean_value(v) for k, v in new_data.items()}
 
         changes = None
-        if old_data and new_data:
+        if action == "delete_entry":
+            # For deletions, show all fields as being removed
+            changes = [{
+                "field": key,
+                "old": value,
+                "new": "None",
+                "type": "deleted"
+            } for key, value in old_data.items()]
+        elif action == "log_attendance":
+            # For new entries, show all fields as being added
+            changes = [{
+                "field": key,
+                "old": "None",
+                "new": value,
+                "type": "added"
+            } for key, value in new_data.items()]
+        elif old_data and new_data:
+            # For modifications, track changes
             changes = []
             all_keys = set(old_data.keys()) | set(new_data.keys())
             for key in all_keys:
                 old_value = old_data.get(key, "None")
                 new_value = new_data.get(key, "None")
                 if old_value != new_value:
-                    # Convert dictionaries to sorted JSON strings for comparison
                     if isinstance(old_value, dict) and isinstance(new_value, dict):
                         old_str = json.dumps(old_value, sort_keys=True)
                         new_str = json.dumps(new_value, sort_keys=True)
@@ -174,16 +189,18 @@ def log_audit(action, user, details, old_data=None, new_data=None):
                             changes.append({
                                 "field": key,
                                 "old": old_value,
-                                "new": new_value
+                                "new": new_value,
+                                "type": "modified"
                             })
                     else:
                         changes.append({
                             "field": key,
                             "old": old_value,
-                            "new": new_value
+                            "new": new_value,
+                            "type": "modified"
                         })
 
-        # Only create audit entry if there are changes or it's a non-modification action
+        # Create audit entry if there are changes or it's a non-modification action
         if changes or not (old_data and new_data):
             audit_entry = AuditLog(
                 user=user,

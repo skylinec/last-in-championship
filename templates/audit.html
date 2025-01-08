@@ -70,10 +70,21 @@
                     <div class="changes-list">
                         {% for change in entry.changes %}
                         <div class="change-item">
+                            <span class="change-type {{ change.type }}">{{ change.type|title }}</span>
                             <span class="field-name">{{ change.field }}:</span>
-                            <span class="old-value">{{ change.old if change.old != "None" else "—" }}</span>
-                            <span class="arrow">→</span>
-                            <span class="new-value">{{ change.new if change.new != "None" else "—" }}</span>
+                            {% if change.type == 'deleted' %}
+                                <span class="old-value">{{ change.old if change.old != "None" else "—" }}</span>
+                                <span class="arrow">→</span>
+                                <span class="new-value">deleted</span>
+                            {% elif change.type == 'added' %}
+                                <span class="old-value">new</span>
+                                <span class="arrow">→</span>
+                                <span class="new-value">{{ change.new if change.new != "None" else "—" }}</span>
+                            {% else %}
+                                <span class="old-value">{{ change.old if change.old != "None" else "—" }}</span>
+                                <span class="arrow">→</span>
+                                <span class="new-value">{{ change.new if change.new != "None" else "—" }}</span>
+                            {% endif %}
                         </div>
                         {% endfor %}
                     </div>
@@ -266,6 +277,28 @@
 .page-link.active {
     background: var(--primary-color);
     color: white;
+}
+
+.change-type {
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-size: 0.8em;
+    font-weight: bold;
+}
+
+.change-type.modified {
+    background: #ffeeba;
+    color: #856404;
+}
+
+.change-type.added {
+    background: #d4edda;
+    color: #155724;
+}
+
+.change-type.deleted {
+    background: #f8d7da;
+    color: #721c24;
 }
 </style>
 

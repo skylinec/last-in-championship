@@ -652,6 +652,40 @@ scoring-explanation ul li::before {
     color: var(--primary-color);
     margin-bottom: 10px;
 }
+
+.dragging {
+    opacity: 0.5;
+    cursor: move;
+}
+
+.drag-over {
+    border: 2px dashed var(--accent-color);
+}
+
+.rules-container {
+    min-height: 100px;
+    padding: 10px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+}
+
+.rule-block {
+    cursor: move;
+    transition: transform 0.2s ease;
+}
+
+.rule-block:hover {
+    transform: translateX(5px);
+}
+
+.rule-block button {
+    opacity: 0;
+    transition: opacity 0.2s ease;
+}
+
+.rule-block:hover button {
+    opacity: 1;
+}
 </style>
 
 <script>
@@ -800,34 +834,121 @@ function initializeDragAndDrop() {
 
     blocks.forEach(block => {
         block.addEventListener('dragstart', handleDragStart);
+        block.addEventListener('dragend', handleDragEnd);
     });
 
     rulesContainer.addEventListener('dragover', handleDragOver);
+    rulesContainer.addEventListener('dragenter', handleDragEnter);
+    rulesContainer.addEventListener('dragleave', handleDragLeave);
     rulesContainer.addEventListener('drop', handleDrop);
+    
+    // Make existing rules draggable within container
+    makeRulesDraggable();
+}
+
+function makeRulesDraggable() {
+    const ruleBlocks = document.querySelectorAll('.rule-block');
+    ruleBlocks.forEach(block => {
+        block.draggable = true;
+        block.addEventListener('dragstart', handleRuleDragStart);
+        block.addEventListener('dragend', handleDragEnd);
+    });
 }
 
 function handleDragStart(e) {
+    e.target.classList.add('dragging');
+    e.dataTransfer.effectAllowed = 'move';
     e.dataTransfer.setData('text/plain', JSON.stringify({
         type: e.target.dataset.type,
-        template: e.target.dataset.template
+        template: e.target.dataset.template,
+        isNew: true
     }));
+}
+
+function handleRuleDragStart(e) {
+    e.target.classList.add('dragging');
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', JSON.stringify({
+        type: e.target.dataset.type,
+        template: e.target.innerHTML,
+        isNew: false,
+        index: Array.from(e.target.parentNode.children).indexOf(e.target)
+    }));
+}
+
+function handleDragEnd(e) {
+    e.target.classList.remove('dragging');
 }
 
 function handleDragOver(e) {
     e.preventDefault();
     e.dataTransfer.dropEffect = 'move';
+    const afterElement = getDragAfterElement(e.target, e.clientY);
+    const draggable = document.querySelector('.dragging');
+    if (draggable) {
+        if (afterElement) {
+            e.target.insertBefore(draggable, afterElement);
+        } else {
+            e.target.appendChild(draggable);
+        }
+    }
+}
+
+function handleDragEnter(e) {
+    e.preventDefault();
+    e.target.classList.add('drag-over');
+}
+
+function handleDragLeave(e) {
+    e.target.classList.remove('drag-over');
 }
 
 function handleDrop(e) {
     e.preventDefault();
+    e.target.classList.remove('drag-over');
+    
     const data = JSON.parse(e.dataTransfer.getData('text/plain'));
-    createRuleBlock(data.type, data.template);
+    
+    if (data.isNew) {
+        createRuleBlock(data.type, data.template);
+    } else {
+        // Reorder existing rule
+        const rules = Array.from(document.querySelectorAll('.rule-block'));
+        const movedRule = rules[data.index];
+        const afterElement = getDragAfterElement(e.target, e.clientY);
+        if (afterElement) {
+            e.target.insertBefore(movedRule, afterElement);
+        } else {
+            e.target.appendChild(movedRule);
+        }
+    }
+    
+    updateRulePreview();
 }
 
+function getDragAfterElement(container, y) {
+    const draggableElements = [...container.querySelectorAll('.rule-block:not(.dragging)')];
+    
+    return draggableElements.reduce((closest, child) => {
+        const box = child.getBoundingClientRect();
+        const offset = y - box.top - box.height / 2;
+        
+        if (offset < 0 && offset > closest.offset) {
+            return { offset: offset, element: child };
+        } else {
+            return closest;
+        }
+    }, { offset: Number.NEGATIVE_INFINITY }).element;
+}
+
+// Update existing createRuleBlock function
 function createRuleBlock(type, template) {
     const block = document.createElement('div');
     block.className = 'rule-block';
     block.dataset.type = type;
+    block.draggable = true;
+    block.addEventListener('dragstart', handleRuleDragStart);
+    block.addEventListener('dragend', handleDragEnd);
     
     const templateParts = template.split(/[{}]/);
     templateParts.forEach(part => {

@@ -239,6 +239,37 @@
                         </tr>
                     </table>
                 </div>
+
+                <div class="streak-rules">
+                    <h5>Streak Rules</h5>
+                    <ul>
+                        <li>Weekend days don't break streaks</li>
+                        <li>Both office and remote work count</li>
+                        <li>Sick days or annual leave break the streak</li>
+                        <li>Maximum gap allowed is 3 days (for weekends)</li>
+                        <li>Streak bonuses only affect scores up to the day being viewed</li>
+                        <li>Future attendance cannot affect past scores</li>
+                    </ul>
+                </div>
+
+                <div class="streak-example">
+                    <h5>Example Date-Aware Calculations</h5>
+                    <p>If viewing rankings for 2024-01-15:</p>
+                    <table class="example-table">
+                        <tr>
+                            <th>Scenario</th>
+                            <th>Effect on Score</th>
+                        </tr>
+                        <tr>
+                            <td>3-day streak up to Jan 15</td>
+                            <td>±{{ 3 * settings.streak_multiplier }} points</td>
+                        </tr>
+                        <tr>
+                            <td>Attendance on Jan 16-20</td>
+                            <td>No effect on Jan 15 score</td>
+                        </tr>
+                    </table>
+                </div>
             </div>
             {% endif %}
         </div>
@@ -360,7 +391,7 @@
     position: relative;
 }
 
-.scoring-explanation ul li::before {
+scoring-explanation ul li::before {
     content: "•";
     color: var(--accent-color);
     font-weight: bold;

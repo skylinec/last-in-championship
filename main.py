@@ -594,14 +594,14 @@ def calculate_daily_score(entry, settings, position=None, total_entries=None, mo
         early_bird_bonus = (total_entries - position + 1) * settings["late_bonus"]
         last_in_bonus = position * settings["late_bonus"]
     
-    # Calculate streak bonus if enabled
+    # Calculate streak bonus if enabled, using date-aware streak calculation
     streak_bonus = 0
     if settings.get("enable_streaks", False):
         db = SessionLocal()
         try:
-            streak = db.query(UserStreak).filter_by(username=entry["name"]).first()
-            if streak and streak.current_streak > 0:
-                streak_bonus = streak.current_streak * settings.get("streak_multiplier", 0.5)
+            streak = calculate_streak_for_date(entry["name"], entry["date"], db)
+            if streak > 0:
+                streak_bonus = streak * settings.get("streak_multiplier", 0.5)
         finally:
             db.close()
     
@@ -2670,6 +2670,50 @@ def chatbot():
         })
 
 # ...existing code...
+
+def calculate_streak_for_date(name, target_date, db):
+    """Calculate streak for a user up to a specific date"""
+    try:
+        target_date = datetime.strptime(target_date, '%Y-%m-%d').date() if isinstance(target_date, str) else target_date
+        
+        # Get entries up to target date
+        entries = db.query(Entry).filter(
+            Entry.name == name,
+            Entry.status.in_(['in-office', 'remote']),
+            Entry.date <= target_date.isoformat()
+        ).order_by(Entry.date.desc()).all()
+        
+        if not entries:
+            return 0
+            
+        streak = 1
+        last_date = datetime.strptime(entries[0].date, "%Y-%m-%d").date()
+        
+        # Skip first entry as it's counted above
+        for entry in entries[1:]:
+            entry_date = datetime.strptime(entry.date, "%Y-%m-%d").date()
+            days_between = (last_date - entry_date).days
+            
+            if days_between > 3:  # More than a weekend
+                break
+            elif days_between > 1:
+                weekend_only = True
+                for d in range(1, days_between):
+                    check_date = last_date - timedelta(days=d)
+                    if check_date.weekday() < 5:  # Not weekend
+                        weekend_only = False
+                        break
+                if not weekend_only:
+                    break
+            
+            streak += 1
+            last_date = entry_date
+            
+        return streak
+        
+    except Exception as e:
+        app.logger.error(f"Error calculating streak: {str(e)}")
+        return 0
 
 if __name__ == "__main__":
     app.run(debug=True)

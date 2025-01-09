@@ -1859,5 +1859,100 @@ def format_date_range(start_date, end_date, period):
         app.logger.error(f"Error formatting date range: {str(e)}")
         return "Invalid date range"
 
+from nltk.tokenize import word_tokenize
+from nltk.corpus import stopwords
+from nltk.stem import WordNetLemmatizer
+import nltk
+
+# Download required NLTK data
+nltk.download('punkt')
+nltk.download('stopwords')
+nltk.download('wordnet')
+
+@app.route("/chatbot", methods=["POST"])
+@login_required
+def chatbot():
+    message = request.json.get("message", "").lower()
+    tokens = word_tokenize(message)
+    stop_words = set(stopwords.words('english'))
+    lemmatizer = WordNetLemmatizer()
+    
+    # Process tokens
+    tokens = [lemmatizer.lemmatize(word) for word in tokens if word not in stop_words]
+    
+    # Define command patterns
+    commands = {
+        'rankings': ['ranking', 'score', 'position', 'standing', 'leaderboard'],
+        'attendance': ['attendance', 'present', 'here', 'today', 'entry'],
+        'stats': ['statistics', 'stats', 'numbers', 'count'],
+        'help': ['help', 'how', 'what', 'guide', 'explain']
+    }
+    
+    # Check for command matches
+    for command, keywords in commands.items():
+        if any(word in tokens for word in keywords):
+            if command == 'rankings':
+                db = SessionLocal()
+                try:
+                    mode = 'last-in'  # Default mode
+                    period = 'day'    # Default period
+                    
+                    # Check for period specifications
+                    if any(word in tokens for word in ['week', 'weekly']):
+                        period = 'week'
+                    elif any(word in tokens for word in ['month', 'monthly']):
+                        period = 'month'
+                    
+                    data = load_data()
+                    rankings = calculate_scores(data, period, datetime.now())
+                    if rankings:
+                        top_3 = rankings[:3]
+                        response = f"Top 3 {period}ly rankings:\n"
+                        for i, rank in enumerate(top_3, 1):
+                            response += f"{i}. {rank['name']} - {rank['score']} points\n"
+                    else:
+                        response = f"No {period}ly rankings available yet."
+                finally:
+                    db.close()
+                return jsonify({"response": response})
+            
+            elif command == 'attendance':
+                db = SessionLocal()
+                try:
+                    today = datetime.now().date().isoformat()
+                    entries = db.query(Entry).filter_by(date=today).all()
+                    if entries:
+                        response = "Today's attendance:\n"
+                        for entry in entries:
+                            response += f"{entry.name} - {entry.status} at {entry.time}\n"
+                    else:
+                        response = "No attendance records for today yet."
+                finally:
+                    db.close()
+                return jsonify({"response": response})
+            
+            elif command == 'stats':
+                response = "Here are some quick statistics:\n"
+                data = load_data()
+                stats = calculate_status_counts(data)
+                response += f"Total in-office: {stats['in_office']}\n"
+                response += f"Total remote: {stats['remote']}\n"
+                response += f"Total sick days: {stats['sick']}\n"
+                response += f"Total leave days: {stats['leave']}"
+                return jsonify({"response": response})
+            
+            elif command == 'help':
+                response = "I can help you with:\n"
+                response += "- Checking rankings (daily/weekly/monthly)\n"
+                response += "- Viewing attendance records\n"
+                response += "- Getting statistics\n"
+                response += "Just ask me what you'd like to know!"
+                return jsonify({"response": response})
+    
+    # Default response if no command matches
+    return jsonify({
+        "response": "I'm not sure about that. Try asking about rankings, attendance, or stats. Or type 'help' for more information."
+    })
+
 if __name__ == "__main__":
     app.run(debug=True)

@@ -766,11 +766,8 @@ def calculate_scores(data, period, current_date):
     
     # Calculate scores for each day
     for date, entries in daily_entries.items():
-        # Sort entries by time based on mode
-        entries.sort(
-            key=lambda x: datetime.strptime(x["time"], "%H:%M"),
-            reverse=(mode == 'last-in')  # Reverse for last-in mode
-        )
+        # Sort entries by time (always ascending)
+        entries.sort(key=lambda x: datetime.strptime(x["time"], "%H:%M"))
         
         total_entries = len(entries)
         for position, entry in enumerate(entries, 1):
@@ -795,7 +792,7 @@ def calculate_scores(data, period, current_date):
                 # Early bird: first position gets highest bonus
                 bonus_position = total_entries - position + 1
             else:
-                # Last-in: last position gets highest bonus
+                # Last-in: last position gets highest bonus (opposite of position)
                 bonus_position = position
                 
             points = calculate_daily_score(entry, settings, bonus_position, total_entries)
@@ -831,8 +828,8 @@ def calculate_scores(data, period, current_date):
                 "average_arrival_time": calculate_average_time(arrival_times) if arrival_times else "N/A"
             })
     
-    # Sort rankings by score
-    rankings.sort(key=lambda x: x["score"], reverse=False)
+    # Always sort by descending score since the scoring logic already accounts for mode
+    rankings.sort(key=lambda x: x["score"], reverse=True)
     return rankings
 
 def calculate_average_time(times):

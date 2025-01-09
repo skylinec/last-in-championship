@@ -1889,81 +1889,125 @@ def chatbot():
     stop_words = set(stopwords.words('english'))
     lemmatizer = WordNetLemmatizer()
     
-    # Process tokens
     tokens = [lemmatizer.lemmatize(word) for word in tokens if word not in stop_words]
     
-    # Define command patterns
+    # Enhanced command patterns with more variations
     commands = {
-        'rankings': ['ranking', 'score', 'position', 'standing', 'leaderboard'],
-        'attendance': ['attendance', 'present', 'here', 'today', 'entry'],
-        'stats': ['statistics', 'stats', 'numbers', 'count'],
-        'help': ['help', 'how', 'what', 'guide', 'explain']
+        'rankings': ['ranking', 'score', 'position', 'standing', 'leaderboard', 'top', 'best', 'leading'],
+        'attendance': ['attendance', 'present', 'here', 'today', 'entry', 'who', 'office', 'remote'],
+        'stats': ['statistics', 'stats', 'numbers', 'count', 'total', 'average', 'avg'],
+        'streaks': ['streak', 'consecutive', 'row', 'sequence'],
+        'help': ['help', 'how', 'what', 'guide', 'explain', 'can', 'capable']
     }
     
-    # Check for command matches
+    # Extract time period if mentioned
+    time_periods = {
+        'today': ['today', 'now', 'current'],
+        'week': ['week', 'weekly'],
+        'month': ['month', 'monthly'],
+        'year': ['year', 'yearly', 'annual']
+    }
+    
+    period = 'day'  # default
+    for p, keywords in time_periods.items():
+        if any(word in tokens for word in keywords):
+            period = p
+            break
+    
+    # Check for command matches with enhanced responses
     for command, keywords in commands.items():
         if any(word in tokens for word in keywords):
-            if command == 'rankings':
-                db = SessionLocal()
-                try:
-                    mode = 'last-in'  # Default mode
-                    period = 'day'    # Default period
-                    
-                    # Check for period specifications
-                    if any(word in tokens for word in ['week', 'weekly']):
-                        period = 'week'
-                    elif any(word in tokens for word in ['month', 'monthly']):
-                        period = 'month'
-                    
+            db = SessionLocal()
+            try:
+                if command == 'rankings':
                     data = load_data()
                     rankings = calculate_scores(data, period, datetime.now())
                     if rankings:
                         top_3 = rankings[:3]
                         response = f"Top 3 {period}ly rankings:\n"
                         for i, rank in enumerate(top_3, 1):
-                            response += f"{i}. {rank['name']} - {rank['score']} points\n"
+                            response += f"{i}. {rank['name']} - {rank['score']} points"
+                            if rank.get('current_streak', 0) > 0:
+                                response += f" (streak: {rank['current_streak']})"
+                            response += "\n"
                     else:
                         response = f"No {period}ly rankings available yet."
-                finally:
-                    db.close()
-                return jsonify({"response": response})
-            
-            elif command == 'attendance':
-                db = SessionLocal()
-                try:
+                    
+                elif command == 'attendance':
+                    # Check for specific user queries
+                    user_query = False
+                    for token in tokens:
+                        if token in [user.lower() for user in get_core_users()]:
+                            user_query = token.capitalize()
+                            break
+                    
                     today = datetime.now().date().isoformat()
-                    entries = db.query(Entry).filter_by(date=today).all()
-                    if entries:
-                        response = "Today's attendance:\n"
-                        for entry in entries:
-                            response += f"{entry.name} - {entry.status} at {entry.time}\n"
+                    entries = db.query(Entry).filter_by(date=today)
+                    
+                    if user_query:
+                        entries = entries.filter_by(name=user_query).all()
+                        if entries:
+                            entry = entries[0]
+                            response = f"{entry.name} is {entry.status} today (arrived at {entry.time})"
+                        else:
+                            response = f"No attendance record for {user_query} today."
                     else:
-                        response = "No attendance records for today yet."
-                finally:
-                    db.close()
+                        entries = entries.all()
+                        if entries:
+                            response = "Today's attendance:\n"
+                            for entry in sorted(entries, key=lambda x: x.time):
+                                response += f"{entry.name} - {entry.status} at {entry.time}\n"
+                        else:
+                            response = "No attendance records for today yet."
+                
+                elif command == 'streaks':
+                    streaks = db.query(UserStreak).order_by(UserStreak.current_streak.desc()).all()
+                    if streaks:
+                        response = "Current streaks:\n"
+                        for streak in streaks[:3]:  # Show top 3 streaks
+                            if streak.current_streak > 0:
+                                response += f"{streak.username}: {streak.current_streak} days"
+                                if streak.current_streak == streak.max_streak:
+                                    response += " (Personal Best!)"
+                                response += "\n"
+                    else:
+                        response = "No active streaks at the moment."
+                
+                elif command == 'stats':
+                    # Enhanced statistics with more detail
+                    data = load_data()
+                    stats = calculate_status_counts(data)
+                    
+                    today_count = len([e for e in data if e['date'] == datetime.now().date().isoformat()])
+                    week_count = len([e for e in data if in_period(e, 'week', datetime.now())])
+                    
+                    response = "📊 Statistics Summary:\n"
+                    response += f"Today's attendance: {today_count}\n"
+                    response += f"This week's attendance: {week_count}\n"
+                    response += f"Total in-office: {stats['in_office']}\n"
+                    response += f"Total remote: {stats['remote']}\n"
+                    response += f"Total sick days: {stats['sick']}\n"
+                    response += f"Total leave days: {stats['leave']}"
+                
+                else:  # help command
+                    response = "I can help you with:\n"
+                    response += "- Checking rankings (try: 'show rankings for this week')\n"
+                    response += "- Viewing attendance (try: 'who is in today?' or 'is [name] in?')\n"
+                    response += "- Getting statistics (try: 'show me the stats')\n"
+                    response += "- Checking streaks (try: 'what are the current streaks?')\n"
+                    response += "Just ask me what you'd like to know!"
+                
                 return jsonify({"response": response})
             
-            elif command == 'stats':
-                response = "Here are some quick statistics:\n"
-                data = load_data()
-                stats = calculate_status_counts(data)
-                response += f"Total in-office: {stats['in_office']}\n"
-                response += f"Total remote: {stats['remote']}\n"
-                response += f"Total sick days: {stats['sick']}\n"
-                response += f"Total leave days: {stats['leave']}"
-                return jsonify({"response": response})
-            
-            elif command == 'help':
-                response = "I can help you with:\n"
-                response += "- Checking rankings (daily/weekly/monthly)\n"
-                response += "- Viewing attendance records\n"
-                response += "- Getting statistics\n"
-                response += "Just ask me what you'd like to know!"
-                return jsonify({"response": response})
+            except Exception as e:
+                app.logger.error(f"Chatbot error: {str(e)}")
+                return jsonify({"response": "Sorry, I encountered an error processing your request."})
+            finally:
+                db.close()
     
-    # Default response if no command matches
+    # If no command matches, provide a helpful response
     return jsonify({
-        "response": "I'm not sure about that. Try asking about rankings, attendance, or stats. Or type 'help' for more information."
+        "response": "I'm not sure what you're asking. Try asking about rankings, attendance, stats, or streaks. Or type 'help' for more information."
     })
 
 if __name__ == "__main__":

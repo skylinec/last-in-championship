@@ -412,6 +412,14 @@
             cursor: pointer;
             box-shadow: 0 2px 10px rgba(0,0,0,0.2);
             transition: transform 0.3s ease;
+            display: flex;           /* Add these lines */
+            align-items: center;     /* to center */
+            justify-content: center; /* the emoji */
+        }
+
+        .chat-icon {
+            line-height: 1;    /* Add these lines */
+            margin-top: -2px;  /* for perfect centering */
         }
 
         .chat-toggle:hover {

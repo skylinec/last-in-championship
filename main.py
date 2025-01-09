@@ -657,16 +657,34 @@ def view_rankings(period, date_str=None):
         data = load_data()
         rankings = calculate_scores(data, period, current_date)
         
-        # Add time data for each entry
-        for entry in rankings:
-            entry_time = datetime.strptime(entry["time"], "%H:%M")
-            entry["time_obj"] = entry_time
-            entry_date = datetime.strptime(entry["date"], "%Y-%m-%d")
-            is_friday = entry_date.weekday() == 4
-            shift_length = 210 if is_friday else 510  # 3.5 hours = 210 mins, 8.5 hours = 510 mins
-            entry["shift_length"] = shift_length
-            end_time = entry_time + timedelta(minutes=shift_length)
-            entry["end_time"] = end_time.strftime('%H:%M')
+        # Process each ranking entry to add time data
+        for rank in rankings:
+            # Find the most recent entry for this user in the period
+            user_entries = [e for e in data if e["name"] == rank["name"] and 
+                          in_period(e, period, current_date)]
+            if user_entries:
+                # Sort entries by date and time to get the most recent
+                latest_entry = sorted(user_entries, 
+                    key=lambda x: (x["date"], x["time"]))[-1]
+                
+                entry_time = datetime.strptime(latest_entry["time"], "%H:%M")
+                entry_date = datetime.strptime(latest_entry["date"], "%Y-%m-%d")
+                is_friday = entry_date.weekday() == 4
+                shift_length = 210 if is_friday else 510
+                end_time = entry_time + timedelta(minutes=shift_length)
+                
+                rank["time"] = latest_entry["time"]
+                rank["date"] = latest_entry["date"]
+                rank["time_obj"] = entry_time
+                rank["shift_length"] = shift_length
+                rank["end_time"] = end_time.strftime('%H:%M')
+            else:
+                # If no entries found, set default values
+                rank["time"] = "N/A"
+                rank["date"] = current_date.strftime('%Y-%m-%d')
+                rank["time_obj"] = datetime.strptime("09:00", "%H:%M")
+                rank["shift_length"] = 510
+                rank["end_time"] = "N/A"
         
         template_data = {
             'rankings': rankings,

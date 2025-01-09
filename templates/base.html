@@ -517,6 +517,49 @@
             border-radius: 20px;
             cursor: pointer;
         }
+
+        .chat-suggestions {
+            padding: 10px;
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .suggestion-chip {
+            background: var(--accent-color);
+            color: white;
+            padding: 6px 12px;
+            border-radius: 16px;
+            font-size: 0.9em;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .suggestion-chip:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+
+        .chat-message {
+            max-width: 80%;
+            padding: 12px;
+            margin: 8px;
+            border-radius: 12px;
+            line-height: 1.4;
+        }
+
+        .chat-message.bot {
+            background: #f0f0f0;
+            margin-right: auto;
+            border-bottom-left-radius: 4px;
+        }
+
+        .chat-message.user {
+            background: var(--accent-color);
+            color: white;
+            margin-left: auto;
+            border-bottom-right-radius: 4px;
+        }
     </style>
     {% block head %}{% endblock %}
 </head>
@@ -590,6 +633,7 @@
                 <button class="chat-close">&times;</button>
             </div>
             <div class="chat-messages"></div>
+            <div class="chat-suggestions"></div>
             <div class="chat-input">
                 <input type="text" placeholder="Ask me anything..." id="chatInput">
                 <button id="chatSend">Send</button>
@@ -794,10 +838,28 @@
             });
 
             const data = await response.json();
-            addMessage(data.response);
+            handleChatResponse(data);
         } catch (error) {
             addMessage('Sorry, I encountered an error. Please try again.');
         }
+    }
+
+    function handleChatResponse(data) {
+        addMessage(data.response, false);
+        
+        // Update suggestions
+        const suggestionsDiv = document.querySelector('.chat-suggestions');
+        suggestionsDiv.innerHTML = '';
+        data.suggestions.forEach(suggestion => {
+            const chip = document.createElement('div');
+            chip.className = 'suggestion-chip';
+            chip.textContent = suggestion;
+            chip.onclick = () => {
+                document.getElementById('chatInput').value = suggestion;
+                sendMessage();
+            };
+            suggestionsDiv.appendChild(chip);
+        });
     }
 
     chatToggle.addEventListener('click', toggleChat);

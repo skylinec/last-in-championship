@@ -2510,5 +2510,166 @@ def generate_stats_response(params, db):
 
 # ...existing code...
 
+class ChatHistory:
+    def __init__(self):
+        self.messages = []
+        self.current_context = None
+        self.last_entities = {}
+        self.topic_stack = []
+        self.suggestion_context = {}
+
+    def add_message(self, message, is_user=True):
+        self.messages.append({
+            'content': message,
+            'timestamp': datetime.now(),
+            'is_user': is_user
+        })
+        if len(self.messages) > 10:  # Keep last 10 messages
+            self.messages.pop(0)
+
+    def get_context(self):
+        if not self.messages:
+            return None
+        return {
+            'last_message': self.messages[-1]['content'],
+            'topic': self.current_context,
+            'entities': self.last_entities,
+            'suggestions': self.suggestion_context
+        }
+
+class EnhancedQueryProcessor(QueryProcessor):
+    def __init__(self):
+        super().__init__()
+        self.chat_histories = defaultdict(ChatHistory)
+        
+        # Add more varied response templates
+        self.response_templates = {
+            'streak': [
+                "🔥 {name} is on fire with a {streak} day streak!",
+                "📈 {name}'s streak: {streak} days and counting",
+                "⭐ {streak} consecutive days for {name}",
+            ],
+            'ranking': [
+                "🏆 Current rankings:\n{rankings}",
+                "🎯 Here's how everyone stands:\n{rankings}",
+                "📊 Latest rankings:\n{rankings}",
+            ],
+            'status': [
+                "👥 Current status:\n{status}",
+                "📍 Here's where everyone is:\n{status}",
+                "🎯 Status update:\n{status}",
+            ],
+            'suggestion': [
+                "💡 You might also want to know: {suggestion}",
+                "🤔 Related question: {suggestion}",
+                "📝 Try asking: {suggestion}",
+            ]
+        }
+        
+    def process_query(self, query, user_id):
+        history = self.chat_histories[user_id]
+        history.add_message(query)
+        
+        # Analyze query with context
+        context = history.get_context()
+        intent, params = self.analyze_query(query, user_id)
+        
+        # Generate related suggestions
+        suggestions = self.generate_suggestions(intent, params, context)
+        history.suggestion_context = suggestions
+        
+        # Generate response
+        response = self.format_response(intent, params, context)
+        history.add_message(response, is_user=False)
+        
+        return {
+            'response': response,
+            'suggestions': suggestions[:2],  # Return top 2 suggestions
+            'context': context
+        }
+
+    def format_response(self, intent, params, context):
+        """Format response with emoji and better structure"""
+        response = generate_response(intent, params, SessionLocal())
+        
+        # Add relevant emoji
+        if 'streak' in response.lower():
+            response = "🔥 " + response
+        if 'ranking' in response.lower():
+            response = "🏆 " + response
+        if 'schedule' in response.lower():
+            response = "📅 " + response
+            
+        # Add contextual follow-up
+        if context and context['suggestions']:
+            suggestion = random.choice(context['suggestions'])
+            template = random.choice(self.response_templates['suggestion'])
+            response += f"\n\n{template.format(suggestion=suggestion)}"
+            
+        return response
+
+    def generate_suggestions(self, intent, params, context):
+        """Generate contextual suggestions based on current query"""
+        suggestions = []
+        
+        if intent.type == 'status':
+            suggestions.extend([
+                "What's the current ranking?",
+                "Who has the longest streak?",
+                "Show me attendance trends"
+            ])
+        elif intent.type == 'streak':
+            suggestions.extend([
+                "Who's in the office today?",
+                "What's the average arrival time?",
+                "Show me the top performers"
+            ])
+        elif intent.type == 'ranking':
+            suggestions.extend([
+                "How's everyone's attendance this week?",
+                "Who's working remotely?",
+                "Show me the streak leaderboard"
+            ])
+            
+        # Add user-specific suggestions
+        if params.get('users'):
+            user = params['users'][0]
+            suggestions.append(f"How often is {user} in the office?")
+            suggestions.append(f"What's {user}'s average arrival time?")
+            
+        return suggestions
+
+# Update chatbot route to use enhanced processor
+@app.route("/chatbot", methods=["POST"])
+@login_required
+def chatbot():
+    try:
+        message = request.json.get("message", "").strip()
+        if not message:
+            return jsonify({"response": "Please ask me a question!"})
+            
+        user_id = session.get('user')
+        if not user_id:
+            return jsonify({"response": "Please log in to use the chatbot."})
+        
+        processor = EnhancedQueryProcessor()
+        result = processor.process_query(message, user_id)
+        
+        return jsonify({
+            "response": result['response'],
+            "suggestions": result['suggestions'],
+            "context": result['context']
+        })
+            
+    except Exception as e:
+        app.logger.error(f"Chatbot error: {str(e)}")
+        return jsonify({
+            "response": "Sorry, something went wrong. Please try again.",
+            "suggestions": ["Try asking something else", "Check the current status"],
+            "context": None
+        })
+
+# ...existing code...
+
 if __name__ == "__main__":
     app.run(debug=True)

@@ -1151,19 +1151,10 @@ def manage_settings():
     try:
         if request.method == "GET":
             settings_data = load_settings()
-            # Get list of registered users from database
-            registered_users = [user[0] for user in db.query(User.username).all()]
-            
-            # Get core users from settings
-            core_users = settings_data.get("core_users", [])
-            
             return render_template(
                 "settings.html",
-                settings=settings_data,
-                settings_data=settings_data,
-                registered_users=registered_users,
-                core_users=core_users,
-                rules=settings_data.get("points", {}).get("rules", [])
+                rules=settings_data.get("rules", []),
+                settings_data=settings_data  # optional
             )
         else:
             old_settings = db.query(Settings).first()

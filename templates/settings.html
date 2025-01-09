@@ -9,7 +9,7 @@
     <div class="settings-column">
         <form id="settingsForm" method="POST" action="/settings">
             <input type="hidden" name="rules" id="rulesInput" />
-            <input type="hidden" id="rulesJson" value='{{ settings.points.rules|tojson|safe }}' />
+            <input type="hidden" id="rulesJson" value='{{ rules|tojson|safe }}' />
             <div class="settings-section">
                 <h2>Points & Bonuses</h2>
                 <!-- Basic point settings -->

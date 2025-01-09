@@ -189,48 +189,53 @@
                 </div>
             </div>
 
-            <!-- Add streak explanation if enabled -->
+            <!-- Replace existing streak explanation with updated one -->
             {% if settings.enable_streaks %}
             <div class="example-box streak-explanation">
-                <h4>Streak Bonus System</h4>
-                <p>The streak system rewards consistent attendance:</p>
+                <h4>Streak System</h4>
+                <p>The streak system rewards consistent attendance with bonus points:</p>
                 <ul>
-                    <li>Each consecutive day earns additional points</li>
+                    <li>Each consecutive workday earns additional points</li>
                     <li>Current multiplier: {{ settings.streak_multiplier }} points per day in streak</li>
-                    <li>Example: 3-day streak = {{ 3 * settings.streak_multiplier }} bonus points</li>
-                    <li>Only in-office and remote work days count towards streaks</li>
-                    <li>Missing a day or taking leave/sick breaks the streak</li>
-                    <li>Weekends don't break streaks (Friday to Monday counts)</li>
+                    <li>Weekend days don't break streaks</li>
+                    <li>Both office and remote work count towards streaks</li>
+                    <li>Sick days or annual leave break the streak</li>
                 </ul>
                 
                 <div class="streak-example">
-                    <h5>Example Calculation</h5>
+                    <h5>Example Streak Calculation</h5>
                     <table class="example-table">
                         <tr>
-                            <th>Day</th>
-                            <th>Base Points</th>
-                            <th>Streak Bonus</th>
-                            <th>Total</th>
+                            <th>Scenario</th>
+                            <th>Streak</th>
+                            <th>Bonus Points</th>
                         </tr>
                         <tr>
-                            <td>Day 1</td>
-                            <td>{{ settings.points.in_office }}</td>
-                            <td>0</td>
-                            <td>{{ settings.points.in_office }}</td>
-                        </tr>
-                        <tr>
-                            <td>Day 2</td>
-                            <td>{{ settings.points.in_office }}</td>
-                            <td>{{ settings.streak_multiplier }}</td>
-                            <td>{{ settings.points.in_office + settings.streak_multiplier }}</td>
-                        </tr>
-                        <tr>
-                            <td>Day 3</td>
-                            <td>{{ settings.points.in_office }}</td>
+                            <td>Mon (Office) → Tue (Office)</td>
+                            <td>2 days</td>
                             <td>{{ 2 * settings.streak_multiplier }}</td>
-                            <td>{{ settings.points.in_office + 2 * settings.streak_multiplier }}</td>
+                        </tr>
+                        <tr>
+                            <td>Thu (Office) → Fri (Remote) → Mon (Office)</td>
+                            <td>3 days</td>
+                            <td>{{ 3 * settings.streak_multiplier }}</td>
+                        </tr>
+                        <tr>
+                            <td>Mon (Office) → Tue (Sick) → Wed (Office)</td>
+                            <td>1 day</td>
+                            <td>{{ 1 * settings.streak_multiplier }}</td>
                         </tr>
                     </table>
+                </div>
+
+                <div class="streak-notes">
+                    <h5>Important Notes</h5>
+                    <ul>
+                        <li>Streaks are counted backwards from each attendance</li>
+                        <li>Maximum gap allowed is 3 days (to account for weekends)</li>
+                        <li>Streak bonus is added to both early-bird and last-in scores</li>
+                        <li>Streaks reset after any non-working day (except weekends)</li>
+                    </ul>
                 </div>
             </div>
             {% endif %}

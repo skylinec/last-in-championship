@@ -595,25 +595,91 @@ def calculate_daily_score(entry, settings, position=None, total_entries=None):
     }
 
 def calculate_streak_bonus(entry):
-    """Calculate bonus points for consecutive late arrivals"""
+    """Calculate bonus points for streak"""
     db = SessionLocal()
     try:
-        # Get entries for the last 5 working days
-        date = datetime.strptime(entry["date"], "%Y-%m-%d")
+        entry_date = datetime.strptime(entry["date"], "%Y-%m-%d").date()
+        name = entry["name"]
+        
+        # Get entries for this user, ordered by date descending
         entries = db.query(Entry).filter(
-            Entry.name == entry["name"],
-            Entry.date < entry["date"]
-        ).order_by(Entry.date.desc()).limit(5).all()
+            Entry.name == name,
+            Entry.date < entry["date"],  # Only look at previous days
+            Entry.status.in_(['in-office', 'remote'])  # Only count active days
+        ).order_by(Entry.date.desc()).all()
         
-        streak = 0
+        streak = 1  # Current day counts as 1
+        last_date = entry_date
+        
         for e in entries:
-            e_time = datetime.strptime(e.time, "%H:%M").time()
-            if e_time >= datetime.strptime("11:00", "%H:%M").time():
-                streak += 1
-            else:
+            e_date = datetime.strptime(e.date, "%Y-%m-%d").date()
+            days_between = (last_date - e_date).days
+            
+            # Break streak if gap is more than 1 workday
+            if days_between > 3:  # More than a weekend
                 break
+            elif days_between > 1:
+                # Check if gap includes weekend
+                for d in range(1, days_between):
+                    check_date = last_date - timedelta(days=d)
+                    if check_date.weekday() < 5:  # Not weekend
+                        streak = 0
+                        break
+                if streak == 0:
+                    break
+            
+            streak += 1
+            last_date = e_date
+
+        settings = db.query(Settings).first()
+        if settings and settings.enable_streaks:
+            return streak * settings.streak_multiplier
+        return 0
         
-        return streak * 0.5  # 0.5 points per day of streak
+    finally:
+        db.close()
+
+def calculate_current_streak(name):
+    """Calculate current streak for a user"""
+    db = SessionLocal()
+    try:
+        today = datetime.now().date()
+        
+        # Get most recent entries, ordered by date descending
+        entries = db.query(Entry).filter(
+            Entry.name == name,
+            Entry.status.in_(['in-office', 'remote'])
+        ).order_by(Entry.date.desc()).all()
+        
+        if not entries:
+            return 0
+            
+        streak = 1
+        last_date = datetime.strptime(entries[0].date, "%Y-%m-%d").date()
+        
+        # Skip first entry as it's counted above
+        for entry in entries[1:]:
+            entry_date = datetime.strptime(entry.date, "%Y-%m-%d").date()
+            days_between = (last_date - entry_date).days
+            
+            if days_between > 3:  # More than a weekend
+                break
+            elif days_between > 1:
+                # Check if gap only includes weekend
+                weekend_only = True
+                for d in range(1, days_between):
+                    check_date = last_date - timedelta(days=d)
+                    if check_date.weekday() < 5:  # Not weekend
+                        weekend_only = False
+                        break
+                if not weekend_only:
+                    break
+            
+            streak += 1
+            last_date = entry_date
+            
+        return streak
+        
     finally:
         db.close()
 

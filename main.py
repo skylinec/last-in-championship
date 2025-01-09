@@ -2105,6 +2105,12 @@ class QueryProcessor:
         return QueryIntent(best_intent[0], best_intent[1] / 100)
     
     def _extract_parameters(self, query, tokens, context):
+        """Extract parameters with null checks"""
+        if not query:
+            query = ""
+        if not tokens:
+            tokens = []
+            
         params = {
             'users': self._extract_users(query),
             'date_range': self._extract_date_range(query),
@@ -2124,6 +2130,10 @@ class QueryProcessor:
         return params
 
     def _extract_users(self, query):
+        """Extract users with null check"""
+        if not query:
+            return []
+            
         core_users = get_core_users()
         mentioned_users = []
         
@@ -2141,9 +2151,11 @@ class QueryProcessor:
         
         return list(set(mentioned_users))
 
-    # Add these new extraction methods
     def _extract_date_range(self, query):
-        """Extract date range from query"""
+        """Extract date range with null check"""
+        if not query:
+            return None
+            
         # First check for explicit ranges
         range_patterns = {
             'today': r'\btoday\b',
@@ -2227,21 +2239,31 @@ class QueryProcessor:
 @app.route("/chatbot", methods=["POST"])
 @login_required
 def chatbot():
-    message = request.json.get("message", "").lower()
-    user_id = session.get('user')
-    
-    processor = QueryProcessor()
-    intent, params = processor.analyze_query(message, user_id)
-    
-    db = SessionLocal()
     try:
-        response = generate_response(intent, params, db)
-        return jsonify({"response": response})
+        message = request.json.get("message", "").strip()
+        if not message:
+            return jsonify({"response": "Please ask me a question!"})
+            
+        user_id = session.get('user')
+        if not user_id:
+            return jsonify({"response": "Please log in to use the chatbot."})
+        
+        processor = QueryProcessor()
+        intent, params = processor.analyze_query(message, user_id)
+        
+        db = SessionLocal()
+        try:
+            response = generate_response(intent, params, db)
+            return jsonify({"response": response})
+        except Exception as e:
+            app.logger.error(f"Chatbot processing error: {str(e)}")
+            return jsonify({"response": "I encountered an error processing your request. Please try rephrasing your question."})
+        finally:
+            db.close()
+            
     except Exception as e:
         app.logger.error(f"Chatbot error: {str(e)}")
-        return jsonify({"response": "Sorry, I encountered an error processing your request."})
-    finally:
-        db.close()
+        return jsonify({"response": "Sorry, something went wrong. Please try again."})
 
 def generate_response(intent, params, db):
     """Generate dynamic response based on intent and parameters"""

@@ -992,7 +992,12 @@ def manage_settings():
                                 settings={
                                     "points": settings.points,
                                     "late_bonus": settings.late_bonus,
-                                    "remote_days": settings.remote_days
+                                    "remote_days": settings.remote_days,
+                                    "core_users": settings.core_users,
+                                    "enable_streaks": settings.enable_streaks,
+                                    "streak_multiplier": settings.streak_multiplier,
+                                    "streaks_enabled": settings.streaks_enabled,
+                                    "streak_bonus": settings.streak_bonus
                                 },
                                 core_users=settings.core_users,
                                 registered_users=registered_users)
@@ -1006,7 +1011,11 @@ def manage_settings():
                     "points": dict(old_settings.points),
                     "late_bonus": float(old_settings.late_bonus),
                     "remote_days": dict(old_settings.remote_days),
-                    "core_users": list(old_settings.core_users)
+                    "core_users": list(old_settings.core_users),
+                    "enable_streaks": old_settings.enable_streaks,
+                    "streak_multiplier": old_settings.streak_multiplier,
+                    "streaks_enabled": old_settings.streaks_enabled,
+                    "streak_bonus": old_settings.streak_bonus
                 }
             
             # Update database and get normalized new settings
@@ -1014,7 +1023,11 @@ def manage_settings():
                 "points": {k: int(v) for k, v in new_settings["points"].items()},
                 "late_bonus": float(new_settings["late_bonus"]),
                 "remote_days": {k: sorted(v) for k, v in new_settings.get("remote_days", {}).items()},
-                "core_users": sorted(new_settings.get("core_users", []))
+                "core_users": sorted(new_settings.get("core_users", [])),
+                "enable_streaks": new_settings.get("enable_streaks", False),
+                "streak_multiplier": float(new_settings.get("streak_multiplier", 0.5)),
+                "streaks_enabled": new_settings.get("streaks_enabled", False),
+                "streak_bonus": float(new_settings.get("streak_bonus", 0.5))
             }
 
             if old_settings:
@@ -1022,6 +1035,10 @@ def manage_settings():
                 old_settings.late_bonus = normalized_new["late_bonus"]
                 old_settings.remote_days = normalized_new["remote_days"]
                 old_settings.core_users = normalized_new["core_users"]
+                old_settings.enable_streaks = normalized_new["enable_streaks"]
+                old_settings.streak_multiplier = normalized_new["streak_multiplier"]
+                old_settings.streaks_enabled = normalized_new["streaks_enabled"]
+                old_settings.streak_bonus = normalized_new["streak_bonus"]
             else:
                 settings = Settings(**normalized_new)
                 db.add(settings)

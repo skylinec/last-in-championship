@@ -30,15 +30,6 @@
                 <input type="number" id="leave" name="points.leave" value="{{ settings.points.leave }}" min="0" max="20">
             </div>
 
-            <div class="form-group">
-                <label for="streaks_enabled">Enable Streaks:</label>
-                <input type="checkbox" id="streaks_enabled" name="streaks_enabled" {% if settings.streaks_enabled %}checked{% endif %}>
-            </div>
-            <div class="form-group">
-                <label for="streak_bonus">Daily Streak Bonus:</label>
-                <input type="number" id="streak_bonus" name="streak_bonus" value="{{ settings.streak_bonus }}" min="0" max="5" step="0.5">
-            </div>
-
             <!-- Remote work days configuration -->
             <h3>Remote Work Late Bonus Days</h3>
             <p class="helper-text">Select days when remote workers can earn late bonus points</p>
@@ -109,8 +100,6 @@
     <div class="settings-section">
         <h2>Streak Settings</h2>
         <form id="settingsForm">
-            <!-- ...existing form fields... -->
-            
             <div class="form-group">
                 <label class="checkbox-label">
                     <input type="checkbox" id="enable_streaks" name="enable_streaks" 
@@ -240,39 +229,6 @@
                     </tr>
                 </table>
             </div>
-        </div>
-
-        <div class="example-box">
-            <h4>Streaks System</h4>
-            <p>When enabled, the streaks system rewards consecutive days of participation:</p>
-            <ul>
-                <li>A streak starts when you attend (in-office or remote) on consecutive working days</li>
-                <li>Each day in a streak multiplies the streak bonus by the streak length</li>
-                <li>Streaks break if you miss a working day or take leave/sick day</li>
-                <li>Maximum streak bonus is capped at 5 days</li>
-            </ul>
-            <table class="example-table">
-                <tr>
-                    <th>Streak Length</th>
-                    <th>Calculation</th>
-                    <th>Bonus Points</th>
-                </tr>
-                <tr>
-                    <td>2 Days</td>
-                    <td>2 × {{ settings.streak_bonus }}</td>
-                    <td>{{ 2 * settings.streak_bonus }}</td>
-                </tr>
-                <tr>
-                    <td>3 Days</td>
-                    <td>3 × {{ settings.streak_bonus }}</td>
-                    <td>{{ 3 * settings.streak_bonus }}</td>
-                </tr>
-                <tr>
-                    <td>5 Days (Max)</td>
-                    <td>5 × {{ settings.streak_bonus }}</td>
-                    <td>{{ 5 * settings.streak_bonus }}</td>
-                </tr>
-            </table>
         </div>
     </div>
 </div>

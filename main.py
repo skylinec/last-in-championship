@@ -2236,36 +2236,6 @@ class QueryProcessor:
             return 'desc'
         return None
 
-# Update the chatbot route to use the new query processor
-@app.route("/chatbot", methods=["POST"])
-@login_required
-def chatbot():
-    try:
-        message = request.json.get("message", "").strip()
-        if not message:
-            return jsonify({"response": "Please ask me a question!"})
-            
-        user_id = session.get('user')
-        if not user_id:
-            return jsonify({"response": "Please log in to use the chatbot."})
-        
-        processor = QueryProcessor()
-        intent, params = processor.analyze_query(message, user_id)
-        
-        db = SessionLocal()
-        try:
-            response = generate_response(intent, params, db)
-            return jsonify({"response": response})
-        except Exception as e:
-            app.logger.error(f"Chatbot processing error: {str(e)}")
-            return jsonify({"response": "I encountered an error processing your request. Please try rephrasing your question."})
-        finally:
-            db.close()
-            
-    except Exception as e:
-        app.logger.error(f"Chatbot error: {str(e)}")
-        return jsonify({"response": "Sorry, something went wrong. Please try again."})
-
 def generate_response(intent, params, db):
     """Generate dynamic response based on intent and parameters"""
     if intent.type == 'comparison':
@@ -2313,10 +2283,6 @@ def generate_comparison_response(params, db):
                 response += f"- {result.name}: {result.total_days} days, avg arrival: {int(result.avg_arrival)}:00\n"
     
     return response
-
-# Add other response generators similarly...
-
-# ...existing code...
 
 def generate_status_response(params, db):
     """Generate response for status queries"""
@@ -2652,6 +2618,7 @@ def chatbot():
         if not user_id:
             return jsonify({"response": "Please log in to use the chatbot."})
         
+        # Use the EnhancedQueryProcessor for better NLP handling
         processor = EnhancedQueryProcessor()
         result = processor.process_query(message, user_id)
         
@@ -2668,8 +2635,6 @@ def chatbot():
             "suggestions": ["Try asking something else", "Check the current status"],
             "context": None
         })
-
-# ...existing code...
 
 def calculate_streak_for_date(name, target_date, db):
     """Calculate streak for a user up to a specific date"""

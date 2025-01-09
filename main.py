@@ -1,5 +1,5 @@
 from flask import Flask, request, jsonify, render_template, session, redirect, url_for
-from sqlalchemy import create_engine, Column, Integer, String, DateTime, Float, JSON, event, text, Boolean
+from sqlalchemy import create_engine, Column, Integer, String, DateTime, Float, JSON, event, text, Boolean, inspect
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from datetime import datetime, timedelta, date  # Add date import
@@ -65,6 +65,14 @@ class AuditLog(Base):
     def __repr__(self):
         return f"<AuditLog {self.action} by {self.user} at {self.timestamp}>"
 
+class UserStreak(Base):
+    __tablename__ = "user_streaks"
+    id = Column(Integer, primary_key=True)
+    username = Column(String, nullable=False)
+    current_streak = Column(Integer, default=0)
+    last_attendance = Column(DateTime, nullable=True)
+    max_streak = Column(Integer, default=0)
+
 # Create tables
 Base.metadata.create_all(bind=engine)
 
@@ -97,9 +105,6 @@ def migrate_database():
         init_settings()
     finally:
         db.close()
-
-# Add at the top with other imports
-from sqlalchemy import inspect
 
 # Initialize default settings if not exists
 def init_settings():
@@ -533,6 +538,9 @@ def log_attendance():
             }
         )
         
+        if entry.status in ['in-office', 'remote']:
+            update_user_streak(entry.name, entry.date)
+        
         return jsonify({
             "message": "Attendance logged successfully.",
             "type": "success"
@@ -572,21 +580,24 @@ def calculate_daily_score(entry, settings, position=None, total_entries=None):
     status = entry["status"].replace("-", "_")
     base_points = settings["points"][status]
     
-    # Always calculate both early bird and last-in scores
+    # Calculate position bonuses
     early_bird_bonus = 0
     last_in_bonus = 0
-    
     if position is not None and total_entries is not None and status in ["in_office", "remote"]:
-        # Early bird bonus (first position gets highest)
         early_bird_bonus = (total_entries - position + 1) * settings["late_bonus"]
-        # Last-in bonus (last position gets highest)
         last_in_bonus = position * settings["late_bonus"]
     
+    # Calculate streak bonus if enabled
     streak_bonus = 0
     if settings.get("enable_streaks", False):
-        streak_bonus = calculate_streak_bonus(entry)
+        db = SessionLocal()
+        try:
+            streak = db.query(UserStreak).filter_by(username=entry["name"]).first()
+            if streak and streak.current_streak > 0:
+                streak_bonus = streak.current_streak * settings.get("streak_multiplier", 0.5)
+        finally:
+            db.close()
     
-    # Return both scoring modes
     return {
         "early_bird": base_points + early_bird_bonus + streak_bonus,
         "last_in": base_points + last_in_bonus + streak_bonus,
@@ -767,13 +778,28 @@ def view_rankings(period, date_str=None):
                 rank["shift_length"] = 540  # Consistent 9-hour shift
                 rank["end_time"] = "18:00"
         
+        # Add streak information to rankings
+        for rank in rankings:
+            db = SessionLocal()
+            try:
+                streak = db.query(UserStreak).filter_by(username=rank["name"]).first()
+                if streak:
+                    rank["current_streak"] = streak.current_streak
+                    rank["max_streak"] = streak.max_streak
+                else:
+                    rank["current_streak"] = 0
+                    rank["max_streak"] = 0
+            finally:
+                db.close()
+        
         template_data = {
             'rankings': rankings,
             'period': period,
             'current_date': current_date.strftime('%Y-%m-%d'),
             'current_display': format_date_range(current_date, period_end, period),
             'current_month_value': current_date.strftime('%Y-%m'),
-            'mode': mode  # Add mode to template data
+            'mode': mode,
+            'streaks_enabled': load_settings().get("enable_streaks", False)
         }
         
         return render_template("rankings.html", **template_data)
@@ -1688,26 +1714,75 @@ def clear_database():
 
 # Move all initialization code to the bottom
 def initialize_app():
-    """Initialize the application and run any pending migrations"""
-    # Create tables first
-    Base.metadata.create_all(bind=engine)
-    
-    # Run migrations before initializing settings
+    """Initialize the application and run all necessary migrations"""
     try:
-        # Import migration here to avoid circular imports
-        from migrations.add_streaks import migrate as migrate_streaks
-        migrate_streaks()
-    except Exception as e:
-        app.logger.error(f"Migration error: {str(e)}")
-    
-    # Initialize settings after migrations
-    try:
+        # Run migrations first
+        app.logger.info("Running database migrations...")
+        from migrations.run_migrations import run_migrations
+        run_migrations()
+        app.logger.info("Database migrations completed successfully")
+        
+        # Create any missing tables
+        app.logger.info("Creating database tables...")
+        Base.metadata.create_all(bind=engine)
+        app.logger.info("Database tables created successfully")
+        
+        # Initialize settings
+        app.logger.info("Initializing application settings...")
+        init_settings()
+        app.logger.info("Application initialization completed successfully")
+        
+    except ImportError as e:
+        app.logger.error(f"Failed to import migrations module: {str(e)}")
+        # Continue with basic initialization if migrations fail
+        Base.metadata.create_all(bind=engine)
         init_settings()
     except Exception as e:
-        app.logger.error(f"Settings initialization error: {str(e)}")
+        app.logger.error(f"Error during application initialization: {str(e)}")
+        raise
 
 # Call initialization at the bottom
 initialize_app()
+
+@app.route("/streaks")
+@login_required
+def view_streaks():
+    """View streaks for all users"""
+    db = SessionLocal()
+    try:
+        streaks = db.query(UserStreak).all()
+        max_streak = max((s.current_streak for s in streaks), default=0)
+        return render_template("streaks.html", streaks=streaks, max_streak=max_streak)
+    finally:
+        db.close()
+
+def update_user_streak(username, attendance_date):
+    """Update streak for a user based on new attendance"""
+    db = SessionLocal()
+    try:
+        streak = db.query(UserStreak).filter_by(username=username).first()
+        if not streak:
+            streak = UserStreak(username=username)
+            db.add(streak)
+
+        # Convert attendance_date to datetime if it's a string
+        if isinstance(attendance_date, str):
+            attendance_date = datetime.strptime(attendance_date, '%Y-%m-%d')
+
+        if streak.last_attendance:
+            days_diff = (attendance_date - streak.last_attendance.date()).days
+            if days_diff <= 3:  # Allow for weekends
+                streak.current_streak += 1
+            else:
+                streak.current_streak = 1
+        else:
+            streak.current_streak = 1
+
+        streak.last_attendance = attendance_date
+        streak.max_streak = max(streak.max_streak, streak.current_streak)
+        db.commit()
+    finally:
+        db.close()
 
 if __name__ == "__main__":
     app.run(debug=True)

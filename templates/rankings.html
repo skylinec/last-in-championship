@@ -33,7 +33,10 @@
                 <th>Name</th>
                 <th>Score</th>
                 <th>Average Arrival Time</th>
+                {% if streaks_enabled %}
                 <th>Current Streak</th>
+                <th>Max Streak</th>
+                {% endif %}
                 <th>Details</th>
             </tr>
         </thead>
@@ -44,7 +47,10 @@
                 <td>{{ rank.name }}</td>
                 <td>{{ rank.score }}</td>
                 <td>{{ rank.average_arrival_time }}</td>
-                <td>{{ rank.streak }} days</td>
+                {% if streaks_enabled %}
+                <td>{{ rank.current_streak }} days</td>
+                <td>{{ rank.max_streak }} days</td>
+                {% endif %}
                 <td>
                     Office: {{ rank.stats.in_office }} days<br>
                     Remote: {{ rank.stats.remote }} days<br>

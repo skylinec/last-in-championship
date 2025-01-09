@@ -1,0 +1,118 @@
+{% extends "base.html" %}
+{% block title %}Streaks{% endblock %}
+
+{% block content %}
+<h1>Attendance Streaks</h1>
+
+<div class="streaks-container">
+    <div class="streak-cards">
+        {% for streak in streaks %}
+        <div class="streak-card">
+            <div class="streak-header">
+                <h2>{{ streak.username }}</h2>
+                <div class="streak-count">
+                    <span class="current">{{ streak.current_streak }}</span>
+                    <span class="days">days</span>
+                </div>
+            </div>
+            <div class="streak-progress">
+                <div class="streak-bar" style="width: {{ (streak.current_streak / max_streak * 100) if max_streak > 0 else 0 }}%"></div>
+            </div>
+            <div class="streak-details">
+                <div class="detail">
+                    <span class="label">Max Streak:</span>
+                    <span class="value">{{ streak.max_streak }} days</span>
+                </div>
+                <div class="detail">
+                    <span class="label">Last Attendance:</span>
+                    <span class="value">{{ streak.last_attendance.strftime('%d/%m/%Y') if streak.last_attendance else 'N/A' }}</span>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+<style>
+.streaks-container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 20px;
+}
+
+.streak-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 20px;
+}
+
+.streak-card {
+    background: white;
+    border-radius: 8px;
+    padding: 20px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+}
+
+.streak-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+}
+
+.streak-header h2 {
+    margin: 0;
+    font-size: 1.5em;
+    color: var(--primary-color);
+}
+
+.streak-count {
+    text-align: center;
+}
+
+.streak-count .current {
+    font-size: 2em;
+    font-weight: bold;
+    color: var(--accent-color);
+}
+
+.streak-count .days {
+    display: block;
+    font-size: 0.9em;
+    color: #666;
+}
+
+.streak-progress {
+    height: 8px;
+    background: #eee;
+    border-radius: 4px;
+    margin: 15px 0;
+    overflow: hidden;
+}
+
+.streak-bar {
+    height: 100%;
+    background: var(--accent-color);
+    transition: width 0.3s ease;
+}
+
+.streak-details {
+    margin-top: 15px;
+}
+
+.detail {
+    display: flex;
+    justify-content: space-between;
+    margin: 5px 0;
+    font-size: 0.9em;
+}
+
+.detail .label {
+    color: #666;
+}
+
+.detail .value {
+    font-weight: 500;
+}
+</style>
+{% endblock %}

@@ -1228,6 +1228,14 @@ def manage_settings():
             if normalized_new["enable_streaks"] and (not old_settings or not old_settings.enable_streaks):
                 generate_streaks()
             
+            settings = db.query(Settings).first()
+            if settings:
+                rules_json = request.form.get("rules")
+                if rules_json:
+                    rules_data = json.loads(rules_json)
+                    settings.points["rules"] = rules_data
+                    db.commit()
+            
             return jsonify({"message": "Settings updated successfully"})
             
     except Exception as e:

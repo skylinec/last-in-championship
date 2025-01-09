@@ -7,7 +7,8 @@
 <div class="settings-container">
     <!-- Left column: Settings controls -->
     <div class="settings-column">
-        <form id="settingsForm">
+        <form id="settingsForm" method="POST" action="/settings">
+            <input type="hidden" name="rules" id="rulesInput" />
             <div class="settings-section">
                 <h2>Points & Bonuses</h2>
                 <!-- Basic point settings -->
@@ -931,6 +932,10 @@ document.getElementById('settingsForm').addEventListener('submit', async (event)
         settings.remote_days[user] = days;
     });
     
+    // Collect rules from the editor
+    const rulesData = collectRulesFromEditor(); // Implement your own
+    document.getElementById('rulesInput').value = JSON.stringify(rulesData);
+
     try {
         const response = await fetch('/settings', {
             method: 'POST',

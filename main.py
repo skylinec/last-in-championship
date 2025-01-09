@@ -1844,5 +1844,20 @@ def calculate_average_time(times):
     except (AttributeError, TypeError):
         return "N/A"
 
+def format_date_range(start_date, end_date, period):
+    """Format date range for display in rankings"""
+    try:
+        if period == 'day':
+            return start_date.strftime('%d/%m/%Y')
+        elif period == 'week':
+            return f"{start_date.strftime('%d/%m/%Y')} - {end_date.strftime('%d/%m/%Y')}"
+        elif period == 'month':
+            return start_date.strftime('%B %Y')
+        else:
+            return start_date.strftime('%d/%m/%Y')
+    except (AttributeError, ValueError) as e:
+        app.logger.error(f"Error formatting date range: {str(e)}")
+        return "Invalid date range"
+
 if __name__ == "__main__":
     app.run(debug=True)

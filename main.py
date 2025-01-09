@@ -766,10 +766,10 @@ def calculate_scores(data, period, current_date):
     
     # Calculate scores for each day
     for date, entries in daily_entries.items():
-        # Sort entries by time
+        # Sort entries by time based on mode
         entries.sort(
             key=lambda x: datetime.strptime(x["time"], "%H:%M"),
-            reverse=(mode == 'last-in')  # Latest first for last-in, earliest first for early-bird
+            reverse=(mode == 'last-in')  # Reverse for last-in mode
         )
         
         total_entries = len(entries)
@@ -784,14 +784,25 @@ def calculate_scores(data, period, current_date):
                         "remote": 0,
                         "sick": 0,
                         "leave": 0,
+                        "days": 0,
                         "latest_arrivals": 0,
                         "arrival_times": []
                     }
                 }
             
-            points = calculate_daily_score(entry, settings, position, total_entries)
+            # Calculate position bonus based on mode
+            if mode == 'early-bird':
+                # Early bird: first position gets highest bonus
+                bonus_position = total_entries - position + 1
+            else:
+                # Last-in: last position gets highest bonus
+                bonus_position = position
+                
+            points = calculate_daily_score(entry, settings, bonus_position, total_entries)
+            
             status = entry["status"].replace("-", "_")
             daily_scores[name]["stats"][status] += 1
+            daily_scores[name]["stats"]["days"] += 1
             
             if status in ["in_office", "remote"]:
                 daily_scores[name]["active_days"] += 1
@@ -809,18 +820,19 @@ def calculate_scores(data, period, current_date):
     rankings = []
     for name, scores in daily_scores.items():
         if scores["active_days"] > 0:
+            avg_score = scores["total_points"] / scores["active_days"]
+            arrival_times = scores["stats"]["arrival_times"]
+            
             rankings.append({
                 "name": name,
-                "score": round(scores["total_points"] / scores["active_days"], 2),
-                "latest_percentage": round((scores["stats"]["latest_arrivals"] / scores["active_days"]) * 100, 1),
-                "average_arrival_time": calculate_average_time(scores["stats"]["arrival_times"]),
+                "score": round(avg_score, 2),
                 "streak": calculate_current_streak(name),
-                "stats": scores["stats"]
+                "stats": scores["stats"],
+                "average_arrival_time": calculate_average_time(arrival_times) if arrival_times else "N/A"
             })
     
-    # Sort rankings
+    # Sort rankings by score
     rankings.sort(key=lambda x: x["score"], reverse=True)
-    
     return rankings
 
 def calculate_average_time(times):

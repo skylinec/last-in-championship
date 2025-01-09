@@ -1793,11 +1793,11 @@ def generate_streaks():
         
         for (username,) in users:
             # Get all entries for user, ordered by date
-            entries = db.query(Entry)\
-                .filter(Entry.name == username)\
-                .filter(Entry.status.in_(['in-office', 'remote']))\
-                .order_by(Entry.date.asc())\  # Changed to ascending order
-                .all()
+            entries = (db.query(Entry)
+                      .filter(Entry.name == username)
+                      .filter(Entry.status.in_(['in-office', 'remote']))
+                      .order_by(Entry.date.asc())
+                      .all())
             
             if not entries:
                 continue
@@ -1837,7 +1837,7 @@ def generate_streaks():
                 username=username,
                 current_streak=current_streak,
                 max_streak=max_streak,
-                last_attendance=entries[-1].timestamp  # Use most recent attendance
+                last_attendance=entries[-1].timestamp
             )
             db.add(streak)
         

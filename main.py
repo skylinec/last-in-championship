@@ -572,10 +572,10 @@ def calculate_daily_score(entry, settings, position=None, total_entries=None):
     
     if position is not None and total_entries is not None and status in ["in_office", "remote"]:
         if mode == 'early-bird':
-            # Early bird mode: first position gets highest bonus
+            # Early bird mode: first position (earliest arrival) gets highest bonus
             position_bonus = (total_entries - position + 1) * settings["late_bonus"]
         else:
-            # Last-in mode: last position gets highest bonus
+            # Last-in mode: last position (latest arrival) gets highest bonus
             position_bonus = position * settings["late_bonus"]
     
     streak_bonus = 0
@@ -751,7 +751,7 @@ def calculate_current_streak(name):
 def calculate_scores(data, period, current_date):
     settings = load_settings()
     filtered_data = [entry for entry in data if in_period(entry, period, current_date)]
-    mode = request.args.get('mode', 'last-in')  # Get mode from request
+    mode = request.args.get('mode', 'last-in')
     
     # Group entries by date for position calculation
     daily_entries = {}
@@ -764,27 +764,28 @@ def calculate_scores(data, period, current_date):
     # Calculate scores for each person
     scores = {}
     for date, entries in daily_entries.items():
-        # Sort entries based on mode
+        # Sort entries based on time - early-bird and last-in use opposite sorting
         entries.sort(
-            key=lambda x: datetime.strptime(x["time"], "%H:%M"), 
-            reverse=(mode == 'last-in')  # Changed this condition
+            key=lambda x: datetime.strptime(x["time"], "%H:%M"),
+            reverse=(mode == 'last-in')  # True for last-in (latest first), False for early-bird (earliest first)
         )
         total_entries = len(entries)
         
+        # Process each entry
         for position, entry in enumerate(entries, 1):
             name = entry["name"]
             if name not in scores:
                 scores[name] = {
                     "total": 0,
-                    "active_days": 0,  # Only count in-office and remote days
-                    "days": 0,         # Count all days for stats
+                    "active_days": 0,
+                    "days": 0,
                     "in_office": 0,
                     "remote": 0,
                     "sick": 0,
                     "leave": 0,
                     "latest_arrivals": 0,
-                    "arrival_times": [],  # Track arrival times for average calculation
-                    "streak": calculate_current_streak(name)  # Calculate current streak
+                    "arrival_times": [],
+                    "streak": calculate_current_streak(name)
                 }
             
             stats = scores[name]
@@ -792,38 +793,34 @@ def calculate_scores(data, period, current_date):
             stats[status] += 1
             stats["days"] += 1
             
-            # Only include in-office and remote days in scoring
             if status in ["in_office", "remote"]:
                 stats["active_days"] += 1
                 points = calculate_daily_score(entry, settings, position, total_entries)
                 stats["total"] += points
                 
-                if position == total_entries:
+                # Track position achievements based on mode
+                if (mode == 'last-in' and position == total_entries) or \
+                   (mode == 'early-bird' and position == 1):
                     stats["latest_arrivals"] += 1
                 
-                # Track arrival times for average calculation
                 arrival_time = datetime.strptime(entry["time"], "%H:%M")
                 stats["arrival_times"].append(arrival_time)
     
-    # Format rankings with average scores (only considering active days)
+    # Format rankings with average scores
     rankings = []
     for name, stats in scores.items():
-        if stats["active_days"] > 0:  # Only include people with active days
-            avg_arrival_time = calculate_average_time(stats["arrival_times"])
+        if stats["active_days"] > 0:
             rankings.append({
                 "name": name,
-                "score": round(stats["total"] / stats["active_days"], 2),  # Average only active days
+                "score": round(stats["total"] / stats["active_days"], 2),
                 "latest_percentage": round((stats["latest_arrivals"] / stats["active_days"]) * 100, 1),
-                "average_arrival_time": avg_arrival_time,
-                "streak": stats["streak"],  # Include current streak
+                "average_arrival_time": calculate_average_time(stats["arrival_times"]),
+                "streak": stats["streak"],
                 "stats": stats
             })
     
-    # Sort rankings based on mode
-    rankings.sort(
-        key=lambda x: (x["score"], x["latest_percentage"] if mode == 'last-in' else -x["latest_percentage"]),
-        reverse=True
-    )
+    # Sort rankings - highest points first for both modes
+    rankings.sort(key=lambda x: x["score"], reverse=True)
     return rankings
 
 def calculate_average_time(times):

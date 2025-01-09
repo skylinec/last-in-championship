@@ -665,11 +665,9 @@ def view_rankings(period, date_str=None):
         # Process each ranking entry to add time data
         for rank in rankings:
             user_entries = [e for e in data if e["name"] == rank["name"] and 
-                          in_period(e, period, current_date)]
+                          in_period(e, period, current_date) and
+                          normalize_status(e["status"]) in ["in_office", "remote"]]
             if user_entries:
-                # Don't reverse sort when calculating average time
-                user_entries.sort(key=lambda x: datetime.strptime(x["time"], "%H:%M"))
-                
                 # Calculate average time from all entries
                 times_in_minutes = []
                 for entry in user_entries:
@@ -682,8 +680,10 @@ def view_rankings(period, date_str=None):
                 avg_minute = int(avg_minutes % 60)
                 
                 entry_time = datetime.strptime(f"{avg_hour:02d}:{avg_minute:02d}", "%H:%M")
-                shift_length = 540  # Always 9 hours
-                end_time = entry_time + timedelta(minutes=shift_length)
+                
+                # Always use 9-hour shift
+                shift_length = 540
+                end_time = (entry_time + timedelta(minutes=shift_length))
                 
                 rank["time"] = f"{avg_hour:02d}:{avg_minute:02d}"
                 rank["time_obj"] = entry_time
@@ -694,8 +694,8 @@ def view_rankings(period, date_str=None):
                 rank["time"] = "N/A"
                 rank["date"] = current_date.strftime('%Y-%m-%d')
                 rank["time_obj"] = datetime.strptime("09:00", "%H:%M")
-                rank["shift_length"] = 510
-                rank["end_time"] = "N/A"
+                rank["shift_length"] = 540  # Consistent 9-hour shift
+                rank["end_time"] = "18:00"
         
         template_data = {
             'rankings': rankings,

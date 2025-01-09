@@ -332,21 +332,33 @@ async function createLateArrivalChart(data) {
     const chartDiv = document.getElementById('lateArrival');
     try {
         if (!data || Object.keys(data).length === 0) {
-            throw new Error('No late arrival data available');
+            chartDiv.innerHTML = '<p class="error">No late arrival data available</p>';
+            return;
         }
 
         const names = Object.keys(data);
         const percentages = names.map(name => data[name].late_percentage);
         const totalDays = names.map(name => data[name].total_days);
+        const lateDays = names.map(name => data[name].late_count);
 
         const layout = {
             title: 'Late Arrival Analysis',
-            xaxis: { title: 'Name' },
+            xaxis: { 
+                title: 'Name',
+                tickangle: -45
+            },
             yaxis: { 
                 title: 'Late Arrival %',
                 range: [0, 100]
             },
-            height: 400
+            height: 400,
+            margin: {
+                l: 50,
+                r: 50,
+                b: 100,
+                t: 50,
+                pad: 4
+            }
         };
 
         await Plotly.newPlot('lateArrival', [{
@@ -354,21 +366,20 @@ async function createLateArrivalChart(data) {
             y: percentages,
             type: 'bar',
             text: percentages.map((p, i) => 
-                `${p.toFixed(1)}%<br>${totalDays[i]} days`
+                `${p.toFixed(1)}%<br>${lateDays[i]}/${totalDays[i]} days`
             ),
             textposition: 'auto',
             hovertemplate: 
                 "Name: %{x}<br>" +
                 "Late %: %{y:.1f}%<br>" +
-                "Total Days: %{text}<br>" +
+                "Late Days: %{text}<br>" +
                 "<extra></extra>"
         }], layout);
         
         chartDiv.classList.remove('loading');
     } catch (error) {
-        console.error('Late arrival data:', data);
+        console.error('Late arrival chart error:', error);
         chartDiv.innerHTML = `<p class="error">Failed to create late arrival chart: ${error.message}</p>`;
-        throw error;
     }
 }
 

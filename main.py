@@ -1428,31 +1428,53 @@ def analyze_early_arrivals(data):
 
 def analyze_late_arrivals(data):
     """Calculate late arrival statistics for each user"""
-    late_stats = {}
-    for entry in data:
-        status = normalize_status(entry['status'])
-        # Only include in-office and remote work for late analysis
-        if status in ["in_office", "remote"]:
+    try:
+        late_stats = {}
+        
+        for entry in data:
+            # Normalize status and skip non-work entries
+            status = normalize_status(entry['status'])
+            if status not in ["in_office", "remote"]:
+                continue
+
             try:
+                # Parse time properly
                 time = datetime.strptime(entry["time"], "%H:%M").time()
                 name = entry["name"]
-                if name not in late_stats:
-                    late_stats[name] = {"late_count": 0, "total_count": 0}
                 
-                late_stats[name]["total_count"] += 1
-                if time.hour >= 9:
+                # Initialize stats for new users
+                if name not in late_stats:
+                    late_stats[name] = {
+                        "late_count": 0,
+                        "total_days": 0
+                    }
+                
+                # Count total workdays
+                late_stats[name]["total_days"] += 1
+                
+                # Count late arrivals (after 9:00)
+                if time >= datetime.strptime("09:00", "%H:%M").time():
                     late_stats[name]["late_count"] += 1
-            except (ValueError, KeyError):
+                    
+            except (ValueError, KeyError) as e:
+                app.logger.warning(f"Error processing entry time: {entry.get('time', 'unknown')}, Error: {str(e)}")
                 continue
-    
-    return {
-        name: {
-            "late_percentage": (stats["late_count"] / stats["total_count"]) * 100,
-            "total_days": stats["total_count"]
-        }
-        for name, stats in late_stats.items()
-        if stats["total_count"] > 0
-    }
+        
+        # Calculate percentages for users with data
+        result = {}
+        for name, stats in late_stats.items():
+            if stats["total_days"] > 0:
+                result[name] = {
+                    "late_percentage": round((stats["late_count"] / stats["total_days"]) * 100, 1),
+                    "total_days": stats["total_days"],
+                    "late_count": stats["late_count"]
+                }
+        
+        return result
+        
+    except Exception as e:
+        app.logger.error(f"Error in late arrival analysis: {str(e)}")
+        return {}
 
 def calculate_daily_activity(data):
     activity = {}

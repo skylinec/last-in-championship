@@ -1577,18 +1577,22 @@ def clear_database():
 # Move all initialization code to the bottom
 def initialize_app():
     """Initialize the application and run any pending migrations"""
+    # Create tables first
     Base.metadata.create_all(bind=engine)
     
-    # Import migration here to avoid circular imports
-    from migrations.add_streaks import migrate as migrate_streaks
-    
+    # Run migrations before initializing settings
     try:
-        migrate_streaks()  # Will only run if not already applied
+        # Import migration here to avoid circular imports
+        from migrations.add_streaks import migrate as migrate_streaks
+        migrate_streaks()
     except Exception as e:
         app.logger.error(f"Migration error: {str(e)}")
-        # Continue app startup even if migration fails
     
-    init_settings()
+    # Initialize settings after migrations
+    try:
+        init_settings()
+    except Exception as e:
+        app.logger.error(f"Settings initialization error: {str(e)}")
 
 # Call initialization at the bottom
 initialize_app()

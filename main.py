@@ -1141,7 +1141,8 @@ def get_core_users():
 @app.route("/history")
 @login_required
 def history():
-    return render_template("history.html")
+    core_users = get_core_users()  # Get the list of core users
+    return render_template("history.html", users=core_users)  # Pass users to template
 
 @app.route("/visualisations")
 @login_required

@@ -539,7 +539,9 @@ def log_attendance():
         )
         
         if entry.status in ['in-office', 'remote']:
-            update_user_streak(entry.name, entry.date)
+            settings = db.query(Settings).first()
+            if settings and settings.enable_streaks:
+                update_user_streak(entry.name, entry.date)
         
         return jsonify({
             "message": "Attendance logged successfully.",
@@ -606,46 +608,18 @@ def calculate_daily_score(entry, settings, position=None, total_entries=None):
     }
 
 def calculate_streak_bonus(entry):
-    """Calculate bonus points for streak"""
+    """Calculate bonus points for streak based on settings"""
     db = SessionLocal()
     try:
-        entry_date = datetime.strptime(entry["date"], "%Y-%m-%d").date()
-        name = entry["name"]
-        
-        # Get entries for this user, ordered by date descending
-        entries = db.query(Entry).filter(
-            Entry.name == name,
-            Entry.date < entry["date"],  # Only look at previous days
-            Entry.status.in_(['in-office', 'remote'])  # Only count active days
-        ).order_by(Entry.date.desc()).all()
-        
-        streak = 1  # Current day counts as 1
-        last_date = entry_date
-        
-        for e in entries:
-            e_date = datetime.strptime(e.date, "%Y-%m-%d").date()
-            days_between = (last_date - e_date).days
-            
-            # Break streak if gap is more than 1 workday
-            if days_between > 3:  # More than a weekend
-                break
-            elif days_between > 1:
-                # Check if gap includes weekend
-                for d in range(1, days_between):
-                    check_date = last_date - timedelta(days=d)
-                    if check_date.weekday() < 5:  # Not weekend
-                        streak = 0
-                        break
-                if streak == 0:
-                    break
-            
-            streak += 1
-            last_date = e_date
-
         settings = db.query(Settings).first()
-        if settings and settings.enable_streaks:
-            return streak * settings.streak_multiplier
-        return 0
+        if not settings or not settings.enable_streaks:
+            return 0
+            
+        streak = db.query(UserStreak).filter_by(username=entry["name"]).first()
+        if not streak or streak.current_streak == 0:
+            return 0
+            
+        return streak.current_streak * settings.streak_multiplier
         
     finally:
         db.close()
@@ -1236,6 +1210,10 @@ def manage_settings():
                 new_data=normalized_new
             )
             
+            # If streaks were enabled, generate them
+            if normalized_new["enable_streaks"] and (not old_settings or not old_settings.enable_streaks):
+                generate_streaks()
+            
             return jsonify({"message": "Settings updated successfully"})
             
     except Exception as e:
@@ -1781,6 +1759,76 @@ def update_user_streak(username, attendance_date):
         streak.last_attendance = attendance_date
         streak.max_streak = max(streak.max_streak, streak.current_streak)
         db.commit()
+    finally:
+        db.close()
+
+def generate_streaks():
+    """Generate all user streaks from scratch"""
+    db = SessionLocal()
+    try:
+        # Clear existing streaks
+        db.query(UserStreak).delete()
+        
+        # Get all users
+        users = db.query(Entry.name).distinct().all()
+        settings = db.query(Settings).first()
+        
+        if not settings or not settings.enable_streaks:
+            return
+        
+        for (username,) in users:
+            # Get all entries for user, ordered by date
+            entries = db.query(Entry)\
+                .filter(Entry.name == username)\
+                .filter(Entry.status.in_(['in-office', 'remote']))\
+                .order_by(Entry.date.desc())\
+                .all()
+            
+            if not entries:
+                continue
+                
+            current_streak = 1
+            max_streak = 1
+            last_date = datetime.strptime(entries[0].date, '%Y-%m-%d').date()
+            
+            # Calculate streak from most recent entries
+            for entry in entries[1:]:
+                entry_date = datetime.strptime(entry.date, '%Y-%m-%d').date()
+                days_between = (last_date - entry_date).days
+                
+                # Break streak if more than 3 days (weekend allowance)
+                if days_between > 3:
+                    break
+                
+                # Check if gap only includes weekend days
+                has_workday = False
+                for i in range(1, days_between):
+                    check_date = last_date - timedelta(days=i)
+                    if check_date.weekday() < 5:  # Not weekend
+                        has_workday = True
+                        break
+                
+                if has_workday:
+                    break
+                
+                current_streak += 1
+                max_streak = max(max_streak, current_streak)
+                last_date = entry_date
+            
+            # Create or update streak record
+            streak = UserStreak(
+                username=username,
+                current_streak=current_streak,
+                max_streak=max_streak,
+                last_attendance=entries[0].timestamp
+            )
+            db.add(streak)
+        
+        db.commit()
+        
+    except Exception as e:
+        db.rollback()
+        app.logger.error(f"Error generating streaks: {str(e)}")
     finally:
         db.close()
 

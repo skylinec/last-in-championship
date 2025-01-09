@@ -80,8 +80,8 @@
             <span class="timeline-name">{{ entry.name }}</span>
             <div class="timeline-bar-container">
                 <div class="timeline-bar" 
-                     style="left: {{ ((entry.time_obj.hour * 60 + entry.time_obj.minute - 420) / (660 - 420)) * 100 }}%; 
-                            width: {{ (entry.shift_length / (660 - 420)) * 100 }}%"
+                     style="left: {{ ((entry.time_obj.hour * 60 + entry.time_obj.minute - 420) / 600) * 100 }}%; 
+                            width: {{ (entry.shift_length / 600) * 100 }}%"
                      title="{{ entry.name }}: {{ entry.time }} - {{ entry.end_time }}">
                     <span class="timeline-time">{{ entry.time }}</span>
                     <span class="timeline-end-time">{{ entry.end_time }}</span>

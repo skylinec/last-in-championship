@@ -611,6 +611,8 @@ def evaluate_rule(rule, entry, context):
                 entry_time = datetime.strptime(entry['time'], '%H:%M').time()
                 compare_time = datetime.strptime(rule['value'], '%H:%M').time()
                 return compare_times(entry_time, compare_time, rule['operator'])
+            elif 'status' in rule:
+                return entry['status'] == rule['value']
             elif 'day' in rule:
                 entry_date = datetime.strptime(entry['date'], '%Y-%m-%d')
                 if rule['value'] == 'weekend':
@@ -619,18 +621,16 @@ def evaluate_rule(rule, entry, context):
                     return entry_date.weekday() < 5
                 else:
                     return entry_date.strftime('%A').lower() == rule['value'].lower()
-            elif 'status' in rule:
-                return entry['status'] == rule['value']
             elif 'streak' in rule:
                 streak = context.get('streak', 0)
                 return compare_values(streak, float(rule['value']), rule['operator'])
         elif rule['type'] == 'action':
-            if 'points' in rule:
+            if 'award' in rule:
                 return float(rule['points'])
             elif 'multiply' in rule:
                 return context['current_points'] * float(rule['value'])
             elif 'streak_bonus' in rule:
-                return context['streak'] * float(rule['value'])
+                return context['streak'] * context.get('streak_multiplier', 0.5)
         return 0
     except (ValueError, KeyError, TypeError) as e:
         app.logger.error(f"Error evaluating rule: {str(e)}")
@@ -1965,11 +1965,11 @@ def calculate_average_time(times):
 def format_date_range(start_date, end_date, period):
     """Format date range for display in rankings"""
     try:
-        if period == 'day':
+        if (period == 'day'):
             return start_date.strftime('%d/%m/%Y')
-        elif period == 'week':
+        elif (period == 'week'):
             return f"{start_date.strftime('%d/%m/%Y')} - {end_date.strftime('%d/%m/%Y')}"
-        elif period == 'month':
+        elif (period == 'month'):
             return start_date.strftime('%B %Y')
         else:
             return start_date.strftime('%d/%m/%Y')

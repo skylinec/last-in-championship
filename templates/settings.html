@@ -134,28 +134,28 @@
                     <h3>Available Blocks</h3>
                     <div class="block-category">
                         <h4>Conditions</h4>
-                        <div class="block" draggable="true" data-type="condition" data-template="if {time} {operator} {value}">
-                            Time Condition
+                        <div class="block" draggable="true" data-type="condition" data-template="if arrival {operator} {time}">
+                            Arrival Time
                         </div>
-                        <div class="block" draggable="true" data-type="condition" data-template="if {day} is {value}">
-                            Day Condition
+                        <div class="block" draggable="true" data-type="condition" data-template="if working {status}">
+                            Work Status
                         </div>
-                        <div class="block" draggable="true" data-type="condition" data-template="if {status} is {value}">
-                            Status Condition
+                        <div class="block" draggable="true" data-type="condition" data-template="if day is {day}">
+                            Day Type
                         </div>
-                        <div class="block" draggable="true" data-type="condition" data-template="if {streak} {operator} {value}">
-                            Streak Condition
+                        <div class="block" draggable="true" data-type="condition" data-template="if streak {operator} {value}">
+                            Streak Length
                         </div>
                     </div>
                     <div class="block-category">
                         <h4>Actions</h4>
-                        <div class="block" draggable="true" data-type="action" data-template="add {points} points">
-                            Add Points
+                        <div class="block" draggable="true" data-type="action" data-template="award {points} points">
+                            Award Points
                         </div>
                         <div class="block" draggable="true" data-type="action" data-template="multiply points by {value}">
-                            Multiply Points
+                            Apply Multiplier
                         </div>
-                        <div class="block" draggable="true" data-type="action" data-template="add streak bonus {value}">
+                        <div class="block" draggable="true" data-type="action" data-template="add streak bonus">
                             Add Streak Bonus
                         </div>
                     </div>
@@ -332,6 +332,39 @@
                 </div>
             </div>
             {% endif %}
+        </div>
+
+        <!-- Add documentation section in the info column -->
+        <div class="info-section">
+            <h3>Scoring Rules System</h3>
+            <p>Create custom scoring rules using conditions and actions:</p>
+            
+            <h4>Available Conditions:</h4>
+            <ul>
+                <li><strong>Arrival Time:</strong> Check when someone arrives (e.g., before 9:00)</li>
+                <li><strong>Work Status:</strong> Check if working in-office, remote, etc.</li>
+                <li><strong>Day Type:</strong> Check if it's a weekday, weekend, or specific day</li>
+                <li><strong>Streak Length:</strong> Check consecutive attendance days</li>
+            </ul>
+
+            <h4>Available Actions:</h4>
+            <ul>
+                <li><strong>Award Points:</strong> Give a fixed number of points</li>
+                <li><strong>Apply Multiplier:</strong> Multiply current points by a value</li>
+                <li><strong>Add Streak Bonus:</strong> Add points based on streak length</li>
+            </ul>
+
+            <h4>Example Rules:</h4>
+            <pre class="rule-example">
+if arrival before 09:00
+award 2 points
+
+if working in-office
+award 10 points
+
+if streak > 5
+multiply points by 1.5
+            </pre>
         </div>
     </div>
 </div>
@@ -808,6 +841,46 @@ scoring-explanation ul li::before {
     background: #f0f7ff;
     border-color: var(--accent-color);
 }
+
+.rule-example {
+    background: #f8f9fa;
+    padding: 15px;
+    border-radius: 4px;
+    font-family: monospace;
+    margin: 10px 0;
+    white-space: pre-wrap;
+}
+
+.info-section {
+    margin-top: 20px;
+    padding: 15px;
+    background: #fff;
+    border-radius: 8px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+}
+
+.info-section h4 {
+    color: var(--primary-color);
+    margin-top: 15px;
+}
+
+.info-section ul {
+    list-style-type: none;
+    padding-left: 0;
+}
+
+.info-section li {
+    margin: 8px 0;
+    padding-left: 20px;
+    position: relative;
+}
+
+.info-section li:before {
+    content: "•";
+    color: var(--accent-color);
+    position: absolute;
+    left: 0;
+}
 </style>
 
 <script>
@@ -1082,13 +1155,18 @@ function createRuleBlock(type, template) {
             if (part.includes('operator')) {
                 const select = document.createElement('select');
                 select.innerHTML = `
-                    <option value="<">before</option>
-                    <option value=">">after</option>
-                    <option value="=">=</option>
-                    <option value=">=">>=</option>
-                    <option value="<="><=</option>
+                    <option value="before">before</option>
+                    <option value="after">after</option>
+                    <option value="at">at</option>
+                    <option value=">=">at or after</option>
+                    <option value="<=">at or before</option>
                 `;
                 block.appendChild(select);
+            } else if (part.includes('time')) {
+                const input = document.createElement('input');
+                input.type = 'time';
+                input.value = '09:00';
+                block.appendChild(input);
             } else if (part.includes('value') || part.includes('points')) {
                 const input = document.createElement('input');
                 input.type = 'number';
@@ -1350,11 +1428,11 @@ function createRuleBlock(type, template) {
         if (part.includes('operator')) {
             const select = document.createElement('select');
             select.innerHTML = `
-                <option value="<">before</option>
-                <option value=">">after</option>
-                <option value="=">=</option>
-                <option value=">=">>=</option>
-                <option value="<="><=</option>
+                <option value="before">before</option>
+                <option value="after">after</option>
+                <option value="at">at</option>
+                <option value=">=">at or after</option>
+                <option value="<=">at or before</option>
             `;
             select.addEventListener('change', updateRulePreview);
             block.appendChild(select);
@@ -1364,21 +1442,12 @@ function createRuleBlock(type, template) {
             input.value = '09:00';
             input.addEventListener('change', updateRulePreview);
             block.appendChild(input);
-        } else if (part.includes('value') || part.includes('points')) {
-            const input = document.createElement('input');
-            input.type = 'number';
-            input.min = '0';
-            input.step = '0.1';
-            input.value = '1';
-            input.addEventListener('change', updateRulePreview);
-            block.appendChild(input);
         } else if (part.includes('status')) {
             const select = document.createElement('select');
             select.innerHTML = `
-                <option value="in_office">in office</option>
+                <option value="in-office">in-office</option>
                 <option value="remote">remote</option>
-                <option value="sick">sick</option>
-                <option value="leave">leave</option>
+                <option value="hybrid">hybrid</option>
             `;
             select.addEventListener('change', updateRulePreview);
             block.appendChild(select);
@@ -1392,6 +1461,14 @@ function createRuleBlock(type, template) {
             `;
             select.addEventListener('change', updateRulePreview);
             block.appendChild(select);
+        } else if (part.includes('points') || part.includes('value')) {
+            const input = document.createElement('input');
+            input.type = 'number';
+            input.min = '0';
+            input.step = '0.5';
+            input.value = part.includes('points') ? '1' : '1.0';
+            input.addEventListener('change', updateRulePreview);
+            block.appendChild(input);
         } else {
             const span = document.createElement('span');
             span.textContent = part;

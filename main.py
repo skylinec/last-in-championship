@@ -2295,5 +2295,197 @@ def generate_comparison_response(params, db):
 
 # ...existing code...
 
+def generate_status_response(params, db):
+    """Generate response for status queries"""
+    users = params.get('users', [])
+    date_range = params.get('date_range', 'today')
+    
+    # Build query
+    query = db.query(Entry)
+    
+    # Apply date filter
+    date = parse_date_reference(date_range or 'today')
+    query = query.filter(Entry.date == date.isoformat())
+    
+    # Apply user filter if specified
+    if users:
+        query = query.filter(Entry.name.in_(users))
+    
+    # Get results
+    entries = query.order_by(Entry.time).all()
+    
+    if not entries:
+        if users:
+            return f"No attendance records found for {', '.join(users)} on {date.strftime('%A, %d %B')}"
+        return f"No attendance records found for {date.strftime('%A, %d %B')}"
+    
+    response = f"Status for {date.strftime('%A, %d %B')}:\n"
+    for entry in entries:
+        response += f"• {entry.name}: {entry.status} at {entry.time}\n"
+    
+    return response
+
+def generate_trend_response(params, db):
+    """Generate response for trend analysis queries"""
+    users = params.get('users', [])
+    metrics = params.get('metrics', ['attendance'])
+    
+    # Default to last 30 days if no date range specified
+    date = datetime.now().date() - timedelta(days=30)
+    query = db.query(Entry).filter(Entry.date >= date.isoformat())
+    
+    if users:
+        query = query.filter(Entry.name.in_(users))
+    
+    entries = query.order_by(Entry.date).all()
+    
+    if not entries:
+        return "No data available for trend analysis"
+    
+    response = "Trend Analysis:\n"
+    
+    # Group entries by user
+    user_entries = defaultdict(list)
+    for entry in entries:
+        user_entries[entry.name].append(entry)
+    
+    for user, user_data in user_entries.items():
+        response += f"\n{user}:\n"
+        total_days = len(user_data)
+        in_office = sum(1 for e in user_data if e.status == 'in-office')
+        remote = sum(1 for e in user_data if e.status == 'remote')
+        
+        response += f"• Attendance Rate: {((in_office + remote) / total_days * 100):.1f}%\n"
+        response += f"• Office Days: {in_office} ({(in_office/total_days * 100):.1f}%)\n"
+        response += f"• Remote Days: {remote} ({(remote/total_days * 100):.1f}%)\n"
+        
+        # Calculate average arrival time
+        times = [datetime.strptime(e.time, "%H:%M") for e in user_data if e.status in ['in-office', 'remote']]
+        if times:
+            avg_minutes = sum((t.hour * 60 + t.minute) for t in times) // len(times)
+            avg_time = f"{avg_minutes//60:02d}:{avg_minutes%60:02d}"
+            response += f"• Average Arrival: {avg_time}\n"
+    
+    return response
+
+def generate_ranking_response(params, db):
+    """Generate response for ranking queries"""
+    limit = params.get('limit', 3)
+    date_range = params.get('date_range', 'today')
+    
+    # Load data and calculate rankings
+    data = load_data()
+    current_date = parse_date_reference(date_range)
+    period = 'day' if date_range == 'today' else 'week' if 'week' in date_range else 'month'
+    
+    rankings = calculate_scores(data, period, current_date)
+    
+    if not rankings:
+        return f"No ranking data available for {date_range}"
+    
+    response = f"Top {limit} Rankings for {date_range}:\n"
+    for i, rank in enumerate(rankings[:limit], 1):
+        response += f"{i}. {rank['name']}: {rank['score']} points"
+        if rank.get('current_streak', 0) > 0:
+            response += f" (streak: {rank['current_streak']})"
+        response += f" - Avg. arrival: {rank.get('average_arrival_time', 'N/A')}\n"
+    
+    return response
+
+def generate_streak_response(params, db):
+    """Generate response for streak queries"""
+    users = params.get('users', [])
+    streaks = db.query(UserStreak)
+    
+    if users:
+        streaks = streaks.filter(UserStreak.username.in_(users))
+    
+    streaks = streaks.order_by(UserStreak.current_streak.desc()).all()
+    
+    if not streaks:
+        return "No active streaks found"
+    
+    response = "Current Streaks:\n"
+    for streak in streaks:
+        if streak.current_streak > 0:
+            response += f"• {streak.username}: {streak.current_streak} days"
+            if streak.current_streak == streak.max_streak:
+                response += " (Personal Best! 🏆)"
+            elif streak.max_streak > streak.current_streak:
+                response += f" (Best: {streak.max_streak})"
+            response += "\n"
+    
+    return response
+
+def generate_schedule_response(params, db):
+    """Generate response for schedule/timing queries"""
+    users = params.get('users', [])
+    date_range = params.get('date_range', 'today')
+    date = parse_date_reference(date_range)
+    
+    query = db.query(Entry).filter(Entry.date == date.isoformat())
+    
+    if users:
+        query = query.filter(Entry.name.in_(users))
+    
+    entries = query.order_by(Entry.time).all()
+    
+    if not entries:
+        return f"No schedule information found for {date.strftime('%A, %d %B')}"
+    
+    response = f"Schedule for {date.strftime('%A, %d %B')}:\n"
+    for entry in entries:
+        response += f"• {entry.name}: Started at {entry.time} ({entry.status})\n"
+    
+    return response
+
+def generate_stats_response(params, db):
+    """Generate response for statistics queries"""
+    users = params.get('users', [])
+    metrics = params.get('metrics', ['attendance'])
+    date_range = params.get('date_range')
+    
+    # Default to current month if no date range specified
+    if not date_range:
+        start_date = datetime.now().replace(day=1).date()
+    else:
+        start_date = parse_date_reference(date_range)
+    
+    query = db.query(Entry).filter(Entry.date >= start_date.isoformat())
+    
+    if users:
+        query = query.filter(Entry.name.in_(users))
+    
+    entries = query.all()
+    
+    if not entries:
+        return "No statistics available for the specified criteria"
+    
+    response = "Statistics Summary:\n"
+    
+    # Overall stats
+    total_entries = len(entries)
+    in_office = sum(1 for e in entries if e.status == 'in-office')
+    remote = sum(1 for e in entries if e.status == 'remote')
+    sick = sum(1 for e in entries if e.status == 'sick')
+    leave = sum(1 for e in entries if e.status == 'leave')
+    
+    response += f"Total Records: {total_entries}\n"
+    response += f"• In Office: {in_office} ({in_office/total_entries*100:.1f}%)\n"
+    response += f"• Remote: {remote} ({remote/total_entries*100:.1f}%)\n"
+    response += f"• Sick Days: {sick}\n"
+    response += f"• Leave Days: {leave}\n"
+    
+    # Average arrival time
+    times = [datetime.strptime(e.time, "%H:%M") for e in entries if e.status in ['in-office', 'remote']]
+    if times:
+        avg_minutes = sum((t.hour * 60 + t.minute) for t in times) // len(times)
+        avg_time = f"{avg_minutes//60:02d}:{avg_minutes%60:02d}"
+        response += f"Average Arrival Time: {avg_time}\n"
+    
+    return response
+
+# ...existing code...
+
 if __name__ == "__main__":
     app.run(debug=True)

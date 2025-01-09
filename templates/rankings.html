@@ -45,7 +45,19 @@
             <tr>
                 <td>{{ loop.index }}</td>
                 <td>{{ rank.name }}</td>
-                <td>{{ rank.score }}</td>
+                <td class="score-cell" 
+                    data-tooltip="Score breakdown:
+                    Base points: {{ rank.base_points }}
+                    {% if mode == 'last-in' %}
+                    Position bonus: {{ rank.position_bonus }}
+                    Streak penalty: {{ rank.streak_bonus * -1 if rank.streak_bonus else 0 }}
+                    {% else %}
+                    Position bonus: {{ rank.position_bonus }}
+                    Streak bonus: {{ rank.streak_bonus }}
+                    {% endif %}
+                    Total: {{ rank.score }}">
+                    {{ rank.score }}
+                </td>
                 <td>{{ rank.average_arrival_time }}</td>
                 {% if streaks_enabled %}
                 <td>{{ rank.current_streak }} days</td>
@@ -291,6 +303,35 @@
     background-image: linear-gradient(90deg, 
         #eee 1px, transparent 1px);
     background-size: calc(100% / 11) 100%;
+}
+
+.score-cell {
+    position: relative;
+    cursor: help;
+}
+
+.score-cell::before {
+    content: attr(data-tooltip);
+    position: absolute;
+    bottom: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 8px;
+    border-radius: 4px;
+    background: #333;
+    color: white;
+    font-size: 0.9em;
+    white-space: pre;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.2s, visibility 0.2s;
+    z-index: 10;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+}
+
+.score-cell:hover::before {
+    opacity: 1;
+    visibility: visible;
 }
 </style>
 

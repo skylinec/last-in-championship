@@ -601,16 +601,21 @@ def calculate_daily_score(entry, settings, position=None, total_entries=None):
         try:
             streak = db.query(UserStreak).filter_by(username=entry["name"]).first()
             if streak and streak.current_streak > 0:
-                # Positive bonus for early bird, negative for last-in
                 streak_bonus = streak.current_streak * settings.get("streak_multiplier", 0.5)
         finally:
             db.close()
     
     return {
         "early_bird": base_points + early_bird_bonus + streak_bonus,
-        "last_in": base_points + last_in_bonus - streak_bonus,  # Subtract streak bonus for last-in
+        "last_in": base_points + last_in_bonus - streak_bonus,
         "base": base_points,
-        "streak": streak_bonus
+        "streak": streak_bonus,
+        "position_bonus": last_in_bonus if mode == 'last-in' else early_bird_bonus,
+        "breakdown": {
+            "base_points": base_points,
+            "position_bonus": last_in_bonus if mode == 'last-in' else early_bird_bonus,
+            "streak_bonus": streak_bonus
+        }
     }
 
 def calculate_streak_bonus(entry):
@@ -894,7 +899,10 @@ def calculate_scores(data, period, current_date):
                 "score": round(last_in_avg if mode == 'last-in' else early_bird_avg, 2),
                 "streak": calculate_current_streak(name),
                 "stats": scores["stats"],
-                "average_arrival_time": calculate_average_time(arrival_times) if arrival_times else "N/A"
+                "average_arrival_time": calculate_average_time(arrival_times) if arrival_times else "N/A",
+                "base_points": scores["base"],
+                "position_bonus": scores["position_bonus"],
+                "streak_bonus": scores["streak"]
             })
     
     # Always sort by descending score (scores are already mode-specific)
@@ -1345,7 +1353,7 @@ def calculate_points_progression(data):
             # Get scores for the entry
             scores = calculate_daily_score(entry, settings)
             # Use the appropriate score based on mode
-            points = scores['last_in'] if mode == 'last-in' else scores['early_bird']
+            points = scores['last_in'] if mode == 'last_in' else scores['early_bird']
             
             progression[date]['total'] += points
             progression[date]['count'] += 1

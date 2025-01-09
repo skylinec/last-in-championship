@@ -181,7 +181,13 @@ async function createHeatmap(data) {
         console.log("Raw heatmap data:", data);
         
         const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
-        const hours = Array.from({length: 14}, (_, i) => `${String(i + 7).padStart(2, '0')}:00`);
+        // Create 15-minute intervals from 7 AM to 12 PM
+        const hours = [];
+        for (let hour = 7; hour <= 12; hour++) {
+            for (let minute = 0; minute < 60; minute += 15) {
+                hours.push(`${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`);
+            }
+        }
         
         // Initialize the matrix with zeros
         const values = days.map(() => Array(hours.length).fill(0));
@@ -189,9 +195,9 @@ async function createHeatmap(data) {
         // Fill in the values from the data
         if (data) {
             for (const [key, count] of Object.entries(data)) {
-                const [day, hour] = key.split('-');
+                const [day, time] = key.split('-');
                 const dayIndex = days.indexOf(day);
-                const hourIndex = hours.indexOf(hour);
+                const hourIndex = hours.indexOf(time);
                 if (dayIndex !== -1 && hourIndex !== -1) {
                     values[dayIndex][hourIndex] = count;
                 }
@@ -201,12 +207,13 @@ async function createHeatmap(data) {
         console.log("Processed values:", values);
 
         const layout = {
-            title: 'Attendance Pattern by Day and Hour',
+            title: 'Morning Arrival Pattern (7 AM - 12 PM)',
             xaxis: { 
-                title: 'Hour',
+                title: 'Time',
                 ticktext: hours,
                 tickvals: Array.from({length: hours.length}, (_, i) => i),
-                tickangle: -45
+                tickangle: -45,
+                nticks: 12  // Show fewer tick labels for readability
             },
             yaxis: { 
                 title: 'Day',
@@ -217,7 +224,7 @@ async function createHeatmap(data) {
             margin: {
                 l: 100,
                 r: 50,
-                b: 100,
+                b: 120,  // Increased to accommodate longer time labels
                 t: 50,
                 pad: 4
             }

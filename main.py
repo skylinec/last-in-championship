@@ -1364,7 +1364,11 @@ def calculate_weekly_patterns(data):
     try:
         # Initialize all possible day-hour combinations
         days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday']
-        hours = [f"{h:02d}:00" for h in range(7, 21)]  # 7 AM to 8 PM
+        # Create 15-minute intervals from 7 AM to 12 PM
+        hours = []
+        for hour in range(7, 13):  # Up to 12 PM
+            for minute in range(0, 60, 15):
+                hours.append(f"{hour:02d}:{minute:02d}")
         
         # Initialize all combinations with zero
         for day in days:
@@ -1382,12 +1386,16 @@ def calculate_weekly_patterns(data):
                     if date.weekday() >= 5:
                         continue
                     
-                    day = date.strftime("%A")
-                    hour = f"{time.hour:02d}:00"
-                    
-                    key = f"{day}-{hour}"
-                    if key in patterns:  # Only count if within our time range
-                        patterns[key] = patterns.get(key, 0) + 1
+                    # Only process times between 7 AM and 12 PM
+                    if 7 <= time.hour <= 12:
+                        day = date.strftime("%A")
+                        # Round to nearest 15 minutes
+                        minute = (time.minute // 15) * 15
+                        hour = f"{time.hour:02d}:{minute:02d}"
+                        
+                        key = f"{day}-{hour}"
+                        if key in patterns:
+                            patterns[key] = patterns.get(key, 0) + 1
                         
                 except (ValueError, TypeError) as e:
                     app.logger.debug(f"Error processing entry: {entry}, Error: {e}")

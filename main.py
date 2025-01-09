@@ -667,18 +667,12 @@ def view_rankings(period, date_str=None):
             user_entries = [e for e in data if e["name"] == rank["name"] and 
                           in_period(e, period, current_date)]
             if user_entries:
-                # Sort entries based on mode before calculating average
-                user_entries.sort(
-                    key=lambda x: datetime.strptime(x["time"], "%H:%M"),
-                    reverse=(mode == 'last-in')
-                )
+                # Don't reverse sort when calculating average time
+                user_entries.sort(key=lambda x: datetime.strptime(x["time"], "%H:%M"))
                 
-                # Take the top 5 entries (or less if fewer entries exist)
-                top_entries = user_entries[:5]
-                
-                # Calculate average time from top entries
+                # Calculate average time from all entries
                 times_in_minutes = []
-                for entry in top_entries:
+                for entry in user_entries:
                     entry_time = datetime.strptime(entry["time"], "%H:%M")
                     minutes = entry_time.hour * 60 + entry_time.minute
                     times_in_minutes.append(minutes)
@@ -688,9 +682,7 @@ def view_rankings(period, date_str=None):
                 avg_minute = int(avg_minutes % 60)
                 
                 entry_time = datetime.strptime(f"{avg_hour:02d}:{avg_minute:02d}", "%H:%M")
-                entry_date = datetime.strptime(user_entries[0]["date"], "%Y-%m-%d")
-                is_friday = entry_date.weekday() == 4
-                shift_length = 210 if is_friday else 540  # Update to 540 minutes for 9 hours
+                shift_length = 540  # Always 9 hours
                 end_time = entry_time + timedelta(minutes=shift_length)
                 
                 rank["time"] = f"{avg_hour:02d}:{avg_minute:02d}"

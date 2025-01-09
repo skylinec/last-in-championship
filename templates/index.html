@@ -273,25 +273,30 @@
 <script>
 async function updatePodium() {
     const period = document.getElementById('podiumPeriod').value;
-    const response = await fetch(`/rankings/${period}`);
+    // Get current mode from toggle
+    const mode = document.getElementById('championshipToggle').checked ? 'last-in' : 'early-bird';
+    const response = await fetch(`/rankings/${period}?mode=${mode}`);
     const data = await response.text();
     
     const parser = new DOMParser();
     const doc = parser.parseFromString(data, 'text/html');
-    const rows = doc.querySelectorAll('tr');
+    const rows = doc.querySelectorAll('.rankings-container tbody tr');
     
     const places = ['first', 'second', 'third'];
     places.forEach((place, index) => {
-        if (rows[index + 1]) {
-            const cells = rows[index + 1].cells;
-            document.getElementById(`${place}Name`).textContent = cells[0].textContent;
-            document.getElementById(`${place}Points`).textContent = cells[1].textContent;
+        if (rows[index]) {
+            const cells = rows[index].querySelectorAll('td');
+            document.getElementById(`${place}Name`).textContent = cells[1].textContent;
+            document.getElementById(`${place}Points`).textContent = cells[2].textContent;
         } else {
             document.getElementById(`${place}Name`).textContent = '-';
             document.getElementById(`${place}Points`).textContent = '-';
         }
     });
 }
+
+// Update podium when mode changes
+document.getElementById('championshipToggle').addEventListener('change', updatePodium);
 
 document.getElementById('podiumPeriod').addEventListener('change', updatePodium);
 document.addEventListener('DOMContentLoaded', updatePodium);

@@ -115,55 +115,66 @@
 
             <div class="settings-section">
                 <h2>Scoring Rules Editor</h2>
-                <div class="scoring-dsl-container">
-                    <div class="scoring-blocks-palette">
-                        <h3>Available Blocks</h3>
-                        <div class="block-category">
-                            <h4>Conditions</h4>
-                            <div class="block" draggable="true" data-type="condition" data-template="if {time} {operator} {value}">
-                                Time Condition
-                            </div>
-                            <div class="block" draggable="true" data-type="condition" data-template="if {day} is {value}">
-                                Day Condition
-                            </div>
-                            <div class="block" draggable="true" data-type="condition" data-template="if {status} is {value}">
-                                Status Condition
-                            </div>
-                            <div class="block" draggable="true" data-type="condition" data-template="if {streak} {operator} {value}">
-                                Streak Condition
-                            </div>
-                        </div>
-                        <div class="block-category">
-                            <h4>Actions</h4>
-                            <div class="block" draggable="true" data-type="action" data-template="add {points} points">
-                                Add Points
-                            </div>
-                            <div class="block" draggable="true" data-type="action" data-template="multiply points by {value}">
-                                Multiply Points
-                            </div>
-                            <div class="block" draggable="true" data-type="action" data-template="add streak bonus {value}">
-                                Add Streak Bonus
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div class="scoring-rules-builder">
-                        <h3>Current Rules</h3>
-                        <div id="rulesContainer" class="rules-container">
-                            <!-- Rules will be added here -->
-                        </div>
-                        <button type="button" onclick="saveRules()">Save Rules</button>
-                    </div>
-
-                    <div class="scoring-preview">
-                        <h3>Rule Preview</h3>
-                        <pre id="rulePreview" class="rule-preview"></pre>
-                    </div>
-                </div>
+                <button type="button" class="open-rules-editor">Open Rules Editor</button>
             </div>
 
             <button type="submit" class="save-button">Save All Settings</button>
         </form>
+    </div>
+
+    <!-- Add Modal for Rules Editor -->
+    <div id="rulesEditorModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Scoring Rules Editor</h2>
+                <span class="close">&times;</span>
+            </div>
+            <div class="scoring-dsl-container">
+                <div class="scoring-blocks-palette">
+                    <h3>Available Blocks</h3>
+                    <div class="block-category">
+                        <h4>Conditions</h4>
+                        <div class="block" draggable="true" data-type="condition" data-template="if {time} {operator} {value}">
+                            Time Condition
+                        </div>
+                        <div class="block" draggable="true" data-type="condition" data-template="if {day} is {value}">
+                            Day Condition
+                        </div>
+                        <div class="block" draggable="true" data-type="condition" data-template="if {status} is {value}">
+                            Status Condition
+                        </div>
+                        <div class="block" draggable="true" data-type="condition" data-template="if {streak} {operator} {value}">
+                            Streak Condition
+                        </div>
+                    </div>
+                    <div class="block-category">
+                        <h4>Actions</h4>
+                        <div class="block" draggable="true" data-type="action" data-template="add {points} points">
+                            Add Points
+                        </div>
+                        <div class="block" draggable="true" data-type="action" data-template="multiply points by {value}">
+                            Multiply Points
+                        </div>
+                        <div class="block" draggable="true" data-type="action" data-template="add streak bonus {value}">
+                            Add Streak Bonus
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="scoring-rules-builder">
+                    <h3>Current Rules</h3>
+                    <div id="rulesContainer" class="rules-container">
+                        <!-- Rules will be added here -->
+                    </div>
+                    <button type="button" onclick="saveRules()">Save Rules</button>
+                </div>
+
+                <div class="scoring-preview">
+                    <h3>Rule Preview</h3>
+                    <pre id="rulePreview" class="rule-preview"></pre>
+                </div>
+            </div>
+        </div>
     </div>
 
     <!-- Right column: Scoring explanation -->
@@ -686,6 +697,117 @@ scoring-explanation ul li::before {
 .rule-block:hover button {
     opacity: 1;
 }
+
+.modal {
+    display: none;
+    position: fixed;
+    z-index: 1000;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0,0,0,0.4);
+}
+
+.modal-content {
+    background-color: #fefefe;
+    margin: 5% auto;
+    padding: 20px;
+    border: 1px solid #888;
+    width: 90%;
+    max-width: 1200px;
+    border-radius: 8px;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+}
+
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+}
+
+.close {
+    color: #aaa;
+    font-size: 28px;
+    font-weight: bold;
+    cursor: pointer;
+}
+
+.close:hover {
+    color: #000;
+}
+
+.open-rules-editor {
+    background: var(--accent-color);
+    color: white;
+    padding: 10px 20px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 16px;
+}
+
+.open-rules-editor:hover {
+    background: var(--primary-color);
+}
+
+.rule-block {
+    background: white;
+    padding: 15px;
+    margin: 10px 0;
+    border-radius: 4px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    cursor: move;
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.rule-block.dragging {
+    opacity: 0.5;
+    background: #f0f0f0;
+}
+
+.rule-block input,
+.rule-block select {
+    padding: 8px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 14px;
+}
+
+.rule-block button {
+    position: absolute;
+    right: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: none;
+    border: none;
+    color: #ff4444;
+    cursor: pointer;
+    font-size: 18px;
+    opacity: 0;
+    transition: opacity 0.2s;
+}
+
+.rule-block:hover button {
+    opacity: 1;
+}
+
+.rules-container {
+    min-height: 200px;
+    border: 2px dashed #ddd;
+    padding: 20px;
+    margin: 20px 0;
+    border-radius: 8px;
+}
+
+.rules-container.drag-over {
+    background: #f0f7ff;
+    border-color: var(--accent-color);
+}
 </style>
 
 <script>
@@ -1135,5 +1257,189 @@ function updateScoringExplanation(rules) {
         explanation.appendChild(rulesList);
     }
 }
+
+document.addEventListener('DOMContentLoaded', function() {
+    const modal = document.getElementById('rulesEditorModal');
+    const openBtn = document.querySelector('.open-rules-editor');
+    const closeBtn = document.querySelector('.close');
+    const rulesContainer = document.getElementById('rulesContainer');
+
+    openBtn.onclick = function() {
+        modal.style.display = 'block';
+        loadExistingRules();
+    }
+
+    closeBtn.onclick = function() {
+        modal.style.display = 'none';
+    }
+
+    window.onclick = function(event) {
+        if (event.target == modal) {
+            modal.style.display = 'none';
+        }
+    }
+
+    // Initialize drag and drop
+    const blocks = document.querySelectorAll('.block');
+    blocks.forEach(block => {
+        block.addEventListener('dragstart', handleDragStart);
+        block.addEventListener('dragend', handleDragEnd);
+    });
+
+    rulesContainer.addEventListener('dragover', handleDragOver);
+    rulesContainer.addEventListener('dragenter', handleDragEnter);
+    rulesContainer.addEventListener('dragleave', handleDragLeave);
+    rulesContainer.addEventListener('drop', handleDrop);
+});
+
+function handleDragStart(e) {
+    e.target.classList.add('dragging');
+    e.dataTransfer.setData('text/plain', JSON.stringify({
+        type: e.target.dataset.type,
+        template: e.target.dataset.template,
+        isNew: true
+    }));
+}
+
+function handleDragEnd(e) {
+    e.target.classList.remove('dragging');
+}
+
+function handleDragOver(e) {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+}
+
+function handleDragEnter(e) {
+    e.preventDefault();
+    e.currentTarget.classList.add('drag-over');
+}
+
+function handleDragLeave(e) {
+    e.currentTarget.classList.remove('drag-over');
+}
+
+function handleDrop(e) {
+    e.preventDefault();
+    e.currentTarget.classList.remove('drag-over');
+    
+    try {
+        const data = JSON.parse(e.dataTransfer.getData('text/plain'));
+        if (data.isNew) {
+            createRuleBlock(data.type, data.template);
+        }
+    } catch (err) {
+        console.error('Error handling drop:', err);
+    }
+}
+
+function createRuleBlock(type, template) {
+    const block = document.createElement('div');
+    block.className = 'rule-block';
+    block.draggable = true;
+    block.dataset.type = type;
+    
+    const parts = template.split(/[{}]/);
+    parts.forEach(part => {
+        if (!part.trim()) return;
+        
+        if (part.includes('operator')) {
+            const select = document.createElement('select');
+            select.innerHTML = `
+                <option value="<">before</option>
+                <option value=">">after</option>
+                <option value="=">=</option>
+                <option value=">=">>=</option>
+                <option value="<="><=</option>
+            `;
+            select.addEventListener('change', updateRulePreview);
+            block.appendChild(select);
+        } else if (part.includes('time')) {
+            const input = document.createElement('input');
+            input.type = 'time';
+            input.value = '09:00';
+            input.addEventListener('change', updateRulePreview);
+            block.appendChild(input);
+        } else if (part.includes('value') || part.includes('points')) {
+            const input = document.createElement('input');
+            input.type = 'number';
+            input.min = '0';
+            input.step = '0.1';
+            input.value = '1';
+            input.addEventListener('change', updateRulePreview);
+            block.appendChild(input);
+        } else if (part.includes('status')) {
+            const select = document.createElement('select');
+            select.innerHTML = `
+                <option value="in_office">in office</option>
+                <option value="remote">remote</option>
+                <option value="sick">sick</option>
+                <option value="leave">leave</option>
+            `;
+            select.addEventListener('change', updateRulePreview);
+            block.appendChild(select);
+        } else if (part.includes('day')) {
+            const select = document.createElement('select');
+            select.innerHTML = `
+                <option value="weekday">weekday</option>
+                <option value="weekend">weekend</option>
+                <option value="monday">Monday</option>
+                <option value="friday">Friday</option>
+            `;
+            select.addEventListener('change', updateRulePreview);
+            block.appendChild(select);
+        } else {
+            const span = document.createElement('span');
+            span.textContent = part;
+            block.appendChild(span);
+        }
+    });
+
+    const deleteBtn = document.createElement('button');
+    deleteBtn.innerHTML = '&times;';
+    deleteBtn.onclick = () => {
+        block.remove();
+        updateRulePreview();
+    };
+    block.appendChild(deleteBtn);
+
+    rulesContainer.appendChild(block);
+    makeBlockDraggable(block);
+    updateRulePreview();
+}
+
+function makeBlockDraggable(block) {
+    block.addEventListener('dragstart', (e) => {
+        e.target.classList.add('dragging');
+        const index = Array.from(rulesContainer.children).indexOf(e.target);
+        e.dataTransfer.setData('text/plain', JSON.stringify({
+            index: index,
+            isNew: false
+        }));
+    });
+
+    block.addEventListener('dragend', (e) => {
+        e.target.classList.remove('dragging');
+    });
+}
+
+function updateRulePreview() {
+    const preview = [];
+    document.querySelectorAll('.rule-block').forEach(block => {
+        let rule = '';
+        block.childNodes.forEach(node => {
+            if (node.tagName === 'SELECT' || node.tagName === 'INPUT') {
+                rule += node.value + ' ';
+            } else if (node.tagName === 'SPAN') {
+                rule += node.textContent + ' ';
+            }
+        });
+        preview.push(rule.trim());
+    });
+    
+    document.getElementById('rulePreview').textContent = preview.join('\n');
+}
+
+// ... rest of your existing script ...
 </script>
 {% endblock %}

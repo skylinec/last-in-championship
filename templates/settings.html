@@ -883,13 +883,17 @@ document.getElementById('enable_streaks').addEventListener('change', function() 
 });
 
 function calculatePoints() {
+    // Only run if we're in the calculator view
+    if (!document.getElementById('position_multiplier')) {
+        return; // Exit if required elements don't exist
+    }
+
     const settings = {
-        position_multiplier: parseFloat(document.getElementById('position_multiplier').value),
-        early_bonus: parseFloat(document.getElementById('early_bonus').value),
-        weekend_multiplier: parseFloat(document.getElementById('weekend_multiplier').value),
-        holiday_multiplier: parseFloat(document.getElementById('holiday_multiplier').value),
-        consecutive_days_bonus: parseFloat(document.getElementById('consecutive_days_bonus').value),
-        // ... get other settings values
+        position_multiplier: parseFloat(document.getElementById('position_multiplier').value) || 0,
+        early_bonus: parseFloat(document.getElementById('early_bonus').value) || 0,
+        weekend_multiplier: parseFloat(document.getElementById('weekend_multiplier').value) || 1,
+        holiday_multiplier: parseFloat(document.getElementById('holiday_multiplier').value) || 1,
+        consecutive_days_bonus: parseFloat(document.getElementById('consecutive_days_bonus').value) || 0
     };
 
     const scenario = document.getElementById('scenarioSelect').value;

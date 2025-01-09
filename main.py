@@ -677,6 +677,30 @@ def format_date_range(start_date, end_date, period):
     else:
         return start_date.strftime('%B %Y')
 
+def calculate_current_streak(name):
+    """Calculate the current streak for a given user"""
+    db = SessionLocal()
+    try:
+        # Get entries for the last 5 working days
+        entries = db.query(Entry).filter(
+            Entry.name == name,
+            Entry.status.in_(['in_office', 'remote'])
+        ).order_by(Entry.date.desc()).limit(5).all()
+        
+        streak = 0
+        prev_date = None
+        for entry in entries:
+            entry_date = datetime.strptime(entry.date, "%Y-%m-%d").date()
+            if prev_date is None or (prev_date - entry_date).days == 1:
+                streak += 1
+                prev_date = entry_date
+            else:
+                break
+        
+        return streak
+    finally:
+        db.close()
+
 def calculate_scores(data, period, current_date):
     settings = load_settings()
     filtered_data = [entry for entry in data if in_period(entry, period, current_date)]
@@ -712,7 +736,8 @@ def calculate_scores(data, period, current_date):
                     "sick": 0,
                     "leave": 0,
                     "latest_arrivals": 0,
-                    "arrival_times": []  # Track arrival times for average calculation
+                    "arrival_times": [],  # Track arrival times for average calculation
+                    "streak": calculate_current_streak(name)  # Calculate current streak
                 }
             
             stats = scores[name]
@@ -743,6 +768,7 @@ def calculate_scores(data, period, current_date):
                 "score": round(stats["total"] / stats["active_days"], 2),  # Average only active days
                 "latest_percentage": round((stats["latest_arrivals"] / stats["active_days"]) * 100, 1),
                 "average_arrival_time": avg_arrival_time,
+                "streak": stats["streak"],  # Include current streak
                 "stats": stats
             })
     

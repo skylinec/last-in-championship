@@ -355,6 +355,9 @@
             bottom: 20px;
             right: 20px;
             z-index: 1000;
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
         }
 
         .clock-in-trigger {
@@ -368,10 +371,9 @@
             font-size: 24px;
             box-shadow: 0 2px 10px rgba(0,0,0,0.1);
             transition: all 0.3s ease;
-        }
-
-        .clock-in-trigger:hover {
-            transform: scale(1.1);
+            display: flex;
+            align-items: center;
+            justify-content: center;
         }
 
         .global-clock-in {
@@ -388,33 +390,9 @@
             min-width: 200px;
         }
 
-        .quick-clock-in:hover .global-clock-in {
+        .global-clock-in.show {
             display: flex;
             animation: fadeIn 0.2s ease-out;
-        }
-
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(10px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-
-        .global-action-button {
-            padding: 8px 16px;
-            border: none;
-            border-radius: 6px;
-            cursor: pointer;
-            font-weight: 500;
-            transition: all 0.3s ease;
-            background: var(--accent-color);
-            color: white;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 8px;
-        }
-
-        .global-action-button.remote {
-            background: var(--success-color);
         }
     </style>
     {% block head %}{% endblock %}
@@ -466,8 +444,8 @@
     </nav>
 
     <div class="quick-clock-in">
-        <button class="clock-in-trigger" title="Quick Clock In">⏰</button>
-        <div class="global-clock-in">
+        <button class="clock-in-trigger" title="Quick Clock In" onclick="toggleClockIn(event)">⏰</button>
+        <div class="global-clock-in" id="clockInMenu">
             <button id="clockInButton" class="global-action-button" onclick="clockIn('in-office')">
                 🏢 Clock In (Office)
             </button>
@@ -627,6 +605,28 @@
                 window.location.reload();
             }
         });
+    });
+
+    function toggleClockIn(event) {
+        event.stopPropagation();
+        const menu = document.getElementById('clockInMenu');
+        menu.classList.toggle('show');
+    }
+
+    // Close menu when clicking outside
+    document.addEventListener('click', function(event) {
+        const menu = document.getElementById('clockInMenu');
+        const trigger = event.target.closest('.clock-in-trigger');
+        const menuContent = event.target.closest('.global-clock-in');
+        
+        if (!trigger && !menuContent) {
+            menu.classList.remove('show');
+        }
+    });
+
+    // Prevent menu from closing when clicking inside it
+    document.querySelector('.global-clock-in').addEventListener('click', function(event) {
+        event.stopPropagation();
     });
     </script>
     {% endif %}

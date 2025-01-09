@@ -34,18 +34,9 @@
 <div class="timeline-container">
     <h2>Daily Schedule Timeline</h2>
     <div class="timeline-scale">
-        <span>7:00</span>
-        <span>8:00</span>
-        <span>9:00</span>
-        <span>10:00</span>
-        <span>11:00</span>
-        <span>12:00</span>
-        <span>13:00</span>
-        <span>14:00</span>
-        <span>15:00</span>
-        <span>16:00</span>
-        <span>17:00</span>
-        <span>18:00</span>
+        {% for hour in range(7, 20) %}
+            <span>{{ "%02d:00"|format(hour) }}</span>
+        {% endfor %}
     </div>
     <div class="timeline-grid">
         {% for entry in rankings %}
@@ -53,8 +44,8 @@
             <span class="timeline-name">{{ entry.name }}</span>
             <div class="timeline-bar-container">
                 <div class="timeline-bar" 
-                     style="left: {{ ((entry.time_obj.hour * 60 + entry.time_obj.minute - 420) / 660) * 100 }}%; 
-                            width: {{ (entry.shift_length / 660) * 100 }}%"  // Update to 660 minutes for alignment
+                     style="left: {{ ((entry.time_obj.hour * 60 + entry.time_obj.minute - 420) / 720) * 100 }}%; 
+                            width: {{ (entry.shift_length / 720) * 100 }}%"
                      title="{{ entry.name }}: {{ entry.time }} - {{ entry.end_time }}">
                     <span class="timeline-time">{{ entry.time }}</span>
                     <span class="timeline-end-time">{{ entry.end_time }}</span>
@@ -75,6 +66,35 @@ function changeDate(delta) {
 function loadDate(date) {
     window.location.href = `/rankings/day/${date}`;
 }
+
+// Add timeline scaling function
+function adjustTimelineBars() {
+    const bars = document.querySelectorAll('.timeline-bar');
+    const container = document.querySelector('.timeline-bar-container');
+    const containerWidth = container.offsetWidth;
+    
+    bars.forEach(bar => {
+        // Ensure times are visible
+        const startTime = bar.querySelector('.timeline-time');
+        const endTime = bar.querySelector('.timeline-end-time');
+        const barWidth = bar.offsetWidth;
+        
+        if (barWidth < 80) { // If bar is too narrow
+            startTime.style.fontSize = '0.7em';
+            endTime.style.fontSize = '0.7em';
+            if (barWidth < 60) {
+                endTime.style.display = 'none';
+                if (barWidth < 40) {
+                    startTime.style.display = 'none';
+                }
+            }
+        }
+    });
+}
+
+// Call on load and resize
+window.addEventListener('load', adjustTimelineBars);
+window.addEventListener('resize', adjustTimelineBars);
 </script>
 <style>
 .date-selector {
@@ -99,16 +119,29 @@ function loadDate(date) {
 }
 .timeline-scale {
     display: grid;
-    grid-template-columns: repeat(11, 1fr);  /* Changed from 12 to 11 columns */
+    grid-template-columns: repeat(13, 1fr); /* 13 hours: 7:00 to 19:00 */
     margin-bottom: 10px;
     border-bottom: 1px solid #eee;
     padding-bottom: 5px;
 }
+
 .timeline-scale span {
     font-size: 0.8em;
     color: #666;
     text-align: center;
+    position: relative;
 }
+
+.timeline-scale span::after {
+    content: '';
+    position: absolute;
+    bottom: -5px;
+    left: 50%;
+    width: 1px;
+    height: 5px;
+    background: #eee;
+}
+
 .timeline-grid {
     display: flex;
     flex-direction: column;
@@ -131,7 +164,7 @@ function loadDate(date) {
     background: #f5f5f5;
     border-radius: 4px;
     background-image: linear-gradient(90deg, #eee 1px, transparent 1px);
-    background-size: calc(100% / 11) 100%;  /* Changed from 12 to 11 divisions */
+    background-size: calc(100% / 12) 100%; /* 12 intervals for 13 hours */
 }
 .timeline-bar {
     position: absolute;
@@ -139,6 +172,7 @@ function loadDate(date) {
     background: var(--accent-color);
     border-radius: 4px;
     transition: all 0.3s ease;
+    min-width: 30px; /* Minimum width for very short periods */
 }
 .timeline-bar:hover {
     transform: scaleY(1.1);
@@ -152,6 +186,7 @@ function loadDate(date) {
     transform: translateY(-50%);
     padding: 0 5px;
     white-space: nowrap;
+    text-shadow: 0 0 2px rgba(0,0,0,0.5);
 }
 .timeline-time {
     left: 5px;

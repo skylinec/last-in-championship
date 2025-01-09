@@ -582,37 +582,107 @@ def parse_uk_date(date_str):
         except ValueError:
             return datetime.now()
 
+def evaluate_rule(rule, entry, context):
+    """Evaluate a single scoring rule for an entry"""
+    try:
+        if rule['type'] == 'condition':
+            if 'time' in rule:
+                entry_time = datetime.strptime(entry['time'], '%H:%M').time()
+                compare_time = datetime.strptime(rule['value'], '%H:%M').time()
+                return compare_times(entry_time, compare_time, rule['operator'])
+            elif 'day' in rule:
+                entry_date = datetime.strptime(entry['date'], '%Y-%m-%d')
+                if rule['value'] == 'weekend':
+                    return entry_date.weekday() >= 5
+                elif rule['value'] == 'weekday':
+                    return entry_date.weekday() < 5
+                else:
+                    return entry_date.strftime('%A').lower() == rule['value'].lower()
+            elif 'status' in rule:
+                return entry['status'] == rule['value']
+            elif 'streak' in rule:
+                streak = context.get('streak', 0)
+                return compare_values(streak, float(rule['value']), rule['operator'])
+        elif rule['type'] == 'action':
+            if 'points' in rule:
+                return float(rule['points'])
+            elif 'multiply' in rule:
+                return context['current_points'] * float(rule['value'])
+            elif 'streak_bonus' in rule:
+                return context['streak'] * float(rule['value'])
+        return 0
+    except (ValueError, KeyError, TypeError) as e:
+        app.logger.error(f"Error evaluating rule: {str(e)}")
+        return 0
+
+def compare_times(time1, time2, operator):
+    """Compare two time objects"""
+    ops = {
+        '<': lambda: time1 < time2,
+        '>': lambda: time1 > time2,
+        '=': lambda: time1 == time2,
+        '>=': lambda: time1 >= time2,
+        '<=': lambda: time1 <= time2
+    }
+    return ops.get(operator, lambda: False)()
+
+def compare_values(val1, val2, operator):
+    """Compare two numeric values"""
+    ops = {
+        '<': lambda: val1 < val2,
+        '>': lambda: val1 > val2,
+        '=': lambda: val1 == val2,
+        '>=': lambda: val1 >= val2,
+        '<=': lambda: val1 <= val2
+    }
+    return ops.get(operator, lambda: False)()
+
 def calculate_daily_score(entry, settings, position=None, total_entries=None, mode='last-in'):
     """Calculate score for a single day's entry with all bonuses"""
     status = entry["status"].replace("-", "_")
     base_points = settings["points"][status]
     
-    # Calculate position bonuses
+    # Initialize context for rule evaluation
+    context = {
+        'current_points': base_points,
+        'streak': calculate_current_streak(entry["name"]),
+        'position': position,
+        'total_entries': total_entries
+    }
+    
+    # Apply custom rules if they exist
+    if 'rules' in settings['points']:
+        for rule in settings['points']['rules']:
+            if rule['type'] == 'condition':
+                if evaluate_rule(rule, entry, context):
+                    # Find and apply the corresponding action
+                    for action in settings['points']['rules']:
+                        if action['type'] == 'action':
+                            points_mod = evaluate_rule(action, entry, context)
+                            context['current_points'] += points_mod
+    
+    # Calculate standard bonuses
     early_bird_bonus = 0
     last_in_bonus = 0
     if position is not None and total_entries is not None and status in ["in_office", "remote"]:
         early_bird_bonus = (total_entries - position + 1) * settings["late_bonus"]
         last_in_bonus = position * settings["late_bonus"]
     
-    # Calculate streak bonus if enabled, using date-aware streak calculation
+    # Calculate streak bonus
     streak_bonus = 0
     if settings.get("enable_streaks", False):
-        db = SessionLocal()
-        try:
-            streak = calculate_streak_for_date(entry["name"], entry["date"], db)
-            if streak > 0:
-                streak_bonus = streak * settings.get("streak_multiplier", 0.5)
-        finally:
-            db.close()
+        streak = context['streak']
+        if streak > 0:
+            streak_bonus = streak * settings.get("streak_multiplier", 0.5)
     
     return {
-        "early_bird": base_points + early_bird_bonus + streak_bonus,
-        "last_in": base_points + last_in_bonus - streak_bonus,
-        "base": base_points,
+        "early_bird": context['current_points'] + early_bird_bonus + streak_bonus,
+        "last_in": context['current_points'] + last_in_bonus - streak_bonus,
+        "base": context['current_points'],
         "streak": streak_bonus,
         "position_bonus": last_in_bonus if mode == 'last-in' else early_bird_bonus,
         "breakdown": {
-            "base_points": base_points,
+            "base_points": context['current_points'],
             "position_bonus": last_in_bonus if mode == 'last-in' else early_bird_bonus,
             "streak_bonus": streak_bonus
         }

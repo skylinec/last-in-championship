@@ -114,62 +114,6 @@
             </div>
 
             <div class="settings-section">
-                <h2>Advanced Scoring Configuration</h2>
-                <div class="scoring-grid">
-                    <div class="form-group">
-                        <label for="position_multiplier">Position Multiplier:</label>
-                        <input type="number" id="position_multiplier" name="position_multiplier" 
-                               value="{{ settings.position_multiplier }}" min="0" max="5" step="0.1">
-                        <div class="setting-explanation">
-                            Multiplies the points earned based on arrival position
-                        </div>
-                    </div>
-
-                    <div class="form-group">
-                        <label for="early_bonus">Early Arrival Bonus:</label>
-                        <input type="number" id="early_bonus" name="early_bonus" 
-                               value="{{ settings.early_bonus }}" min="0" max="5" step="0.1">
-                        <div class="setting-explanation">
-                            Additional points for arriving before 9:00 AM
-                        </div>
-                    </div>
-
-                    <div class="form-group">
-                        <label for="weekend_multiplier">Weekend Multiplier:</label>
-                        <input type="number" id="weekend_multiplier" name="weekend_multiplier" 
-                               value="{{ settings.weekend_multiplier }}" min="1" max="5" step="0.1">
-                        <div class="setting-explanation">
-                            Multiplies points earned on weekends
-                        </div>
-                    </div>
-
-                    <!-- Add more scoring parameters -->
-                </div>
-
-                <div class="points-preview">
-                    <h3>Points Calculator</h3>
-                    <div class="calculator">
-                        <select id="scenarioSelect">
-                            <option value="regular">Regular Weekday</option>
-                            <option value="weekend">Weekend</option>
-                            <option value="holiday">Holiday</option>
-                        </select>
-                        <input type="time" id="arrivalTime" value="09:00">
-                        <select id="statusSelect">
-                            <option value="in_office">In Office</option>
-                            <option value="remote">Remote</option>
-                        </select>
-                        <input type="number" id="position" min="1" max="10" value="1" placeholder="Position">
-                        <input type="number" id="streak" min="0" max="30" value="0" placeholder="Current Streak">
-                        <button onclick="calculatePoints()">Calculate Points</button>
-                    </div>
-                    <div id="pointsBreakdown" class="points-breakdown">
-                        Points breakdown will appear here
-                    </div>
-                </div>
-            </div>
-
-            <div class="settings-section">
                 <h2>Scoring Rules Editor</h2>
                 <div class="scoring-dsl-container">
                     <div class="scoring-blocks-palette">
@@ -941,28 +885,52 @@ function createRuleBlock(type, template) {
 function updateRulePreview() {
     const rules = [];
     document.querySelectorAll('.rule-block').forEach(block => {
-        let rule = '';
+        const parts = [];
         block.childNodes.forEach(node => {
             if (node.tagName === 'SELECT' || node.tagName === 'INPUT') {
-                rule += node.value + ' ';
+                parts.push(node.value);
             } else if (node.tagName === 'SPAN') {
-                rule += node.textContent + ' ';
+                parts.push(node.textContent.trim());
             }
         });
-        rules.push(rule.trim());
+        rules.push(parts.join(' '));
     });
 
-    document.getElementById('rulePreview').textContent = rules.join('\n');
+    const preview = rules.join('\n');
+    document.getElementById('rulePreview').textContent = preview;
+
+    // Add example calculation
+    const example = calculateExampleWithRules(rules);
+    document.getElementById('rulePreview').textContent += '\n\nExample Calculation:\n' + example;
 }
 
-function loadExistingRules() {
-    // Load rules from settings.points if they exist
-    const settings = {{ settings|tojson }};
-    if (settings.points.rules) {
-        settings.points.rules.forEach(rule => {
-            createRuleBlock(rule.type, rule.template);
-        });
-    }
+function calculateExampleWithRules(rules) {
+    const exampleEntry = {
+        time: '09:00',
+        date: new Date().toISOString().split('T')[0],
+        status: 'in_office',
+        name: 'Example User'
+    };
+
+    let points = 10; // Base points
+    let explanation = `Base points: ${points}\n`;
+
+    rules.forEach(rule => {
+        // Parse and apply rule logic here
+        // This is a simplified version
+        if (rule.includes('add')) {
+            const amount = parseInt(rule.match(/add (\d+)/)[1]);
+            points += amount;
+            explanation += `Added ${amount} points\n`;
+        } else if (rule.includes('multiply')) {
+            const factor = parseFloat(rule.match(/multiply.*?(\d+\.?\d*)/)[1]);
+            points *= factor;
+            explanation += `Multiplied by ${factor}\n`;
+        }
+    });
+
+    explanation += `Final points: ${points}`;
+    return explanation;
 }
 
 function saveRules() {
@@ -970,43 +938,63 @@ function saveRules() {
     document.querySelectorAll('.rule-block').forEach(block => {
         const rule = {
             type: block.dataset.type,
-            conditions: [],
-            actions: []
         };
         
-        // Collect all inputs and selects
+        // Collect all inputs and selects as properties
         block.querySelectorAll('input, select').forEach(input => {
+            const label = input.previousElementSibling?.textContent?.toLowerCase().replace(/[^a-z]/g, '') || 'value';
             if (input.tagName === 'SELECT') {
-                rule[input.dataset.type] = input.value;
+                rule[label] = input.value;
+                if (label === 'operator') {
+                    rule.operator = input.value;
+                }
             } else {
-                rule[input.placeholder] = input.value;
+                rule[label] = input.value;
             }
         });
         
         rules.push(rule);
     });
 
-    // Update the settings form with new rules
-    const settingsData = {
-        ...window.currentSettings,
+    // Get current settings from form
+    const formData = new FormData(document.getElementById('settingsForm'));
+    const settings = {
         points: {
-            ...window.currentSettings.points,
-            rules: rules
-        }
+            in_office: parseInt(formData.get('points.in_office')),
+            remote: parseInt(formData.get('points.remote')),
+            sick: parseInt(formData.get('points.sick')),
+            leave: parseInt(formData.get('points.leave')),
+            rules: rules  // Add rules to points object
+        },
+        late_bonus: parseFloat(formData.get('late_bonus')),
+        remote_days: {},
+        core_users: Array.from(document.querySelectorAll('.core-user-checkbox:checked'))
+                       .map(checkbox => checkbox.value),
+        enable_streaks: document.getElementById('enable_streaks').checked,
+        streak_multiplier: parseFloat(document.getElementById('streak_multiplier').value)
     };
+
+    // Collect remote days
+    document.querySelectorAll('.user-row').forEach(row => {
+        const user = row.dataset.user;
+        const days = Array.from(row.querySelectorAll('input[type="checkbox"]:checked'))
+                         .map(cb => cb.value);
+        settings.remote_days[user] = days;
+    });
 
     // Save settings
     fetch('/settings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(settingsData)
+        body: JSON.stringify(settings)
     })
     .then(response => response.json())
     .then(result => {
-        alert('Rules saved successfully!');
+        alert('Settings and rules saved successfully!');
         updateScoringExplanation(rules);
+        location.reload();
     })
-    .catch(error => alert('Error saving rules: ' + error));
+    .catch(error => alert('Error saving settings: ' + error));
 }
 
 function updateScoringExplanation(rules) {

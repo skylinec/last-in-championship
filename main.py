@@ -684,7 +684,9 @@ def calculate_daily_score(entry, settings, position=None, total_entries=None, mo
         'total_entries': total_entries,
         'streak_multiplier': settings.get('streak_multiplier', 0.5)
     }
-    
+    if 'streak' not in context:  # Provide a default streak
+        context['streak'] = 0
+
     # Apply custom rules if they exist
     rules = settings["points"].get("rules", [])
     if rules:

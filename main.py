@@ -645,10 +645,15 @@ def calculate_daily_score(entry, settings, position=None, total_entries=None, mo
     # Initialize context for rule evaluation
     context = {
         'current_points': base_points,
-        'streak': calculate_current_streak(entry["name"]),
         'position': position,
         'total_entries': total_entries
     }
+    
+    # Only calculate streak up to the entry date for historical accuracy
+    entry_date = datetime.strptime(entry["date"], '%Y-%m-%d').date()
+    
+    # Use calculate_streak_for_date instead of calculate_current_streak
+    context['streak'] = calculate_streak_for_date(entry["name"], entry_date, SessionLocal())
     
     # Apply custom rules if they exist
     if 'rules' in settings['points']:
@@ -671,7 +676,7 @@ def calculate_daily_score(entry, settings, position=None, total_entries=None, mo
     # Calculate streak bonus
     streak_bonus = 0
     if settings.get("enable_streaks", False):
-        streak = context['streak']
+        streak = context['streak']  # Use the streak calculated for the specific date
         if streak > 0:
             streak_bonus = streak * settings.get("streak_multiplier", 0.5)
     

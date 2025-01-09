@@ -570,11 +570,12 @@ def calculate_daily_score(entry, settings, position=None, total_entries=None):
     base_points = settings["points"][status]
     position_bonus = 0
     
-    if position is not None and total_entries is not None:
-        if status in ["in_office", "remote"]:
-            # For early-bird mode, reverse the position bonus calculation
-            if mode == 'early-bird':
-                position = total_entries - position + 1
+    if position is not None and total_entries is not None and status in ["in_office", "remote"]:
+        if mode == 'early-bird':
+            # Early bird mode: first position gets highest bonus
+            position_bonus = (total_entries - position + 1) * settings["late_bonus"]
+        else:
+            # Last-in mode: last position gets highest bonus
             position_bonus = position * settings["late_bonus"]
     
     streak_bonus = 0
@@ -704,7 +705,8 @@ def view_rankings(period, date_str=None):
             'period': period,
             'current_date': current_date.strftime('%Y-%m-%d'),
             'current_display': format_date_range(current_date, period_end, period),
-            'current_month_value': current_date.strftime('%Y-%m')
+            'current_month_value': current_date.strftime('%Y-%m'),
+            'mode': mode  # Add mode to template data
         }
         
         return render_template("rankings.html", **template_data)

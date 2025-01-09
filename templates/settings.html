@@ -193,49 +193,51 @@
             {% if settings.enable_streaks %}
             <div class="example-box streak-explanation">
                 <h4>Streak System</h4>
-                <p>The streak system rewards consistent attendance with bonus points:</p>
-                <ul>
-                    <li>Each consecutive workday earns additional points</li>
-                    <li>Current multiplier: {{ settings.streak_multiplier }} points per day in streak</li>
-                    <li>Weekend days don't break streaks</li>
-                    <li>Both office and remote work count towards streaks</li>
-                    <li>Sick days or annual leave break the streak</li>
-                </ul>
+                <p>The streak system affects scores differently based on the mode:</p>
+                
+                <div class="mode-specific">
+                    <h5>Early Bird Mode</h5>
+                    <ul>
+                        <li>Streaks add bonus points (rewards consistent early arrival)</li>
+                        <li>Current multiplier: +{{ settings.streak_multiplier }} points per day in streak</li>
+                    </ul>
+                    
+                    <h5>Last-In Mode</h5>
+                    <ul>
+                        <li>Streaks subtract points (penalizes consistent lateness)</li>
+                        <li>Current multiplier: -{{ settings.streak_multiplier }} points per day in streak</li>
+                    </ul>
+                </div>
+                
+                <div class="streak-rules">
+                    <h5>General Rules</h5>
+                    <ul>
+                        <li>Weekend days don't break streaks</li>
+                        <li>Both office and remote work count</li>
+                        <li>Sick days or annual leave break the streak</li>
+                        <li>Maximum gap allowed is 3 days (for weekends)</li>
+                    </ul>
+                </div>
                 
                 <div class="streak-example">
-                    <h5>Example Streak Calculation</h5>
+                    <h5>Example Calculations</h5>
                     <table class="example-table">
                         <tr>
-                            <th>Scenario</th>
+                            <th>Mode</th>
                             <th>Streak</th>
-                            <th>Bonus Points</th>
+                            <th>Effect on Score</th>
                         </tr>
                         <tr>
-                            <td>Mon (Office) → Tue (Office)</td>
-                            <td>2 days</td>
-                            <td>{{ 2 * settings.streak_multiplier }}</td>
-                        </tr>
-                        <tr>
-                            <td>Thu (Office) → Fri (Remote) → Mon (Office)</td>
+                            <td>Early Bird</td>
                             <td>3 days</td>
-                            <td>{{ 3 * settings.streak_multiplier }}</td>
+                            <td>+{{ 3 * settings.streak_multiplier }} points</td>
                         </tr>
                         <tr>
-                            <td>Mon (Office) → Tue (Sick) → Wed (Office)</td>
-                            <td>1 day</td>
-                            <td>{{ 1 * settings.streak_multiplier }}</td>
+                            <td>Last-In</td>
+                            <td>3 days</td>
+                            <td>-{{ 3 * settings.streak_multiplier }} points</td>
                         </tr>
                     </table>
-                </div>
-
-                <div class="streak-notes">
-                    <h5>Important Notes</h5>
-                    <ul>
-                        <li>Streaks are counted backwards from each attendance</li>
-                        <li>Maximum gap allowed is 3 days (to account for weekends)</li>
-                        <li>Streak bonus is added to both early-bird and last-in scores</li>
-                        <li>Streaks reset after any non-working day (except weekends)</li>
-                    </ul>
                 </div>
             </div>
             {% endif %}
@@ -436,6 +438,25 @@
 .checkbox-label input[type="checkbox"] {
     width: 20px;
     height: 20px;
+}
+
+.mode-specific {
+    margin: 15px 0;
+    padding: 10px;
+    background: #f8f9fa;
+    border-radius: 4px;
+}
+
+.mode-specific h5 {
+    color: var(--primary-color);
+    margin-top: 10px;
+}
+
+.streak-rules {
+    margin: 15px 0;
+    padding: 10px;
+    background: #e9ecef;
+    border-radius: 4px;
 }
 </style>
 

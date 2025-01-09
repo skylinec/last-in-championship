@@ -601,13 +601,14 @@ def calculate_daily_score(entry, settings, position=None, total_entries=None):
         try:
             streak = db.query(UserStreak).filter_by(username=entry["name"]).first()
             if streak and streak.current_streak > 0:
+                # Positive bonus for early bird, negative for last-in
                 streak_bonus = streak.current_streak * settings.get("streak_multiplier", 0.5)
         finally:
             db.close()
     
     return {
         "early_bird": base_points + early_bird_bonus + streak_bonus,
-        "last_in": base_points + last_in_bonus + streak_bonus,
+        "last_in": base_points + last_in_bonus - streak_bonus,  # Subtract streak bonus for last-in
         "base": base_points,
         "streak": streak_bonus
     }

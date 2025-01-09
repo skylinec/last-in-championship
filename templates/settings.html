@@ -1261,22 +1261,43 @@ function calculateExampleWithRules(rules) {
 function saveRules() {
     const rules = [];
     document.querySelectorAll('.rule-block').forEach(block => {
-        const rule = {
-            type: block.dataset.type,
-        };
+        const type = block.dataset.type;
+        const rule = { type };
         
-        // Collect all inputs and selects as properties
-        block.querySelectorAll('input, select').forEach(input => {
-            const label = input.previousElementSibling?.textContent?.toLowerCase().replace(/[^a-z]/g, '') || 'value';
-            if (input.tagName === 'SELECT') {
-                rule[label] = input.value;
-                if (label === 'operator') {
-                    rule.operator = input.value;
-                }
-            } else {
-                rule[label] = input.value;
+        if (type === 'condition') {
+            const parts = Array.from(block.childNodes)
+                .filter(node => node.tagName === 'SELECT' || node.tagName === 'INPUT' || (node.tagName === 'SPAN' && node.textContent.trim()))
+                .map(node => node.tagName === 'SELECT' || node.tagName === 'INPUT' ? node.value : node.textContent.trim());
+            
+            if (parts[0] === 'if' && parts[1] === 'arrival') {
+                rule.arrival = true;
+                rule.operator = parts[2];
+                rule.time = parts[3];
+            } else if (parts[0] === 'if' && parts[1] === 'working') {
+                rule.working = true;
+                rule.status = parts[2];
+            } else if (parts[0] === 'if' && parts[1] === 'day') {
+                rule.day = parts[3];
+            } else if (parts[0] === 'if' && parts[1] === 'streak') {
+                rule.streak = true;
+                rule.operator = parts[2];
+                rule.value = parts[3];
             }
-        });
+        } else if (type === 'action') {
+            const parts = Array.from(block.childNodes)
+                .filter(node => node.tagName === 'SELECT' || node.tagName === 'INPUT' || (node.tagName === 'SPAN' && node.textContent.trim()))
+                .map(node => node.tagName === 'SELECT' || node.tagName === 'INPUT' ? node.value : node.textContent.trim());
+            
+            if (parts[0] === 'award') {
+                rule.award = true;
+                rule.points = parseFloat(parts[1]);
+            } else if (parts[0] === 'multiply') {
+                rule.multiply = true;
+                rule.value = parseFloat(parts[3]);
+            } else if (parts[0] === 'add' && parts[1] === 'streak') {
+                rule.streak = true;
+            }
+        }
         
         rules.push(rule);
     });
@@ -1521,6 +1542,116 @@ function updateRulePreview() {
     document.getElementById('rulePreview').textContent = preview.join('\n');
 }
 
-// ... rest of your existing script ...
+// Add this function near the top of your script section
+function loadExistingRules() {
+    // Get rules from settings
+    const settings = {{ settings|tojson }};
+    const rules = settings.points.rules || [];
+    
+    // Clear existing rules
+    const rulesContainer = document.getElementById('rulesContainer');
+    rulesContainer.innerHTML = '';
+    
+    // Recreate each rule block
+    rules.forEach(rule => {
+        if (rule.type === 'condition') {
+            let template;
+            if (rule.arrival) {
+                template = `if arrival ${rule.operator} ${rule.time}`;
+            } else if (rule.working) {
+                template = `if working ${rule.status}`;
+            } else if (rule.day) {
+                template = `if day is ${rule.day}`;
+            } else if (rule.streak) {
+                template = `if streak ${rule.operator} ${rule.value}`;
+            }
+            if (template) {
+                createRuleBlock('condition', template);
+            }
+        } else if (rule.type === 'action') {
+            let template;
+            if (rule.award) {
+                template = `award ${rule.points} points`;
+            } else if (rule.multiply) {
+                template = `multiply points by ${rule.value}`;
+            } else if (rule.streak) {
+                template = `add streak bonus`;
+            }
+            if (template) {
+                createRuleBlock('action', template);
+            }
+        }
+    });
+    
+    updateRulePreview();
+}
+
+// Update saveRules function
+function saveRules() {
+    const rules = [];
+    document.querySelectorAll('.rule-block').forEach(block => {
+        const type = block.dataset.type;
+        const rule = { type };
+        
+        if (type === 'condition') {
+            const parts = Array.from(block.childNodes)
+                .filter(node => node.tagName === 'SELECT' || node.tagName === 'INPUT' || (node.tagName === 'SPAN' && node.textContent.trim()))
+                .map(node => node.tagName === 'SELECT' || node.tagName === 'INPUT' ? node.value : node.textContent.trim());
+            
+            if (parts[0] === 'if' && parts[1] === 'arrival') {
+                rule.arrival = true;
+                rule.operator = parts[2];
+                rule.time = parts[3];
+            } else if (parts[0] === 'if' && parts[1] === 'working') {
+                rule.working = true;
+                rule.status = parts[2];
+            } else if (parts[0] === 'if' && parts[1] === 'day') {
+                rule.day = parts[3];
+            } else if (parts[0] === 'if' && parts[1] === 'streak') {
+                rule.streak = true;
+                rule.operator = parts[2];
+                rule.value = parts[3];
+            }
+        } else if (type === 'action') {
+            const parts = Array.from(block.childNodes)
+                .filter(node => node.tagName === 'SELECT' || node.tagName === 'INPUT' || (node.tagName === 'SPAN' && node.textContent.trim()))
+                .map(node => node.tagName === 'SELECT' || node.tagName === 'INPUT' ? node.value : node.textContent.trim());
+            
+            if (parts[0] === 'award') {
+                rule.award = true;
+                rule.points = parseFloat(parts[1]);
+            } else if (parts[0] === 'multiply') {
+                rule.multiply = true;
+                rule.value = parseFloat(parts[3]);
+            } else if (parts[0] === 'add' && parts[1] === 'streak') {
+                rule.streak = true;
+            }
+        }
+        
+        rules.push(rule);
+    });
+
+    // Get current settings from form
+    const formData = new FormData(document.getElementById('settingsForm'));
+    const settings = {
+        points: {
+            in_office: parseInt(formData.get('points.in_office')),
+            remote: parseInt(formData.get('points.remote')),
+            sick: parseInt(formData.get('points.sick')),
+            leave: parseInt(formData.get('points.leave')),
+            rules: rules  // Add rules to points object
+        },
+        late_bonus: parseFloat(formData.get('late_bonus')),
+        remote_days: {},
+        core_users: Array.from(document.querySelectorAll('.core-user-checkbox:checked'))
+                       .map(checkbox => checkbox.value),
+        enable_streaks: document.getElementById('enable_streaks').checked,
+        streak_multiplier: parseFloat(document.getElementById('streak_multiplier').value)
+    };
+
+    // ...rest of existing saveRules function...
+}
+
+// ...rest of existing code...
 </script>
 {% endblock %}

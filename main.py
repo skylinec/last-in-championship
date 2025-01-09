@@ -180,35 +180,49 @@ def save_data(entries):
 
 def load_settings():
     db = SessionLocal()
-    settings = db.query(Settings).first()
-    if not settings:
-        init_settings()
+    try:
         settings = db.query(Settings).first()
-    result = {
-        "points": settings.points,
-        "late_bonus": settings.late_bonus,
-        "remote_days": settings.remote_days,
-        "core_users": settings.core_users,
-        "enable_streaks": settings.enable_streaks,
-        "streak_multiplier": settings.streak_multiplier,
-        "streaks_enabled": settings.streaks_enabled,
-        "streak_bonus": settings.streak_bonus
-    }
-    db.close()
-    return result
+        if not settings:
+            init_settings()
+            settings = db.query(Settings).first()
+        result = {
+            "points": settings.points,
+            "late_bonus": settings.late_bonus,
+            "remote_days": settings.remote_days,
+            "core_users": settings.core_users,
+            "enable_streaks": settings.enable_streaks,
+            "streak_multiplier": settings.streak_multiplier,
+            "streaks_enabled": settings.streaks_enabled,
+            "streak_bonus": settings.streak_bonus,
+            "rules": settings.points.get('rules', [])  # Add rules to response
+        }
+        return result
+    finally:
+        db.close()
 
 def save_settings(settings_data):
     db = SessionLocal()
-    settings = db.query(Settings).first()
-    if settings:
-        settings.points = settings_data["points"]
-        settings.late_bonus = settings_data["late_bonus"]
-        settings.remote_days = settings_data["remote_days"]
-    else:
-        settings = Settings(**settings_data)
-        db.add(settings)
-    db.commit()
-    db.close()
+    try:
+        settings = db.query(Settings).first()
+        if settings:
+            # Ensure points is a dictionary and includes rules
+            points_data = settings_data.get("points", {})
+            if isinstance(points_data, dict):
+                # Preserve existing rules if not being updated
+                if 'rules' not in points_data and hasattr(settings, 'points') and isinstance(settings.points, dict):
+                    points_data['rules'] = settings.points.get('rules', [])
+            settings.points = points_data
+            settings.late_bonus = settings_data["late_bonus"]
+            settings.remote_days = settings_data["remote_days"]
+            settings.core_users = settings_data.get("core_users", [])
+            settings.enable_streaks = settings_data.get("enable_streaks", False)
+            settings.streak_multiplier = settings_data.get("streak_multiplier", 0.5)
+        else:
+            settings = Settings(**settings_data)
+            db.add(settings)
+        db.commit()
+    finally:
+        db.close()
 
 def log_audit(action, user, details, old_data=None, new_data=None):
     """Log audit entry to database with proper change tracking"""
@@ -667,26 +681,22 @@ def calculate_daily_score(entry, settings, position=None, total_entries=None, mo
     context = {
         'current_points': base_points,
         'position': position,
-        'total_entries': total_entries
+        'total_entries': total_entries,
+        'streak_multiplier': settings.get('streak_multiplier', 0.5)
     }
     
-    # Only calculate streak up to the entry date for historical accuracy
-    entry_date = datetime.strptime(entry["date"], '%Y-%m-%d').date()
-    
-    # Use calculate_streak_for_date instead of calculate_current_streak
-    context['streak'] = calculate_streak_for_date(entry["name"], entry_date, SessionLocal())
-    
     # Apply custom rules if they exist
-    if 'rules' in settings['points']:
-        for rule in settings['points']['rules']:
+    rules = settings["points"].get("rules", [])
+    if rules:
+        for rule in rules:
             if rule['type'] == 'condition':
                 if evaluate_rule(rule, entry, context):
-                    # Find and apply the corresponding action
-                    for action in settings['points']['rules']:
-                        if action['type'] == 'action':
-                            points_mod = evaluate_rule(action, entry, context)
-                            context['current_points'] += points_mod
-    
+                    # Find matching action
+                    action_rule = next((r for r in rules if r['type'] == 'action'), None)
+                    if action_rule:
+                        points_mod = evaluate_rule(action_rule, entry, context)
+                        context['current_points'] += points_mod
+
     # Calculate standard bonuses
     early_bird_bonus = 0
     last_in_bonus = 0

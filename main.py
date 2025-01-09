@@ -632,7 +632,6 @@ def get_week_bounds(date_str):
 @login_required
 def view_rankings(period, date_str=None):
     try:
-        # Get championship mode from query parameter
         mode = request.args.get('mode', 'last-in')
         # Get current date (either from URL or today)
         if date_str:
@@ -659,14 +658,21 @@ def view_rankings(period, date_str=None):
         
         # Process each ranking entry to add time data
         for rank in rankings:
-            # Find all entries for this user in the period
             user_entries = [e for e in data if e["name"] == rank["name"] and 
                           in_period(e, period, current_date)]
-            
             if user_entries:
-                # Calculate average start time
+                # Sort entries based on mode before calculating average
+                user_entries.sort(
+                    key=lambda x: datetime.strptime(x["time"], "%H:%M"),
+                    reverse=(mode == 'last-in')
+                )
+                
+                # Take the top 5 entries (or less if fewer entries exist)
+                top_entries = user_entries[:5]
+                
+                # Calculate average time from top entries
                 times_in_minutes = []
-                for entry in user_entries:
+                for entry in top_entries:
                     entry_time = datetime.strptime(entry["time"], "%H:%M")
                     minutes = entry_time.hour * 60 + entry_time.minute
                     times_in_minutes.append(minutes)

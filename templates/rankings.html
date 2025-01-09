@@ -357,8 +357,8 @@ function calculateEndTime(startTime, dayOfWeek) {
     // Convert dayOfWeek from Python (0-6, Mon-Sun) to JS (0-6, Sun-Sat)
     const jsDay = (dayOfWeek + 6) % 7;
     
-    // Add 8.5 hours for Mon-Thu, 3.5 hours for Fri
-    const hoursToAdd = jsDay === 5 ? 3.5 : 8.5;
+    // Add 9 hours for Mon-Thu, 3.5 hours for Fri
+    const hoursToAdd = jsDay === 5 ? 3.5 : 9;  // Update to 9 hours
     
     const endDate = new Date(startDate.getTime() + hoursToAdd * 60 * 60 * 1000);
     return endDate.toLocaleTimeString('en-GB', { 

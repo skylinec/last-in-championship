@@ -1,15 +1,12 @@
 {% extends "base.html" %}
 {% block title %}Daily Rankings{% endblock %}
-
 {% block content %}
 <h1>Rankings for {{ date }}</h1>
-
 <div class="date-selector">
     <button onclick="changeDate(-1)">Previous Day</button>
     <input type="date" id="dateSelect" value="{{ date }}" onchange="loadDate(this.value)">
     <button onclick="changeDate(1)">Next Day</button>
 </div>
-
 <div class="rankings-container">
     <table>
         <thead>
@@ -34,7 +31,6 @@
         </tbody>
     </table>
 </div>
-
 <div class="timeline-container">
     <h2>Daily Schedule Timeline</h2>
     <div class="timeline-scale">
@@ -58,7 +54,7 @@
             <div class="timeline-bar-container">
                 <div class="timeline-bar" 
                      style="left: {{ ((entry.time_obj.hour * 60 + entry.time_obj.minute - 420) / 660) * 100 }}%; 
-                            width: {{ (entry.shift_length / 660) * 100 }}%"
+                            width: {{ (entry.shift_length / 540) * 100 }}%"  // Update to 540 minutes for 9 hours
                      title="{{ entry.name }}: {{ entry.time }} - {{ entry.end_time }}">
                     <span class="timeline-time">{{ entry.time }}</span>
                     <span class="timeline-end-time">{{ entry.end_time }}</span>
@@ -68,7 +64,6 @@
         {% endfor %}
     </div>
 </div>
-
 <script>
 function changeDate(delta) {
     const dateInput = document.getElementById('dateSelect');
@@ -77,12 +72,10 @@ function changeDate(delta) {
     dateInput.value = currentDate.toISOString().split('T')[0];
     loadDate(dateInput.value);
 }
-
 function loadDate(date) {
     window.location.href = `/rankings/day/${date}`;
 }
 </script>
-
 <style>
 .date-selector {
     margin: 20px 0;
@@ -91,15 +84,12 @@ function loadDate(date) {
     align-items: center;
     justify-content: center;
 }
-
 .rankings-container {
     margin-top: 20px;
 }
-
 .rank-row.in-office {
     font-weight: bold;
 }
-
 .timeline-container {
     background: white;
     padding: 20px;
@@ -107,7 +97,6 @@ function loadDate(date) {
     box-shadow: 0 2px 5px rgba(0,0,0,0.1);
     margin-top: 30px;
 }
-
 .timeline-scale {
     display: grid;
     grid-template-columns: repeat(11, 1fr);  /* Changed from 12 to 11 columns */
@@ -115,31 +104,26 @@ function loadDate(date) {
     border-bottom: 1px solid #eee;
     padding-bottom: 5px;
 }
-
 .timeline-scale span {
     font-size: 0.8em;
     color: #666;
     text-align: center;
 }
-
 .timeline-grid {
     display: flex;
     flex-direction: column;
     gap: 10px;
 }
-
 .timeline-row {
     display: flex;
     align-items: center;
     height: 40px;
 }
-
 .timeline-name {
     width: 120px;
     font-size: 0.9em;
     padding-right: 10px;
 }
-
 .timeline-bar-container {
     position: relative;
     flex-grow: 1;
@@ -149,7 +133,6 @@ function loadDate(date) {
     background-image: linear-gradient(90deg, #eee 1px, transparent 1px);
     background-size: calc(100% / 11) 100%;  /* Changed from 12 to 11 divisions */
 }
-
 .timeline-bar {
     position: absolute;
     height: 100%;
@@ -157,12 +140,10 @@ function loadDate(date) {
     border-radius: 4px;
     transition: all 0.3s ease;
 }
-
 .timeline-bar:hover {
     transform: scaleY(1.1);
     z-index: 1;
 }
-
 .timeline-time, .timeline-end-time {
     position: absolute;
     font-size: 0.8em;
@@ -172,11 +153,9 @@ function loadDate(date) {
     padding: 0 5px;
     white-space: nowrap;
 }
-
 .timeline-time {
     left: 5px;
 }
-
 .timeline-end-time {
     right: 5px;
 }

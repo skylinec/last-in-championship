@@ -684,7 +684,7 @@ def view_rankings(period, date_str=None):
                 entry_time = datetime.strptime(f"{avg_hour:02d}:{avg_minute:02d}", "%H:%M")
                 entry_date = datetime.strptime(user_entries[0]["date"], "%Y-%m-%d")
                 is_friday = entry_date.weekday() == 4
-                shift_length = 210 if is_friday else 510
+                shift_length = 210 if is_friday else 540  # Update to 540 minutes for 9 hours
                 end_time = entry_time + timedelta(minutes=shift_length)
                 
                 rank["time"] = f"{avg_hour:02d}:{avg_minute:02d}"
@@ -882,7 +882,7 @@ def day_rankings(date=None):
         entry_time = datetime.strptime(entry["time"], "%H:%M")
         entry_date = datetime.strptime(entry["date"], "%Y-%m-%d")
         is_friday = entry_date.weekday() == 4
-        shift_length = 210 if is_friday else 510  # 3.5 hours = 210 mins, 8.5 hours = 510 mins
+        shift_length = 210 if is_friday else 540  # Update to 540 minutes for 9 hours
         end_time = entry_time + timedelta(minutes=shift_length)
         rankings.append({
             "name": entry["name"],

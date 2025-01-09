@@ -1150,27 +1150,12 @@ def manage_settings():
     db = SessionLocal()
     try:
         if request.method == "GET":
-            settings = db.query(Settings).first()
-            if not settings:
-                init_settings()
-                settings = db.query(Settings).first()
-            
-            # Get all registered users
-            registered_users = [user[0] for user in db.query(User.username).all()]
-            
-            return render_template("settings.html", 
-                                settings={
-                                    "points": settings.points,
-                                    "late_bonus": settings.late_bonus,
-                                    "remote_days": settings.remote_days,
-                                    "core_users": settings.core_users,
-                                    "enable_streaks": settings.enable_streaks,
-                                    "streak_multiplier": settings.streak_multiplier,
-                                    "streaks_enabled": settings.streaks_enabled,
-                                    "streak_bonus": settings.streak_bonus
-                                },
-                                core_users=settings.core_users,
-                                registered_users=registered_users)
+            settings_data = load_settings()
+            return render_template(
+                "settings.html",
+                rules=settings_data.get("rules", []),
+                settings_data=settings_data  # optional
+            )
         else:
             old_settings = db.query(Settings).first()
             new_settings = request.json
@@ -2773,7 +2758,7 @@ def calculate_streak_for_date(name, target_date, db):
             Entry.name == name,
             Entry.status.in_(['in-office', 'remote']),
             Entry.date <= target_date.isoformat()
-        ).order_by(
+        ). order_by(
             Entry.date.desc()
         ).all()
         

@@ -2015,78 +2015,203 @@ def build_dynamic_query(db, params):
     
     return query
 
+from fuzzywuzzy import fuzz, process
+from collections import defaultdict
+import re
+
+# Add these new classes for better query handling
+class ConversationContext:
+    def __init__(self):
+        self.last_query = None
+        self.last_results = None
+        self.current_topic = None
+        self.mentioned_users = []
+        self.mentioned_dates = []
+        self.follow_up_context = {}
+
+class QueryIntent:
+    def __init__(self, intent_type, confidence, parameters=None):
+        self.type = intent_type
+        self.confidence = confidence
+        self.parameters = parameters or {}
+
+class QueryProcessor:
+    def __init__(self):
+        self.conversation_contexts = defaultdict(ConversationContext)
+        self.intent_patterns = {
+            'comparison': r'compare|versus|vs|difference|between',
+            'trend': r'trend|over time|pattern|history',
+            'ranking': r'rank|top|bottom|best|worst|leading',
+            'status': r'status|where|doing|currently',
+            'statistics': r'average|mean|total|count|summary|stats',
+            'streak': r'streak|consecutive|row|sequence',
+            'schedule': r'schedule|timing|when|arrival|departure'
+        }
+        
+    def analyze_query(self, query, user_id):
+        context = self.conversation_contexts[user_id]
+        tokens = word_tokenize(query.lower())
+        
+        # Detect follow-up questions
+        if self._is_followup_question(query, context):
+            return self._handle_followup(query, context)
+        
+        # Identify main intent
+        intent = self._classify_intent(query, tokens)
+        
+        # Extract parameters
+        params = self._extract_parameters(query, tokens, context)
+        
+        # Update context
+        context.last_query = query
+        context.current_topic = intent.type
+        context.mentioned_users.extend(params.get('users', []))
+        
+        return intent, params
+    
+    def _is_followup_question(self, query, context):
+        follow_up_indicators = [
+            'what about',
+            'how about',
+            'and',
+            'what else',
+            'who else',
+            'then',
+            'also'
+        ]
+        return any(indicator in query.lower() for indicator in follow_up_indicators)
+    
+    def _handle_followup(self, query, context):
+        # Inherit context from previous query
+        intent = self._classify_intent(query, word_tokenize(query.lower()))
+        params = context.follow_up_context.copy()
+        
+        # Update parameters based on new query
+        new_params = self._extract_parameters(query, word_tokenize(query.lower()), context)
+        params.update(new_params)
+        
+        return intent, params
+    
+    def _classify_intent(self, query, tokens):
+        scores = {}
+        for intent, pattern in self.intent_patterns.items():
+            if re.search(pattern, query.lower()):
+                scores[intent] = fuzz.ratio(pattern, query.lower())
+        
+        if not scores:
+            return QueryIntent('status', 0.5)  # Default to status check
+            
+        best_intent = max(scores.items(), key=lambda x: x[1])
+        return QueryIntent(best_intent[0], best_intent[1] / 100)
+    
+    def _extract_parameters(self, query, tokens, context):
+        params = {
+            'users': self._extract_users(query),
+            'date_range': self._extract_date_range(query),
+            'status': self._extract_status(query),
+            'metrics': self._extract_metrics(query),
+            'limit': self._extract_limit(query),
+            'comparison_type': self._extract_comparison_type(query),
+            'sort': self._extract_sort_preference(query)
+        }
+        
+        # Add temporal context
+        if 'yesterday' in query:
+            params['temporal_context'] = 'past'
+        elif 'tomorrow' in query:
+            params['temporal_context'] = 'future'
+        
+        return params
+
+    def _extract_users(self, query):
+        core_users = get_core_users()
+        mentioned_users = []
+        
+        # Direct matches
+        for user in core_users:
+            if user.lower() in query.lower():
+                mentioned_users.append(user)
+        
+        # Fuzzy matches
+        if not mentioned_users:
+            words = query.split()
+            for word in words:
+                matches = process.extractBests(word, core_users, score_cutoff=80)
+                mentioned_users.extend([match[0] for match in matches])
+        
+        return list(set(mentioned_users))
+
+# Update the chatbot route to use the new query processor
 @app.route("/chatbot", methods=["POST"])
 @login_required
 def chatbot():
     message = request.json.get("message", "").lower()
-    tokens = word_tokenize(message)
-    stop_words = set(stopwords.words('english'))
-    lemmatizer = WordNetLemmatizer()
+    user_id = session.get('user')
     
-    # Process tokens
-    tokens = [lemmatizer.lemmatize(word) for word in tokens if word not in stop_words]
-    
-    # Extract query parameters
-    params = extract_query_parameters(tokens)
+    processor = QueryProcessor()
+    intent, params = processor.analyze_query(message, user_id)
     
     db = SessionLocal()
     try:
-        # Build and execute query
-        query = build_dynamic_query(db, params)
-        results = query.all()
-        
-        # Format response based on metric
-        if params["metric"] == "points":
-            data = load_data()
-            current_date = datetime.now()
-            rankings = calculate_scores(data, 'day' if not params["date_range"] else 'week' if 'week' in params["date_range"] else 'month', current_date)
-            
-            if params["users"]:
-                rankings = [r for r in rankings if r["name"] in params["users"]]
-            if params["limit"]:
-                rankings = rankings[:params["limit"]]
-            
-            response = "Rankings:\n"
-            for i, rank in enumerate(rankings, 1):
-                response += f"{i}. {rank['name']} - {rank['score']} points"
-                if rank.get('current_streak', 0) > 0:
-                    response += f" (streak: {rank['current_streak']})"
-                response += "\n"
-                
-        elif params["metric"] == "streak":
-            streaks = db.query(UserStreak)
-            if params["users"]:
-                streaks = streaks.filter(UserStreak.username.in_(params["users"]))
-            streaks = streaks.order_by(UserStreak.current_streak.desc()).all()
-            
-            response = "Current streaks:\n"
-            for streak in streaks[:params["limit"] if params["limit"] else None]:
-                if streak.current_streak > 0:
-                    response += f"{streak.username}: {streak.current_streak} days"
-                    if streak.current_streak == streak.max_streak:
-                        response += " (Personal Best!)"
-                    response += "\n"
-                    
-        elif params["metric"] == "time":
-            response = "Arrival times:\n"
-            for entry in results:
-                response += f"{entry.name}: {entry.time} ({entry.status})\n"
-                
-        else:  # Default to attendance
-            if not results:
-                response = "No matching records found."
-            else:
-                response = "Attendance records:\n"
-                for entry in results:
-                    response += f"{entry.name} - {entry.status} at {entry.time} on {entry.date}\n"
-        
-        return jsonify({"response": response.strip()})
-        
+        response = generate_response(intent, params, db)
+        return jsonify({"response": response})
     except Exception as e:
         app.logger.error(f"Chatbot error: {str(e)}")
         return jsonify({"response": "Sorry, I encountered an error processing your request."})
     finally:
         db.close()
+
+def generate_response(intent, params, db):
+    """Generate dynamic response based on intent and parameters"""
+    if intent.type == 'comparison':
+        return generate_comparison_response(params, db)
+    elif intent.type == 'trend':
+        return generate_trend_response(params, db)
+    elif intent.type == 'ranking':
+        return generate_ranking_response(params, db)
+    elif intent.type == 'status':
+        return generate_status_response(params, db)
+    elif intent.type == 'statistics':
+        return generate_stats_response(params, db)
+    elif intent.type == 'streak':
+        return generate_streak_response(params, db)
+    elif intent.type == 'schedule':
+        return generate_schedule_response(params, db)
+    else:
+        return "I'm not sure how to help with that. Try asking about attendance, rankings, or statistics."
+
+# Add response generator functions
+def generate_comparison_response(params, db):
+    users = params.get('users', [])
+    if len(users) < 2:
+        return "Please specify two or more users to compare."
+    
+    date_range = params.get('date_range', 'month')
+    metrics = params.get('metrics', ['attendance', 'points', 'streaks'])
+    
+    response = f"Comparing {', '.join(users)}:\n\n"
+    
+    for metric in metrics:
+        if metric == 'attendance':
+            # Query attendance patterns
+            query = db.query(
+                Entry.name,
+                func.count(Entry.id).label('total_days'),
+                func.avg(func.extract('hour', func.cast(Entry.time, Time))).label('avg_arrival')
+            ).filter(
+                Entry.name.in_(users)
+            ).group_by(Entry.name)
+            
+            results = query.all()
+            response += "Attendance Patterns:\n"
+            for result in results:
+                response += f"- {result.name}: {result.total_days} days, avg arrival: {int(result.avg_arrival)}:00\n"
+    
+    return response
+
+# Add other response generators similarly...
+
+# ...existing code...
 
 if __name__ == "__main__":
     app.run(debug=True)

@@ -1657,6 +1657,64 @@ function saveRules() {
     // ...rest of existing saveRules function...
 }
 
+// Add this function to collect rules from the editor
+function collectRulesFromEditor() {
+    const rules = [];
+    document.querySelectorAll('.rule-block').forEach(block => {
+        const type = block.dataset.type;
+        const rule = { type };
+        
+        // Get all inputs and selects from the block
+        const elements = block.querySelectorAll('input, select');
+        const spans = block.querySelectorAll('span');
+        
+        // Build rule based on its type
+        if (type === 'condition') {
+            // Get first span text (should be 'if')
+            const action = spans[0].textContent.trim();
+            if (action === 'if') {
+                const condition = spans[1].textContent.trim();
+                
+                if (condition === 'arrival') {
+                    rule.arrival = true;
+                    rule.operator = elements[0].value;  // First select is operator
+                    rule.time = elements[1].value;      // Second input is time
+                }
+                else if (condition === 'working') {
+                    rule.working = true;
+                    rule.status = elements[0].value;    // Status select
+                }
+                else if (condition === 'day') {
+                    rule.day = elements[0].value;       // Day select
+                }
+                else if (condition === 'streak') {
+                    rule.streak = true;
+                    rule.operator = elements[0].value;  // Operator select
+                    rule.value = elements[1].value;     // Value input
+                }
+            }
+        } 
+        else if (type === 'action') {
+            const action = spans[0].textContent.trim();
+            if (action === 'award') {
+                rule.award = true;
+                rule.points = parseFloat(elements[0].value);
+            }
+            else if (action === 'multiply') {
+                rule.multiply = true;
+                rule.value = parseFloat(elements[0].value);
+            }
+            else if (action === 'add') {
+                rule.streak = true;
+            }
+        }
+        
+        rules.push(rule);
+    });
+    
+    return rules;
+}
+
 // ...rest of existing code...
 </script>
 {% endblock %}

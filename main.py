@@ -628,111 +628,12 @@ def get_week_bounds(date_str):
     last_day = first_day + timedelta(days=6)
     return first_day, last_day
 
-def calculate_scores(data, period, current_date):
-    """Calculate scores with proper handling of early-bird/last-in modes"""
-    settings = load_settings()
-    filtered_data = [entry for entry in data if in_period(entry, period, current_date)]
-    mode = request.args.get('mode', 'last-in')
-    
-    # Group entries by date first
-    daily_entries = {}
-    daily_scores = {}
-    
-    # First, group entries by date
-    for entry in filtered_data:
-        date = entry["date"]
-        if date not in daily_entries:
-            daily_entries[date] = []
-        daily_entries[date].append(entry)
-    
-    # Calculate scores for each day
-    for date, entries in daily_entries.items():
-        # Sort entries by time - same direction for both modes initially
-        entries.sort(key=lambda x: datetime.strptime(x["time"], "%H:%M"))
-        
-        total_entries = len(entries)
-        
-        # Process entries based on mode
-        for idx, entry in enumerate(entries):
-            name = entry["name"]
-            if name not in daily_scores:
-                daily_scores[name] = {
-                    "total_points": 0,
-                    "active_days": 0,
-                    "stats": {
-                        "in_office": 0,
-                        "remote": 0,
-                        "sick": 0,
-                        "leave": 0,
-                        "days": 0,
-                        "latest_arrivals": 0,
-                        "arrival_times": []
-                    }
-                }
-            
-            # Calculate position and bonus based on mode
-            if mode == 'early-bird':
-                # Early bird: first position (earliest) gets highest bonus
-                position = idx + 1  # Position 1 is earliest
-                bonus_points = (total_entries - idx) * settings["late_bonus"]
-            else:
-                # Last-in: last position gets highest bonus
-                position = total_entries - idx  # Position 5 (of 5) is latest
-                bonus_points = position * settings["late_bonus"]
-            
-            # Calculate base points
-            status = entry["status"].replace("-", "_")
-            base_points = settings["points"][status]
-            
-            # Add bonus points only for in-office and eligible remote work
-            total_points = base_points
-            if status in ["in_office", "remote"]:
-                total_points += bonus_points
-            
-            # Update statistics
-            daily_scores[name]["stats"][status] += 1
-            daily_scores[name]["stats"]["days"] += 1
-            
-            if status in ["in_office", "remote"]:
-                daily_scores[name]["active_days"] += 1
-                daily_scores[name]["total_points"] += total_points
-                
-                # Track achievements based on mode
-                if (mode == 'last-in' and position == total_entries) or \
-                   (mode == 'early-bird' and position == 1):
-                    daily_scores[name]["stats"]["latest_arrivals"] += 1
-                
-                daily_scores[name]["stats"]["arrival_times"].append(
-                    datetime.strptime(entry["time"], "%H:%M")
-                )
-    
-    # Format rankings
-    rankings = []
-    for name, scores in daily_scores.items():
-        if scores["active_days"] > 0:
-            avg_score = scores["total_points"] / scores["active_days"]
-            arrival_times = scores["stats"]["arrival_times"]
-            
-            rankings.append({
-                "name": name,
-                "score": round(avg_score, 2),
-                "streak": calculate_current_streak(name),
-                "stats": scores["stats"],
-                "average_arrival_time": calculate_average_time(arrival_times) if arrival_times else "N/A"
-            })
-    
-    # Sort rankings by score
-    rankings.sort(key=lambda x: x["score"], reverse=True)
-    return rankings
-
 @app.route("/rankings/<period>")
 @app.route("/rankings/<period>/<date_str>")
 @login_required
 def view_rankings(period, date_str=None):
     try:
-        # Always get mode from request args
         mode = request.args.get('mode', 'last-in')
-        
         # Get current date (either from URL or today)
         if date_str:
             current_date = datetime.strptime(date_str, '%Y-%m-%d')
@@ -741,6 +642,7 @@ def view_rankings(period, date_str=None):
         
         # For weekly view, always snap to Monday
         if period == 'week':
+            # Calculate Monday of the week
             current_date = current_date - timedelta(days=current_date.weekday())
         
         # Calculate period end date
@@ -753,41 +655,50 @@ def view_rankings(period, date_str=None):
             period_end = current_date
         
         data = load_data()
-        # Pass mode to calculate_scores
         rankings = calculate_scores(data, period, current_date)
         
-        # Process rankings for display
+        # Process each ranking entry to add time data
         for rank in rankings:
             user_entries = [e for e in data if e["name"] == rank["name"] and 
                           in_period(e, period, current_date)]
             if user_entries:
-                # Sort entries based on mode
+                # Sort entries based on mode before calculating average
                 user_entries.sort(
                     key=lambda x: datetime.strptime(x["time"], "%H:%M"),
                     reverse=(mode == 'last-in')
                 )
                 
-                times = [datetime.strptime(e["time"], "%H:%M") for e in user_entries]
-                if times:
-                    avg_time = sum((t.hour * 60 + t.minute) for t in times) // len(times)
-                    avg_hour = avg_time // 60
-                    avg_minute = avg_time % 60
-                    
-                    rank["time"] = f"{avg_hour:02d}:{avg_minute:02d}"
-                    rank["time_obj"] = datetime.strptime(rank["time"], "%H:%M")
-                    
-                    is_friday = current_date.weekday() == 4
-                    shift_length = 210 if is_friday else 540
-                    end_time = rank["time_obj"] + timedelta(minutes=shift_length)
-                    rank["shift_length"] = shift_length
-                    rank["end_time"] = end_time.strftime('%H:%M')
-                else:
-                    rank.update({
-                        "time": "N/A",
-                        "time_obj": datetime.strptime("09:00", "%H:%M"),
-                        "shift_length": 540,
-                        "end_time": "N/A"
-                    })
+                # Take the top 5 entries (or less if fewer entries exist)
+                top_entries = user_entries[:5]
+                
+                # Calculate average time from top entries
+                times_in_minutes = []
+                for entry in top_entries:
+                    entry_time = datetime.strptime(entry["time"], "%H:%M")
+                    minutes = entry_time.hour * 60 + entry_time.minute
+                    times_in_minutes.append(minutes)
+                
+                avg_minutes = sum(times_in_minutes) / len(times_in_minutes)
+                avg_hour = int(avg_minutes // 60)
+                avg_minute = int(avg_minutes % 60)
+                
+                entry_time = datetime.strptime(f"{avg_hour:02d}:{avg_minute:02d}", "%H:%M")
+                entry_date = datetime.strptime(user_entries[0]["date"], "%Y-%m-%d")
+                is_friday = entry_date.weekday() == 4
+                shift_length = 210 if is_friday else 540  # Update to 540 minutes for 9 hours
+                end_time = entry_time + timedelta(minutes=shift_length)
+                
+                rank["time"] = f"{avg_hour:02d}:{avg_minute:02d}"
+                rank["time_obj"] = entry_time
+                rank["shift_length"] = shift_length
+                rank["end_time"] = end_time.strftime('%H:%M')
+            else:
+                # If no entries found, set default values
+                rank["time"] = "N/A"
+                rank["date"] = current_date.strftime('%Y-%m-%d')
+                rank["time_obj"] = datetime.strptime("09:00", "%H:%M")
+                rank["shift_length"] = 510
+                rank["end_time"] = "N/A"
         
         template_data = {
             'rankings': rankings,
@@ -795,7 +706,7 @@ def view_rankings(period, date_str=None):
             'current_date': current_date.strftime('%Y-%m-%d'),
             'current_display': format_date_range(current_date, period_end, period),
             'current_month_value': current_date.strftime('%Y-%m'),
-            'mode': mode
+            'mode': mode  # Add mode to template data
         }
         
         return render_template("rankings.html", **template_data)
@@ -836,6 +747,104 @@ def calculate_current_streak(name):
         return streak
     finally:
         db.close()
+
+def calculate_scores(data, period, current_date):
+    """Calculate scores with proper handling of early-bird/last-in modes"""
+    settings = load_settings()
+    filtered_data = [entry for entry in data if in_period(entry, period, current_date)]
+    mode = request.args.get('mode', 'last-in')
+    
+    # Group entries by date first
+    daily_entries = {}
+    daily_scores = {}
+    
+    for entry in filtered_data:
+        date = entry["date"]
+        if date not in daily_entries:
+            daily_entries[date] = []
+        daily_entries[date].append(entry)
+    
+    # Calculate scores for each day
+    for date, entries in daily_entries.items():
+        # Sort entries by time based on mode
+        entries.sort(
+            key=lambda x: datetime.strptime(x["time"], "%H:%M"),
+            reverse=(mode == 'last-in')  # Reverse for last-in mode
+        )
+        
+        total_entries = len(entries)
+        for position, entry in enumerate(entries, 1):
+            name = entry["name"]
+            if name not in daily_scores:
+                daily_scores[name] = {
+                    "total_points": 0,
+                    "active_days": 0,
+                    "stats": {
+                        "in_office": 0,
+                        "remote": 0,
+                        "sick": 0,
+                        "leave": 0,
+                        "days": 0,
+                        "latest_arrivals": 0,
+                        "arrival_times": []
+                    }
+                }
+            
+            # Calculate position bonus based on mode - THIS IS THE KEY FIX
+            if mode == 'early-bird':
+                # Early bird: first position gets highest bonus
+                bonus_position = total_entries - position + 1
+            else:
+                # Last-in: last position gets highest bonus
+                bonus_position = position
+                
+            points = calculate_daily_score(entry, settings, bonus_position, total_entries)
+            
+            status = entry["status"].replace("-", "_")
+            daily_scores[name]["stats"][status] += 1
+            daily_scores[name]["stats"]["days"] += 1
+            
+            if status in ["in_office", "remote"]:
+                daily_scores[name]["active_days"] += 1
+                daily_scores[name]["total_points"] += points
+                
+                # Track achievements based on mode
+                if (mode == 'last-in' and position == total_entries) or \
+                   (mode == 'early-bird' and position == 1):
+                    daily_scores[name]["stats"]["latest_arrivals"] += 1
+                
+                arrival_time = datetime.strptime(entry["time"], "%H:%M")
+                daily_scores[name]["stats"]["arrival_times"].append(arrival_time)
+    
+    # Format rankings
+    rankings = []
+    for name, scores in daily_scores.items():
+        if scores["active_days"] > 0:
+            avg_score = scores["total_points"] / scores["active_days"]
+            arrival_times = scores["stats"]["arrival_times"]
+            
+            rankings.append({
+                "name": name,
+                "score": round(avg_score, 2),
+                "streak": calculate_current_streak(name),
+                "stats": scores["stats"],
+                "average_arrival_time": calculate_average_time(arrival_times) if arrival_times else "N/A"
+            })
+    
+    # Sort rankings by score, reverse order only for last-in mode
+    rankings.sort(key=lambda x: x["score"], reverse=(mode == 'last-in'))
+    return rankings
+
+def calculate_average_time(times):
+    """Calculate the average time from a list of datetime.time objects"""
+    if not times:
+        return "N/A"
+    
+    total_minutes = sum(t.hour * 60 + t.minute for t in times)
+    avg_minutes = total_minutes // len(times)
+    avg_hour = avg_minutes // 60
+    avg_minute = avg_minutes % 60
+    return f"{avg_hour:02d}:{avg_minute:02d}"
 
 @app.route("/rankings/today")
 @login_required
@@ -1050,8 +1059,8 @@ def normalize_settings(settings_dict):
         "points": {
             "in_office": int(settings_dict["points"]["in_office"]),
             "remote": int(settings_dict["points"]["remote"]),
-            "sick": int(settings_dict["sick"]),
-            "leave": int(settings_dict["leave"])
+            "sick": int(settings_dict["points"]["sick"]),
+            "leave": int(settings_dict["points"]["leave"])
         },
         "late_bonus": float(settings_dict["late_bonus"]),
         "remote_days": {

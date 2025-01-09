@@ -5,230 +5,235 @@
 <h1>Championship Settings</h1>
 
 <div class="settings-container">
-    <div class="settings-section">
-        <h2>Points & Bonuses</h2>
+    <!-- Left column: Settings controls -->
+    <div class="settings-column">
         <form id="settingsForm">
-            <!-- Basic point settings -->
-            <div class="form-group">
-                <label for="in_office">In Office Points:</label>
-                <input type="number" id="in_office" name="points.in_office" value="{{ settings.points.in_office }}" min="0" max="20">
-            </div>
-            <div class="form-group">
-                <label for="remote">Remote Work Points:</label>
-                <input type="number" id="remote" name="points.remote" value="{{ settings.points.remote }}" min="0" max="20">
-            </div>
-            <div class="form-group">
-                <label for="late_bonus">Late Arrival Bonus:</label>
-                <input type="number" id="late_bonus" name="late_bonus" value="{{ settings.late_bonus }}" min="0" max="5">
-            </div>
-            <div class="form-group">
-                <label for="sick">Sick Day Points:</label>
-                <input type="number" id="sick" name="points.sick" value="{{ settings.points.sick }}" min="0" max="20">
-            </div>
-            <div class="form-group">
-                <label for="leave">Annual Leave Points:</label>
-                <input type="number" id="leave" name="points.leave" value="{{ settings.points.leave }}" min="0" max="20">
+            <div class="settings-section">
+                <h2>Points & Bonuses</h2>
+                <!-- Basic point settings -->
+                <div class="form-group">
+                    <label for="in_office">In Office Points:</label>
+                    <input type="number" id="in_office" name="points.in_office" value="{{ settings.points.in_office }}" min="0" max="20">
+                </div>
+                <div class="form-group">
+                    <label for="remote">Remote Work Points:</label>
+                    <input type="number" id="remote" name="points.remote" value="{{ settings.points.remote }}" min="0" max="20">
+                </div>
+                <div class="form-group">
+                    <label for="late_bonus">Late Arrival Bonus:</label>
+                    <input type="number" id="late_bonus" name="late_bonus" value="{{ settings.late_bonus }}" min="0" max="5">
+                </div>
+                <div class="form-group">
+                    <label for="sick">Sick Day Points:</label>
+                    <input type="number" id="sick" name="points.sick" value="{{ settings.points.sick }}" min="0" max="20">
+                </div>
+                <div class="form-group">
+                    <label for="leave">Annual Leave Points:</label>
+                    <input type="number" id="leave" name="points.leave" value="{{ settings.points.leave }}" min="0" max="20">
+                </div>
             </div>
 
-            <!-- Remote work days configuration -->
-            <h3>Remote Work Late Bonus Days</h3>
-            <p class="helper-text">Select days when remote workers can earn late bonus points</p>
-            <div class="remote-days-table">
-                <table>
-                    <thead>
-                        <tr>
-                            <th>User</th>
-                            <th>Mon</th>
-                            <th>Tue</th>
-                            <th>Wed</th>
-                            <th>Thu</th>
-                            <th>Fri</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for user in core_users %}
-                        <tr class="user-row" data-user="{{ user }}">
-                            <td>{{ user }}</td>
-                            {% for day in ['mon', 'tue', 'wed', 'thu', 'fri'] %}
-                            <td>
-                                <input type="checkbox" 
-                                       name="remote_days.{{ user }}"
-                                       value="{{ day }}"
-                                       {% if day in settings.remote_days.get(user, []) %}checked{% endif %}>
-                            </td>
+            <div class="settings-section">
+                <h2>Remote Work Configuration</h2>
+                <p class="helper-text">Select days when remote workers can earn position bonus points</p>
+                <div class="remote-days-table">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>User</th>
+                                <th>Mon</th>
+                                <th>Tue</th>
+                                <th>Wed</th>
+                                <th>Thu</th>
+                                <th>Fri</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for user in core_users %}
+                            <tr class="user-row" data-user="{{ user }}">
+                                <td>{{ user }}</td>
+                                {% for day in ['mon', 'tue', 'wed', 'thu', 'fri'] %}
+                                <td>
+                                    <input type="checkbox" 
+                                           name="remote_days.{{ user }}"
+                                           value="{{ day }}"
+                                           {% if day in settings.remote_days.get(user, []) %}checked{% endif %}>
+                                </td>
+                                {% endfor %}
+                            </tr>
                             {% endfor %}
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
+                        </tbody>
+                    </table>
+                </div>
             </div>
-            
+
+            <div class="settings-section">
+                <h2>Core Users</h2>
+                <p class="helper-text">Select users to include in attendance tracking</p>
+                <div class="core-users-table">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Registered User</th>
+                                <th>Core Member</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for registered_user in registered_users %}
+                            <tr>
+                                <td>{{ registered_user }}</td>
+                                <td>
+                                    <input type="checkbox" 
+                                           class="core-user-checkbox"
+                                           name="core_users"
+                                           value="{{ registered_user }}"
+                                           {% if registered_user in core_users %}checked{% endif %}>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="settings-section">
+                <h2>Streak Settings</h2>
+                <div class="form-group">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="enable_streaks" name="enable_streaks" 
+                               {% if settings.enable_streaks %}checked{% endif %}>
+                        Enable Streak Bonus System
+                    </label>
+                </div>
+                
+                <div class="form-group streak-settings" {% if not settings.enable_streaks %}style="display: none"{% endif %}>
+                    <label for="streak_multiplier">Streak Multiplier (points per day):</label>
+                    <input type="number" id="streak_multiplier" name="streak_multiplier" 
+                           value="{{ settings.streak_multiplier }}" min="0" max="5" step="0.1">
+                </div>
+            </div>
+
             <button type="submit" class="save-button">Save All Settings</button>
         </form>
     </div>
 
-    <!-- Add new Core Users section before scoring explanation -->
-    <div class="settings-section">
-        <h2>Core Users</h2>
-        <p class="helper-text">Select users who should be included in attendance tracking and warnings</p>
-        <div class="core-users-table">
-            <table>
-                <thead>
-                    <tr>
-                        <th>Registered User</th>
-                        <th>Core Member</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for registered_user in registered_users %}
-                    <tr>
-                        <td>{{ registered_user }}</td>
-                        <td>
-                            <input type="checkbox" 
-                                   class="core-user-checkbox"
-                                   name="core_users"
-                                   value="{{ registered_user }}"
-                                   {% if registered_user in core_users %}checked{% endif %}>
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
-    </div>
-
-    <div class="settings-section">
-        <h2>Streak Settings</h2>
-        <form id="settingsForm">
-            <div class="form-group">
-                <label class="checkbox-label">
-                    <input type="checkbox" id="enable_streaks" name="enable_streaks" 
-                           {% if settings.enable_streaks %}checked{% endif %}>
-                    Enable Streak Bonus System
-                </label>
+    <!-- Right column: Scoring explanation -->
+    <div class="info-column">
+        <div class="scoring-explanation">
+            <h2>How Scoring Works</h2>
+            <div class="mode-specific-info">
+                <h3>Position Bonus System</h3>
+                <div id="lastInInfo">
+                    <h4>Last-In Championship Mode</h4>
+                    <p>Points increase with later arrival times:</p>
+                    <ul>
+                        <li>Last person to arrive gets maximum bonus (position × {{ settings.late_bonus }})</li>
+                        <li>Earlier arrivals get progressively smaller bonuses</li>
+                        <li>First arrival gets minimum position bonus</li>
+                    </ul>
+                </div>
+                <div id="earlyBirdInfo" style="display: none;">
+                    <h4>Early Bird Mode</h4>
+                    <p>Points increase with earlier arrival times:</p>
+                    <ul>
+                        <li>First person to arrive gets maximum bonus (position × {{ settings.late_bonus }})</li>
+                        <li>Later arrivals get progressively smaller bonuses</li>
+                        <li>Last arrival gets minimum position bonus</li>
+                    </ul>
+                </div>
             </div>
-            
-            <div class="form-group streak-settings" {% if not settings.enable_streaks %}style="display: none"{% endif %}>
-                <label for="streak_multiplier">Streak Multiplier (points per day):</label>
-                <input type="number" id="streak_multiplier" name="streak_multiplier" 
-                       value="{{ settings.streak_multiplier }}" min="0" max="5" step="0.1">
-            </div>
-        </form>
-    </div>
 
-    <div class="scoring-explanation">
-        <h2>How Scoring Works</h2>
-        
-        <h3>Daily Scoring</h3>
-        <p>Points are awarded based on:</p>
-        <ul>
-            <li>Base points (10) for all attendance types (in-office, remote, sick, leave)</li>
-            <li>Late arrival bonus (position × late_bonus) applies to:
+            <div class="example-box">
+                <h4>Base Points</h4>
                 <ul>
-                    <li>In-office attendance (always)</li>
-                    <li>Remote work on designated remote days only</li>
+                    <li>In-office: {{ settings.points.in_office }} points</li>
+                    <li>Remote work: {{ settings.points.remote }} points</li>
+                    <li>Sick leave: {{ settings.points.sick }} points</li>
+                    <li>Annual leave: {{ settings.points.leave }} points</li>
                 </ul>
-            </li>
-            <li>Position bonus increases with later arrival (promoting the "Last-In" concept)</li>
-            <li>Sick days and leave days are neutral - they receive base points only</li>
-        </ul>
-        
-        <div class="example-box">
-            <h4>Example Calculations</h4>
-            <table class="example-table">
-                <tr>
-                    <th>Scenario</th>
-                    <th>Calculation</th>
-                    <th>Total</th>
-                </tr>
-                <tr>
-                    <td>Last In Office (5th person)</td>
-                    <td>{{ settings.points.in_office }} + (5 × {{ settings.late_bonus }})</td>
-                    <td>{{ settings.points.in_office + (5 * settings.late_bonus) }}</td>
-                </tr>
-                <tr>
-                    <td>Second-to-Last (4th person)</td>
-                    <td>{{ settings.points.in_office }} + (4 × {{ settings.late_bonus }})</td>
-                    <td>{{ settings.points.in_office + (4 * settings.late_bonus) }}</td>
-                </tr>
-                <tr>
-                    <td>Last Remote (eligible day)</td>
-                    <td>{{ settings.points.remote }} + (5 × {{ settings.late_bonus }})</td>
-                    <td>{{ settings.points.remote + (5 * settings.late_bonus) }}</td>
-                </tr>
-                <tr>
-                    <td>Remote (non-eligible day)</td>
-                    <td>{{ settings.points.remote }} (base only)</td>
-                    <td>{{ settings.points.remote }}</td>
-                </tr>
-                <tr>
-                    <td>Sick Day</td>
-                    <td>{{ settings.points.sick }} (base only)</td>
-                    <td>{{ settings.points.sick }}</td>
-                </tr>
-                <tr>
-                    <td>Annual Leave</td>
-                    <td>{{ settings.points.leave }} (base only)</td>
-                    <td>{{ settings.points.leave }}</td>
-                </tr>
-            </table>
-        </div>
-
-        <div class="example-box">
-            <h4>Scoring Notes</h4>
-            <ul>
-                <li>Base in-office points: {{ settings.points.in_office }}</li>
-                <li>Base remote work points: {{ settings.points.remote }}</li>
-                <li>Position multiplier: {{ settings.late_bonus }}× per position</li>
-                <li>Rankings are based only on in-office and eligible remote work days</li>
-                <li>Maximum bonus (5 people): {{ 5 * settings.late_bonus }} points</li>
-                <li>Remote work only earns position bonus on designated days</li>
-                <li>Weekly and monthly scores are averages of daily scores</li>
-                <li>Sick and leave days do not affect rankings</li>
-            </ul>
-        </div>
-
-        <div class="example-box" id="streakExplanation" {% if not settings.enable_streaks %}style="display: none"{% endif %}>
-            <h4>Streak Bonus System</h4>
-            <p>The streak system rewards consistent attendance:</p>
-            <ul>
-                <li>Each consecutive day earns additional points</li>
-                <li>Current multiplier: {{ settings.streak_multiplier }} points per day in streak</li>
-                <li>Example: 3-day streak = {{ 3 * settings.streak_multiplier }} bonus points</li>
-                <li>Only in-office and remote work days count towards streaks</li>
-                <li>Missing a day or taking leave/sick breaks the streak</li>
-                <li>Weekends don't break streaks (Friday to Monday counts)</li>
-            </ul>
-            
-            <div class="streak-example">
-                <h5>Example Calculation</h5>
-                <table class="example-table">
-                    <tr>
-                        <th>Day</th>
-                        <th>Base Points</th>
-                        <th>Streak Bonus</th>
-                        <th>Total</th>
-                    </tr>
-                    <tr>
-                        <td>Day 1</td>
-                        <td>{{ settings.points.in_office }}</td>
-                        <td>0</td>
-                        <td>{{ settings.points.in_office }}</td>
-                    </tr>
-                    <tr>
-                        <td>Day 2</td>
-                        <td>{{ settings.points.in_office }}</td>
-                        <td>{{ settings.streak_multiplier }}</td>
-                        <td>{{ settings.points.in_office + settings.streak_multiplier }}</td>
-                    </tr>
-                    <tr>
-                        <td>Day 3</td>
-                        <td>{{ settings.points.in_office }}</td>
-                        <td>{{ 2 * settings.streak_multiplier }}</td>
-                        <td>{{ settings.points.in_office + 2 * settings.streak_multiplier }}</td>
-                    </tr>
-                </table>
             </div>
+
+            <div class="example-box">
+                <h4>Example Calculations</h4>
+                <div id="lastInExample">
+                    <h5>Last-In Mode Example (5 people)</h5>
+                    <table class="example-table">
+                        <tr><th>Position</th><th>Calculation</th><th>Total</th></tr>
+                        <tr>
+                            <td>Last (5th)</td>
+                            <td>{{ settings.points.in_office }} + (5 × {{ settings.late_bonus }})</td>
+                            <td>{{ settings.points.in_office + (5 * settings.late_bonus) }}</td>
+                        </tr>
+                        <tr>
+                            <td>First</td>
+                            <td>{{ settings.points.in_office }} + (1 × {{ settings.late_bonus }})</td>
+                            <td>{{ settings.points.in_office + settings.late_bonus }}</td>
+                        </tr>
+                    </table>
+                </div>
+                <div id="earlyBirdExample" style="display: none;">
+                    <h5>Early Bird Mode Example (5 people)</h5>
+                    <table class="example-table">
+                        <tr><th>Position</th><th>Calculation</th><th>Total</th></tr>
+                        <tr>
+                            <td>First</td>
+                            <td>{{ settings.points.in_office }} + (5 × {{ settings.late_bonus }})</td>
+                            <td>{{ settings.points.in_office + (5 * settings.late_bonus) }}</td>
+                        </tr>
+                        <tr>
+                            <td>Last (5th)</td>
+                            <td>{{ settings.points.in_office }} + (1 × {{ settings.late_bonus }})</td>
+                            <td>{{ settings.points.in_office + settings.late_bonus }}</td>
+                        </tr>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Add streak explanation if enabled -->
+            {% if settings.enable_streaks %}
+            <div class="example-box streak-explanation">
+                <h4>Streak Bonus System</h4>
+                <p>The streak system rewards consistent attendance:</p>
+                <ul>
+                    <li>Each consecutive day earns additional points</li>
+                    <li>Current multiplier: {{ settings.streak_multiplier }} points per day in streak</li>
+                    <li>Example: 3-day streak = {{ 3 * settings.streak_multiplier }} bonus points</li>
+                    <li>Only in-office and remote work days count towards streaks</li>
+                    <li>Missing a day or taking leave/sick breaks the streak</li>
+                    <li>Weekends don't break streaks (Friday to Monday counts)</li>
+                </ul>
+                
+                <div class="streak-example">
+                    <h5>Example Calculation</h5>
+                    <table class="example-table">
+                        <tr>
+                            <th>Day</th>
+                            <th>Base Points</th>
+                            <th>Streak Bonus</th>
+                            <th>Total</th>
+                        </tr>
+                        <tr>
+                            <td>Day 1</td>
+                            <td>{{ settings.points.in_office }}</td>
+                            <td>0</td>
+                            <td>{{ settings.points.in_office }}</td>
+                        </tr>
+                        <tr>
+                            <td>Day 2</td>
+                            <td>{{ settings.points.in_office }}</td>
+                            <td>{{ settings.streak_multiplier }}</td>
+                            <td>{{ settings.points.in_office + settings.streak_multiplier }}</td>
+                        </tr>
+                        <tr>
+                            <td>Day 3</td>
+                            <td>{{ settings.points.in_office }}</td>
+                            <td>{{ 2 * settings.streak_multiplier }}</td>
+                            <td>{{ settings.points.in_office + 2 * settings.streak_multiplier }}</td>
+                        </tr>
+                    </table>
+                </div>
+            </div>
+            {% endif %}
         </div>
     </div>
 </div>
@@ -236,9 +241,39 @@
 <style>
 .settings-container {
     display: grid;
-    grid-template-columns: 1.2fr 1fr;
+    grid-template-columns: 1fr 1fr;
     gap: 40px;
-    align-items: start;
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 20px;
+}
+
+.settings-column {
+    background: white;
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+}
+
+.info-column {
+    background: white;
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    position: sticky;
+    top: 20px;
+    max-height: calc(100vh - 40px);
+    overflow-y: auto;
+}
+
+.settings-section {
+    margin-bottom: 30px;
+    padding-bottom: 20px;
+    border-bottom: 1px solid #eee;
+}
+
+.settings-section:last-child {
+    border-bottom: none;
 }
 
 .remote-days-table {
@@ -400,6 +435,23 @@
 </style>
 
 <script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Update mode-specific info based on championship toggle
+    function updateModeInfo() {
+        const isLastIn = document.getElementById('championshipToggle').checked;
+        document.getElementById('lastInInfo').style.display = isLastIn ? 'block' : 'none';
+        document.getElementById('earlyBirdInfo').style.display = isLastIn ? 'none' : 'block';
+        document.getElementById('lastInExample').style.display = isLastIn ? 'block' : 'none';
+        document.getElementById('earlyBirdExample').style.display = isLastIn ? 'none' : 'block';
+    }
+
+    // Initial update
+    updateModeInfo();
+
+    // Listen for mode changes
+    document.getElementById('championshipToggle').addEventListener('change', updateModeInfo);
+});
+
 document.getElementById('settingsForm').addEventListener('submit', async (event) => {
     event.preventDefault();
     

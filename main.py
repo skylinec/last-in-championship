@@ -565,15 +565,18 @@ def parse_uk_date(date_str):
 
 def calculate_daily_score(entry, settings, position=None, total_entries=None):
     """Calculate score for a single day's entry with all bonuses"""
+    mode = request.args.get('mode', 'last-in')
     status = entry["status"].replace("-", "_")
     base_points = settings["points"][status]
     position_bonus = 0
     
     if position is not None and total_entries is not None:
-        # ... existing position bonus calculation ...
-        pass
-
-    # Calculate streak bonus only if enabled
+        if status in ["in_office", "remote"]:
+            # For early-bird mode, reverse the position bonus calculation
+            if mode == 'early-bird':
+                position = total_entries - position + 1
+            position_bonus = position * settings["late_bonus"]
+    
     streak_bonus = 0
     if settings.get("enable_streaks", False):
         streak_bonus = calculate_streak_bonus(entry)
@@ -720,7 +723,7 @@ def calculate_scores(data, period, current_date):
         # Sort entries based on mode
         entries.sort(
             key=lambda x: datetime.strptime(x["time"], "%H:%M"), 
-            reverse=(mode == 'early-bird')  # Reverse sort for early-bird mode
+            reverse=(mode == 'last-in')  # Changed this condition
         )
         total_entries = len(entries)
         
@@ -772,7 +775,11 @@ def calculate_scores(data, period, current_date):
                 "stats": stats
             })
     
-    rankings.sort(key=lambda x: (x["score"], x["latest_percentage"]), reverse=True)
+    # Sort rankings based on mode
+    rankings.sort(
+        key=lambda x: (x["score"], x["latest_percentage"] if mode == 'last-in' else -x["latest_percentage"]),
+        reverse=True
+    )
     return rankings
 
 def calculate_average_time(times):

@@ -4,7 +4,13 @@
 {% block content %}
 <div class="error-container">
     <h1>⚠️ Error</h1>
-    <p>{{ message }}</p>
+    {% if error %}
+        <p>{{ error }}</p>
+    {% elif message %}
+        <p>{{ message }}</p>
+    {% else %}
+        <p>An unknown error occurred.</p>
+    {% endif %}
     <button onclick="window.history.back()">Go Back</button>
 </div>
 
@@ -22,6 +28,13 @@
 .error-container h1 {
     color: var(--warning-color);
     margin-bottom: 20px;
+}
+
+.error-container p {
+    color: #666;
+    margin-bottom: 20px;
+    white-space: pre-wrap;
+    word-break: break-word;
 }
 
 .error-container button {

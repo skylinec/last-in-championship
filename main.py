@@ -1600,6 +1600,18 @@ def clear_database():
 def initialize_app():
     """Initialize the application and run all necessary migrations"""
     try:
+        # Initialize NLTK
+        app.logger.info("Initializing NLTK...")
+        try:
+            import nltk
+            nltk.download('punkt', quiet=True)
+            nltk.download('stopwords', quiet=True)
+            nltk.download('wordnet', quiet=True)
+            app.logger.info("NLTK data downloaded successfully")
+        except Exception as e:
+            app.logger.warning(f"NLTK initialization error: {str(e)}")
+            app.logger.warning("Chatbot functionality may be limited")
+        
         # Run migrations first
         app.logger.info("Running database migrations...")
         from migrations.run_migrations import run_migrations

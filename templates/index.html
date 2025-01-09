@@ -37,14 +37,11 @@
 
             <div class="form-group">
                 <label for="name">Name</label>
-                <input type="text" 
-                       id="name" 
-                       name="name" 
-                       list="namesList" 
-                       value="{{ session.user }}"
-                       autocomplete="off"
-                       required>
-                <datalist id="namesList"></datalist>
+                <select id="name" name="name" required>
+                    {% for user in core_users %}
+                    <option value="{{ user }}" {% if user == session.user %}selected{% endif %}>{{ user }}</option>
+                    {% endfor %}
+                </select>
             </div>
 
             <button type="submit" class="submit-button">Submit Attendance</button>

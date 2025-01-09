@@ -460,7 +460,7 @@ def check_attendance():
 @app.route("/")
 @login_required
 def index():
-    return render_template("index.html")
+    return render_template("index.html", core_users=get_core_users())
 
 @app.route("/names")
 @login_required

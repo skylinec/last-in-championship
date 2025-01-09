@@ -878,6 +878,7 @@ def day_rankings(date=None):
     
     data = load_data()
     settings = load_settings()
+    mode = request.args.get('mode', 'last-in')
     
     # Get entries for the specified date and sort by time
     day_entries = [e for e in data if e["date"] == date]
@@ -887,12 +888,12 @@ def day_rankings(date=None):
     rankings = []
     total_entries = len(day_entries)
     for position, entry in enumerate(day_entries, 1):
-        points = calculate_daily_score(entry, settings, position, total_entries)
+        scores = calculate_daily_score(entry, settings, position, total_entries)
         entry_time = datetime.strptime(entry["time"], "%H:%M")
         entry_date = datetime.strptime(entry["date"], "%Y-%m-%d")
-        is_friday = entry_date.weekday() == 4
-        shift_length = 210 if is_friday else 540  # Update to 540 minutes for 9 hours
+        shift_length = 540  # Always 9 hours
         end_time = entry_time + timedelta(minutes=shift_length)
+        
         rankings.append({
             "name": entry["name"],
             "time": entry["time"],
@@ -900,14 +901,15 @@ def day_rankings(date=None):
             "shift_length": shift_length,
             "end_time": end_time.strftime('%H:%M'),
             "status": entry["status"],
-            "points": points
+            "points": scores["last_in"] if mode == 'last-in' else scores["early_bird"]
         })
     
-    # Sort by points descending (latest arrivals get more points)
+    # Sort by points descending
     rankings.sort(key=lambda x: x["points"], reverse=True)
     return render_template("day_rankings.html", 
                          rankings=rankings,
-                         date=date)
+                         date=date,
+                         mode=mode)  # Pass mode to template
 
 # Update the get_entries route to handle the new filters
 @app.route("/edit", methods=["GET"])

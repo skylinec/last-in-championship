@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block title %}Daily Rankings{% endblock %}
 {% block content %}
-<h1>Rankings for {{ date }}</h1>
+<h1>Rankings for {{ date }} ({{ mode|replace('-', ' ')|title }} Mode)</h1>
 <div class="date-selector">
     <button onclick="changeDate(-1)">Previous Day</button>
     <input type="date" id="dateSelect" value="{{ date }}" onchange="loadDate(this.value)">

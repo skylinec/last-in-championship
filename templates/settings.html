@@ -113,6 +113,111 @@
                 </div>
             </div>
 
+            <div class="settings-section">
+                <h2>Advanced Scoring Configuration</h2>
+                <div class="scoring-grid">
+                    <div class="form-group">
+                        <label for="position_multiplier">Position Multiplier:</label>
+                        <input type="number" id="position_multiplier" name="position_multiplier" 
+                               value="{{ settings.position_multiplier }}" min="0" max="5" step="0.1">
+                        <div class="setting-explanation">
+                            Multiplies the points earned based on arrival position
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="early_bonus">Early Arrival Bonus:</label>
+                        <input type="number" id="early_bonus" name="early_bonus" 
+                               value="{{ settings.early_bonus }}" min="0" max="5" step="0.1">
+                        <div class="setting-explanation">
+                            Additional points for arriving before 9:00 AM
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="weekend_multiplier">Weekend Multiplier:</label>
+                        <input type="number" id="weekend_multiplier" name="weekend_multiplier" 
+                               value="{{ settings.weekend_multiplier }}" min="1" max="5" step="0.1">
+                        <div class="setting-explanation">
+                            Multiplies points earned on weekends
+                        </div>
+                    </div>
+
+                    <!-- Add more scoring parameters -->
+                </div>
+
+                <div class="points-preview">
+                    <h3>Points Calculator</h3>
+                    <div class="calculator">
+                        <select id="scenarioSelect">
+                            <option value="regular">Regular Weekday</option>
+                            <option value="weekend">Weekend</option>
+                            <option value="holiday">Holiday</option>
+                        </select>
+                        <input type="time" id="arrivalTime" value="09:00">
+                        <select id="statusSelect">
+                            <option value="in_office">In Office</option>
+                            <option value="remote">Remote</option>
+                        </select>
+                        <input type="number" id="position" min="1" max="10" value="1" placeholder="Position">
+                        <input type="number" id="streak" min="0" max="30" value="0" placeholder="Current Streak">
+                        <button onclick="calculatePoints()">Calculate Points</button>
+                    </div>
+                    <div id="pointsBreakdown" class="points-breakdown">
+                        Points breakdown will appear here
+                    </div>
+                </div>
+            </div>
+
+            <div class="settings-section">
+                <h2>Scoring Rules Editor</h2>
+                <div class="scoring-dsl-container">
+                    <div class="scoring-blocks-palette">
+                        <h3>Available Blocks</h3>
+                        <div class="block-category">
+                            <h4>Conditions</h4>
+                            <div class="block" draggable="true" data-type="condition" data-template="if {time} {operator} {value}">
+                                Time Condition
+                            </div>
+                            <div class="block" draggable="true" data-type="condition" data-template="if {day} is {value}">
+                                Day Condition
+                            </div>
+                            <div class="block" draggable="true" data-type="condition" data-template="if {status} is {value}">
+                                Status Condition
+                            </div>
+                            <div class="block" draggable="true" data-type="condition" data-template="if {streak} {operator} {value}">
+                                Streak Condition
+                            </div>
+                        </div>
+                        <div class="block-category">
+                            <h4>Actions</h4>
+                            <div class="block" draggable="true" data-type="action" data-template="add {points} points">
+                                Add Points
+                            </div>
+                            <div class="block" draggable="true" data-type="action" data-template="multiply points by {value}">
+                                Multiply Points
+                            </div>
+                            <div class="block" draggable="true" data-type="action" data-template="add streak bonus {value}">
+                                Add Streak Bonus
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="scoring-rules-builder">
+                        <h3>Current Rules</h3>
+                        <div id="rulesContainer" class="rules-container">
+                            <!-- Rules will be added here -->
+                        </div>
+                        <button type="button" onclick="saveRules()">Save Rules</button>
+                    </div>
+
+                    <div class="scoring-preview">
+                        <h3>Rule Preview</h3>
+                        <pre id="rulePreview" class="rule-preview"></pre>
+                    </div>
+                </div>
+            </div>
+
             <button type="submit" class="save-button">Save All Settings</button>
         </form>
     </div>
@@ -489,6 +594,120 @@ scoring-explanation ul li::before {
     background: #e9ecef;
     border-radius: 4px;
 }
+
+.scoring-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 20px;
+    margin-bottom: 30px;
+}
+
+.setting-explanation {
+    font-size: 0.9em;
+    color: #666;
+    margin-top: 5px;
+}
+
+.points-preview {
+    background: #f8f9fa;
+    padding: 20px;
+    border-radius: 8px;
+    margin-top: 20px;
+}
+
+.calculator {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 10px;
+    margin-bottom: 20px;
+}
+
+.points-breakdown {
+    font-family: monospace;
+    white-space: pre-wrap;
+    background: #fff;
+    padding: 15px;
+    border-radius: 4px;
+    border: 1px solid #ddd;
+}
+
+.scoring-dsl-container {
+    display: grid;
+    grid-template-columns: 250px 1fr;
+    gap: 20px;
+    margin-top: 20px;
+    padding: 20px;
+    background: #f8f9fa;
+    border-radius: 8px;
+}
+
+.scoring-blocks-palette {
+    background: white;
+    padding: 15px;
+    border-radius: 6px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.block {
+    background: var(--accent-color);
+    color: white;
+    padding: 10px;
+    margin: 5px 0;
+    border-radius: 4px;
+    cursor: grab;
+    user-select: none;
+}
+
+.block[data-type="condition"] {
+    background: var(--primary-color);
+}
+
+.block[data-type="action"] {
+    background: var(--success-color);
+}
+
+.rules-container {
+    min-height: 200px;
+    padding: 15px;
+    background: white;
+    border-radius: 6px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.rule-block {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px;
+    margin: 5px 0;
+    background: #f8f9fa;
+    border-radius: 4px;
+    border: 1px dashed #dee2e6;
+}
+
+.rule-block input, .rule-block select {
+    padding: 4px;
+    border-radius: 3px;
+    border: 1px solid #dee2e6;
+}
+
+.rule-preview {
+    background: white;
+    padding: 15px;
+    border-radius: 6px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    white-space: pre-wrap;
+    font-family: monospace;
+}
+
+.block-category {
+    margin-bottom: 20px;
+}
+
+.block-category h4 {
+    color: var(--primary-color);
+    margin-bottom: 10px;
+}
 </style>
 
 <script>
@@ -562,5 +781,250 @@ document.getElementById('enable_streaks').addEventListener('change', function() 
     streakSettings.style.display = this.checked ? 'block' : 'none';
     streakExplanation.style.display = this.checked ? 'block' : 'none';
 });
+
+function calculatePoints() {
+    const settings = {
+        position_multiplier: parseFloat(document.getElementById('position_multiplier').value),
+        early_bonus: parseFloat(document.getElementById('early_bonus').value),
+        weekend_multiplier: parseFloat(document.getElementById('weekend_multiplier').value),
+        holiday_multiplier: parseFloat(document.getElementById('holiday_multiplier').value),
+        consecutive_days_bonus: parseFloat(document.getElementById('consecutive_days_bonus').value),
+        // ... get other settings values
+    };
+
+    const scenario = document.getElementById('scenarioSelect').value;
+    const arrivalTime = document.getElementById('arrivalTime').value;
+    const status = document.getElementById('statusSelect').value;
+    const position = parseInt(document.getElementById('position').value);
+    const streak = parseInt(document.getElementById('streak').value);
+
+    // Calculate base points
+    let points = status === 'in_office' ? settings.points.in_office : settings.points.remote;
+    let breakdown = `Base points (${status}): ${points}\n`;
+
+    // Apply position bonus
+    const positionBonus = position * settings.position_multiplier;
+    points += positionBonus;
+    breakdown += `Position bonus: ${positionBonus}\n`;
+
+    // Apply time bonus
+    const arrivalHour = parseInt(arrivalTime.split(':')[0]);
+    if (arrivalHour < 9) {
+        const earlyBonus = settings.early_bonus;
+        points += earlyBonus;
+        breakdown += `Early arrival bonus: ${earlyBonus}\n`;
+    }
+
+    // Apply scenario multiplier
+    let multiplier = 1;
+    if (scenario === 'weekend') multiplier = settings.weekend_multiplier;
+    if (scenario === 'holiday') multiplier = settings.holiday_multiplier;
+    if (multiplier > 1) {
+        const bonusPoints = points * (multiplier - 1);
+        points *= multiplier;
+        breakdown += `${scenario} multiplier (${multiplier}x): +${bonusPoints}\n`;
+    }
+
+    // Apply streak bonus
+    if (streak > 0) {
+        const streakBonus = streak * settings.consecutive_days_bonus;
+        points += streakBonus;
+        breakdown += `Streak bonus (${streak} days): ${streakBonus}\n`;
+    }
+
+    breakdown += `\nTotal Points: ${points.toFixed(2)}`;
+    document.getElementById('pointsBreakdown').textContent = breakdown;
+}
+
+// Add event listeners to all inputs to update calculation in real-time
+document.querySelectorAll('.calculator input, .calculator select').forEach(input => {
+    input.addEventListener('change', calculatePoints);
+});
+
+// Initial calculation
+calculatePoints();
+
+// Initialize drag and drop functionality
+document.addEventListener('DOMContentLoaded', function() {
+    initializeDragAndDrop();
+    loadExistingRules();
+});
+
+function initializeDragAndDrop() {
+    const blocks = document.querySelectorAll('.block');
+    const rulesContainer = document.getElementById('rulesContainer');
+
+    blocks.forEach(block => {
+        block.addEventListener('dragstart', handleDragStart);
+    });
+
+    rulesContainer.addEventListener('dragover', handleDragOver);
+    rulesContainer.addEventListener('drop', handleDrop);
+}
+
+function handleDragStart(e) {
+    e.dataTransfer.setData('text/plain', JSON.stringify({
+        type: e.target.dataset.type,
+        template: e.target.dataset.template
+    }));
+}
+
+function handleDragOver(e) {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+}
+
+function handleDrop(e) {
+    e.preventDefault();
+    const data = JSON.parse(e.dataTransfer.getData('text/plain'));
+    createRuleBlock(data.type, data.template);
+}
+
+function createRuleBlock(type, template) {
+    const block = document.createElement('div');
+    block.className = 'rule-block';
+    block.dataset.type = type;
+    
+    const templateParts = template.split(/[{}]/);
+    templateParts.forEach(part => {
+        if (part.trim()) {
+            if (part.includes('operator')) {
+                const select = document.createElement('select');
+                select.innerHTML = `
+                    <option value="<">before</option>
+                    <option value=">">after</option>
+                    <option value="=">=</option>
+                    <option value=">=">>=</option>
+                    <option value="<="><=</option>
+                `;
+                block.appendChild(select);
+            } else if (part.includes('value') || part.includes('points')) {
+                const input = document.createElement('input');
+                input.type = 'number';
+                input.placeholder = part;
+                block.appendChild(input);
+            } else if (part.includes('status')) {
+                const select = document.createElement('select');
+                select.innerHTML = `
+                    <option value="in_office">in office</option>
+                    <option value="remote">remote</option>
+                    <option value="sick">sick</option>
+                    <option value="leave">leave</option>
+                `;
+                block.appendChild(select);
+            } else if (part.includes('day')) {
+                const select = document.createElement('select');
+                select.innerHTML = `
+                    <option value="weekday">weekday</option>
+                    <option value="weekend">weekend</option>
+                    <option value="monday">Monday</option>
+                    <option value="friday">Friday</option>
+                `;
+                block.appendChild(select);
+            } else {
+                const span = document.createElement('span');
+                span.textContent = part;
+                block.appendChild(span);
+            }
+        }
+    });
+
+    const deleteBtn = document.createElement('button');
+    deleteBtn.textContent = '✕';
+    deleteBtn.onclick = () => block.remove();
+    block.appendChild(deleteBtn);
+
+    document.getElementById('rulesContainer').appendChild(block);
+    updateRulePreview();
+}
+
+function updateRulePreview() {
+    const rules = [];
+    document.querySelectorAll('.rule-block').forEach(block => {
+        let rule = '';
+        block.childNodes.forEach(node => {
+            if (node.tagName === 'SELECT' || node.tagName === 'INPUT') {
+                rule += node.value + ' ';
+            } else if (node.tagName === 'SPAN') {
+                rule += node.textContent + ' ';
+            }
+        });
+        rules.push(rule.trim());
+    });
+
+    document.getElementById('rulePreview').textContent = rules.join('\n');
+}
+
+function loadExistingRules() {
+    // Load rules from settings.points if they exist
+    const settings = {{ settings|tojson }};
+    if (settings.points.rules) {
+        settings.points.rules.forEach(rule => {
+            createRuleBlock(rule.type, rule.template);
+        });
+    }
+}
+
+function saveRules() {
+    const rules = [];
+    document.querySelectorAll('.rule-block').forEach(block => {
+        const rule = {
+            type: block.dataset.type,
+            conditions: [],
+            actions: []
+        };
+        
+        // Collect all inputs and selects
+        block.querySelectorAll('input, select').forEach(input => {
+            if (input.tagName === 'SELECT') {
+                rule[input.dataset.type] = input.value;
+            } else {
+                rule[input.placeholder] = input.value;
+            }
+        });
+        
+        rules.push(rule);
+    });
+
+    // Update the settings form with new rules
+    const settingsData = {
+        ...window.currentSettings,
+        points: {
+            ...window.currentSettings.points,
+            rules: rules
+        }
+    };
+
+    // Save settings
+    fetch('/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(settingsData)
+    })
+    .then(response => response.json())
+    .then(result => {
+        alert('Rules saved successfully!');
+        updateScoringExplanation(rules);
+    })
+    .catch(error => alert('Error saving rules: ' + error));
+}
+
+function updateScoringExplanation(rules) {
+    const explanation = document.querySelector('.scoring-explanation');
+    const rulesList = document.createElement('div');
+    rulesList.className = 'current-rules';
+    rulesList.innerHTML = `
+        <h3>Current Scoring Rules</h3>
+        <pre>${JSON.stringify(rules, null, 2)}</pre>
+    `;
+    
+    // Update or append the rules explanation
+    const existingRules = explanation.querySelector('.current-rules');
+    if (existingRules) {
+        existingRules.replaceWith(rulesList);
+    } else {
+        explanation.appendChild(rulesList);
+    }
+}
 </script>
 {% endblock %}

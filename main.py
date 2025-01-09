@@ -1881,6 +1881,140 @@ nltk.download('punkt')
 nltk.download('stopwords')
 nltk.download('wordnet')
 
+from datetime import datetime, timedelta
+from sqlalchemy import or_, and_, func
+import re
+
+def parse_date_reference(text):
+    """Parse natural language date references"""
+    text = text.lower()
+    today = datetime.now().date()
+    
+    if "yesterday" in text:
+        return today - timedelta(days=1)
+    elif "today" in text:
+        return today
+    elif "tomorrow" in text:
+        return today + timedelta(days=1)
+    elif "last week" in text:
+        return today - timedelta(weeks=1)
+    elif "next week" in text:
+        return today + timedelta(weeks=1)
+    elif "last month" in text:
+        return today.replace(day=1) - timedelta(days=1)
+    
+    # Try to parse specific dates
+    date_patterns = [
+        r"(\d{1,2})(?:st|nd|rd|th)? (?:of )?([a-zA-Z]+)",  # "21st March", "3rd of April"
+        r"([a-zA-Z]+) (\d{1,2})(?:st|nd|rd|th)?"          # "March 21", "April 3"
+    ]
+    
+    for pattern in date_patterns:
+        match = re.search(pattern, text)
+        if match:
+            try:
+                groups = match.groups()
+                if groups[0].isdigit():
+                    day, month = groups
+                else:
+                    month, day = groups
+                date_str = f"{day} {month} {today.year}"
+                return datetime.strptime(date_str, "%d %B %Y").date()
+            except ValueError:
+                continue
+    
+    return today
+
+def extract_query_parameters(tokens):
+    """Extract key parameters from tokenized query"""
+    params = {
+        "date_range": None,
+        "users": [],
+        "status": None,
+        "metric": None,
+        "limit": None
+    }
+    
+    # Get core users for reference
+    core_users = get_core_users()
+    
+    # Scan for users
+    for token in tokens:
+        if token.capitalize() in core_users:
+            params["users"].append(token.capitalize())
+    
+    # Look for date references
+    date_keywords = ["today", "yesterday", "last week", "this week", "last month", "this month"]
+    for kw in date_keywords:
+        if kw in " ".join(tokens):
+            params["date_range"] = kw
+            break
+    
+    # Detect status
+    status_map = {
+        "office": "in-office",
+        "remote": "remote",
+        "sick": "sick",
+        "leave": "leave",
+        "holiday": "leave",
+        "working": "in-office"
+    }
+    for token in tokens:
+        if token in status_map:
+            params["status"] = status_map[token]
+    
+    # Detect metrics
+    metrics = {
+        "points": ["points", "score", "ranking"],
+        "streak": ["streak", "consecutive"],
+        "attendance": ["attendance", "present", "in"],
+        "time": ["time", "arrival", "late", "early"]
+    }
+    for metric, keywords in metrics.items():
+        if any(kw in tokens for kw in keywords):
+            params["metric"] = metric
+    
+    # Look for limits
+    for i, token in enumerate(tokens):
+        if token.isdigit() and i > 0 and tokens[i-1] in ["top", "best", "first"]:
+            params["limit"] = int(token)
+    
+    return params
+
+def build_dynamic_query(db, params):
+    """Build a dynamic database query based on parameters"""
+    query = db.query(Entry)
+    
+    # Apply date range filter
+    if params["date_range"]:
+        date = parse_date_reference(params["date_range"])
+        if "week" in params["date_range"]:
+            start_date = date - timedelta(days=date.weekday())
+            end_date = start_date + timedelta(days=6)
+            query = query.filter(Entry.date.between(start_date.isoformat(), end_date.isoformat()))
+        elif "month" in params["date_range"]:
+            start_date = date.replace(day=1)
+            if "last" in params["date_range"]:
+                start_date = (start_date - timedelta(days=1)).replace(day=1)
+            next_month = (start_date.replace(day=28) + timedelta(days=4)).replace(day=1)
+            query = query.filter(Entry.date.between(start_date.isoformat(), (next_month - timedelta(days=1)).isoformat()))
+        else:
+            query = query.filter(Entry.date == date.isoformat())
+    
+    # Apply user filter
+    if params["users"]:
+        query = query.filter(Entry.name.in_(params["users"]))
+    
+    # Apply status filter
+    if params["status"]:
+        query = query.filter(Entry.status == params["status"])
+    
+    # Apply limit
+    if params["limit"]:
+        query = query.limit(params["limit"])
+    
+    return query
+
 @app.route("/chatbot", methods=["POST"])
 @login_required
 def chatbot():
@@ -1889,126 +2023,70 @@ def chatbot():
     stop_words = set(stopwords.words('english'))
     lemmatizer = WordNetLemmatizer()
     
+    # Process tokens
     tokens = [lemmatizer.lemmatize(word) for word in tokens if word not in stop_words]
     
-    # Enhanced command patterns with more variations
-    commands = {
-        'rankings': ['ranking', 'score', 'position', 'standing', 'leaderboard', 'top', 'best', 'leading'],
-        'attendance': ['attendance', 'present', 'here', 'today', 'entry', 'who', 'office', 'remote'],
-        'stats': ['statistics', 'stats', 'numbers', 'count', 'total', 'average', 'avg'],
-        'streaks': ['streak', 'consecutive', 'row', 'sequence'],
-        'help': ['help', 'how', 'what', 'guide', 'explain', 'can', 'capable']
-    }
+    # Extract query parameters
+    params = extract_query_parameters(tokens)
     
-    # Extract time period if mentioned
-    time_periods = {
-        'today': ['today', 'now', 'current'],
-        'week': ['week', 'weekly'],
-        'month': ['month', 'monthly'],
-        'year': ['year', 'yearly', 'annual']
-    }
-    
-    period = 'day'  # default
-    for p, keywords in time_periods.items():
-        if any(word in tokens for word in keywords):
-            period = p
-            break
-    
-    # Check for command matches with enhanced responses
-    for command, keywords in commands.items():
-        if any(word in tokens for word in keywords):
-            db = SessionLocal()
-            try:
-                if command == 'rankings':
-                    data = load_data()
-                    rankings = calculate_scores(data, period, datetime.now())
-                    if rankings:
-                        top_3 = rankings[:3]
-                        response = f"Top 3 {period}ly rankings:\n"
-                        for i, rank in enumerate(top_3, 1):
-                            response += f"{i}. {rank['name']} - {rank['score']} points"
-                            if rank.get('current_streak', 0) > 0:
-                                response += f" (streak: {rank['current_streak']})"
-                            response += "\n"
-                    else:
-                        response = f"No {period}ly rankings available yet."
-                    
-                elif command == 'attendance':
-                    # Check for specific user queries
-                    user_query = False
-                    for token in tokens:
-                        if token in [user.lower() for user in get_core_users()]:
-                            user_query = token.capitalize()
-                            break
-                    
-                    today = datetime.now().date().isoformat()
-                    entries = db.query(Entry).filter_by(date=today)
-                    
-                    if user_query:
-                        entries = entries.filter_by(name=user_query).all()
-                        if entries:
-                            entry = entries[0]
-                            response = f"{entry.name} is {entry.status} today (arrived at {entry.time})"
-                        else:
-                            response = f"No attendance record for {user_query} today."
-                    else:
-                        entries = entries.all()
-                        if entries:
-                            response = "Today's attendance:\n"
-                            for entry in sorted(entries, key=lambda x: x.time):
-                                response += f"{entry.name} - {entry.status} at {entry.time}\n"
-                        else:
-                            response = "No attendance records for today yet."
-                
-                elif command == 'streaks':
-                    streaks = db.query(UserStreak).order_by(UserStreak.current_streak.desc()).all()
-                    if streaks:
-                        response = "Current streaks:\n"
-                        for streak in streaks[:3]:  # Show top 3 streaks
-                            if streak.current_streak > 0:
-                                response += f"{streak.username}: {streak.current_streak} days"
-                                if streak.current_streak == streak.max_streak:
-                                    response += " (Personal Best!)"
-                                response += "\n"
-                    else:
-                        response = "No active streaks at the moment."
-                
-                elif command == 'stats':
-                    # Enhanced statistics with more detail
-                    data = load_data()
-                    stats = calculate_status_counts(data)
-                    
-                    today_count = len([e for e in data if e['date'] == datetime.now().date().isoformat()])
-                    week_count = len([e for e in data if in_period(e, 'week', datetime.now())])
-                    
-                    response = "📊 Statistics Summary:\n"
-                    response += f"Today's attendance: {today_count}\n"
-                    response += f"This week's attendance: {week_count}\n"
-                    response += f"Total in-office: {stats['in_office']}\n"
-                    response += f"Total remote: {stats['remote']}\n"
-                    response += f"Total sick days: {stats['sick']}\n"
-                    response += f"Total leave days: {stats['leave']}"
-                
-                else:  # help command
-                    response = "I can help you with:\n"
-                    response += "- Checking rankings (try: 'show rankings for this week')\n"
-                    response += "- Viewing attendance (try: 'who is in today?' or 'is [name] in?')\n"
-                    response += "- Getting statistics (try: 'show me the stats')\n"
-                    response += "- Checking streaks (try: 'what are the current streaks?')\n"
-                    response += "Just ask me what you'd like to know!"
-                
-                return jsonify({"response": response})
+    db = SessionLocal()
+    try:
+        # Build and execute query
+        query = build_dynamic_query(db, params)
+        results = query.all()
+        
+        # Format response based on metric
+        if params["metric"] == "points":
+            data = load_data()
+            current_date = datetime.now()
+            rankings = calculate_scores(data, 'day' if not params["date_range"] else 'week' if 'week' in params["date_range"] else 'month', current_date)
             
-            except Exception as e:
-                app.logger.error(f"Chatbot error: {str(e)}")
-                return jsonify({"response": "Sorry, I encountered an error processing your request."})
-            finally:
-                db.close()
-    
-    # If no command matches, provide a helpful response
-    return jsonify({
-        "response": "I'm not sure what you're asking. Try asking about rankings, attendance, stats, or streaks. Or type 'help' for more information."
-    })
+            if params["users"]:
+                rankings = [r for r in rankings if r["name"] in params["users"]]
+            if params["limit"]:
+                rankings = rankings[:params["limit"]]
+            
+            response = "Rankings:\n"
+            for i, rank in enumerate(rankings, 1):
+                response += f"{i}. {rank['name']} - {rank['score']} points"
+                if rank.get('current_streak', 0) > 0:
+                    response += f" (streak: {rank['current_streak']})"
+                response += "\n"
+                
+        elif params["metric"] == "streak":
+            streaks = db.query(UserStreak)
+            if params["users"]:
+                streaks = streaks.filter(UserStreak.username.in_(params["users"]))
+            streaks = streaks.order_by(UserStreak.current_streak.desc()).all()
+            
+            response = "Current streaks:\n"
+            for streak in streaks[:params["limit"] if params["limit"] else None]:
+                if streak.current_streak > 0:
+                    response += f"{streak.username}: {streak.current_streak} days"
+                    if streak.current_streak == streak.max_streak:
+                        response += " (Personal Best!)"
+                    response += "\n"
+                    
+        elif params["metric"] == "time":
+            response = "Arrival times:\n"
+            for entry in results:
+                response += f"{entry.name}: {entry.time} ({entry.status})\n"
+                
+        else:  # Default to attendance
+            if not results:
+                response = "No matching records found."
+            else:
+                response = "Attendance records:\n"
+                for entry in results:
+                    response += f"{entry.name} - {entry.status} at {entry.time} on {entry.date}\n"
+        
+        return jsonify({"response": response.strip()})
+        
+    except Exception as e:
+        app.logger.error(f"Chatbot error: {str(e)}")
+        return jsonify({"response": "Sorry, I encountered an error processing your request."})
+    finally:
+        db.close()
 
 if __name__ == "__main__":
     app.run(debug=True)

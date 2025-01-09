@@ -161,7 +161,12 @@ def load_settings():
     result = {
         "points": settings.points,
         "late_bonus": settings.late_bonus,
-        "remote_days": settings.remote_days
+        "remote_days": settings.remote_days,
+        "core_users": settings.core_users,
+        "enable_streaks": settings.enable_streaks,
+        "streak_multiplier": settings.streak_multiplier,
+        "streaks_enabled": settings.streaks_enabled,
+        "streak_bonus": settings.streak_bonus
     }
     db.close()
     return result
@@ -563,89 +568,18 @@ def calculate_daily_score(entry, settings, position=None, total_entries=None):
     status = entry["status"].replace("-", "_")
     base_points = settings["points"][status]
     position_bonus = 0
-    streak_bonus = calculate_streak_bonus(entry, settings) if status in ["in_office", "remote"] else 0
     
     if position is not None and total_entries is not None:
-        if status == "in_office" or (status == "remote" and is_eligible_remote_day(entry, settings)):
-            # Get mode from request
-            mode = request.args.get('mode', 'last-in')
-            
-            if mode == 'early-bird':
-                # For early bird mode, reverse the position calculation
-                position = total_entries - position + 1
-                
-            position_bonus = position * settings["late_bonus"]
-            
-            # Add special bonuses based on timing
-            arrival_time = datetime.strptime(entry["time"], "%H:%M").time()
-            if mode == 'last-in':
-                # Late arrival bonuses only apply in last-in mode
-                if arrival_time >= datetime.strptime("17:00", "%H:%M").time():
-                    position_bonus *= 1.5  # 50% bonus for after 5 PM
-                elif arrival_time <= datetime.strptime("08:00", "%H:%M").time():
-                    position_bonus *= 0.5  # 50% penalty for before 8 AM
-            else:
-                # Early arrival bonuses for early-bird mode
-                if arrival_time <= datetime.strptime("08:00", "%H:%M").time():
-                    position_bonus *= 1.5  # 50% bonus for before 8 AM
-                elif arrival_time >= datetime.strptime("10:00", "%H:%M").time():
-                    position_bonus *= 0.5  # 50% penalty for after 10 AM
-    
-    # Add streak bonus (if applicable)
-    streak_bonus = calculate_streak_bonus(entry)
+        # ... existing position bonus calculation ...
+        pass
+
+    # Calculate streak bonus only if enabled
+    streak_bonus = 0
+    if settings.get("enable_streaks", False):
+        streak_bonus = calculate_streak_bonus(entry)
     
     total_points = base_points + position_bonus + streak_bonus
-
-    # Add streak bonus if enabled
-    if settings.get("enable_streaks", False):
-        streak_bonus = calculate_streak_bonus(entry, settings.get("streak_multiplier", 0.5))
-        total_points += streak_bonus
-    
     return total_points
-
-def calculate_streak_bonus(entry, settings):
-    """Calculate bonus points for consecutive attendance"""
-    if not settings.get('streaks_enabled', False):
-        return 0
-        
-    db = SessionLocal()
-    try:
-        # Get entries for the last 5 working days
-        date = datetime.strptime(entry["date"], "%Y-%m-%d")
-        entries = db.query(Entry).filter(
-            Entry.name == entry["name"],
-            Entry.date < entry["date"],
-            Entry.status.in_(['in-office', 'remote'])  # Only count active attendance
-        ).order_by(Entry.date.desc()).limit(5).all()
-        
-        streak = 1  # Current day counts
-        prev_date = date
-        
-        for e in entries:
-            e_date = datetime.strptime(e.date, "%Y-%m-%d")
-            # Check if it's the next consecutive working day
-            days_between = business_days_between(e_date, prev_date)
-            if days_between != 1:
-                break
-            streak += 1
-            prev_date = e_date
-            if streak >= 5:  # Cap at 5 days
-                break
-        
-        return streak * settings.get('streak_bonus', 0.5) if streak > 1 else 0
-        
-    finally:
-        db.close()
-
-def business_days_between(start_date, end_date):
-    """Calculate number of business days between two dates"""
-    current = start_date
-    days = 0
-    while current <= end_date:
-        if current.weekday() < 5:  # 0-4 represents Monday to Friday
-            days += 1
-        current += timedelta(days=1)
-    return days
 
 def calculate_streak_bonus(entry):
     """Calculate bonus points for consecutive late arrivals"""

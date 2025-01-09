@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block title %}Error{% endblock %}
+
+{% block content %}
+<div class="error-container">
+    <h1>⚠️ Error</h1>
+    <p>{{ message }}</p>
+    <button onclick="window.history.back()">Go Back</button>
+</div>
+
+<style>
+.error-container {
+    background: white;
+    padding: 30px;
+    border-radius: 8px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    text-align: center;
+    margin: 40px auto;
+    max-width: 600px;
+}
+
+.error-container h1 {
+    color: var(--warning-color);
+    margin-bottom: 20px;
+}
+
+.error-container button {
+    margin-top: 20px;
+    padding: 10px 20px;
+    background: var(--primary-color);
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.error-container button:hover {
+    transform: translateY(-2px);
+    background: var(--accent-color);
+}
+</style>
+{% endblock %}

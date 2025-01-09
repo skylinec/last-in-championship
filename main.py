@@ -582,7 +582,7 @@ def parse_uk_date(date_str):
         except ValueError:
             return datetime.now()
 
-def calculate_daily_score(entry, settings, position=None, total_entries=None):
+def calculate_daily_score(entry, settings, position=None, total_entries=None, mode='last-in'):
     """Calculate score for a single day's entry with all bonuses"""
     status = entry["status"].replace("-", "_")
     base_points = settings["points"][status]
@@ -867,7 +867,7 @@ def calculate_scores(data, period, current_date):
                 }
             
             # Calculate scores for both modes
-            scores = calculate_daily_score(entry, settings, position, total_entries)
+            scores = calculate_daily_score(entry, settings, position, total_entries, mode)
             
             status = entry["status"].replace("-", "_")
             daily_scores[name]["stats"][status] += 1
@@ -968,7 +968,7 @@ def day_rankings(date=None):
     rankings = []
     total_entries = len(day_entries)
     for position, entry in enumerate(day_entries, 1):
-        scores = calculate_daily_score(entry, settings, position, total_entries)
+        scores = calculate_daily_score(entry, settings, position, total_entries, mode)
         entry_time = datetime.strptime(entry["time"], "%H:%M")
         entry_date = datetime.strptime(entry["date"], "%Y-%m-%d")
         shift_length = 540  # Always 9 hours

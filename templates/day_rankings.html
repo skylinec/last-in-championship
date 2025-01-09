@@ -54,7 +54,7 @@
             <div class="timeline-bar-container">
                 <div class="timeline-bar" 
                      style="left: {{ ((entry.time_obj.hour * 60 + entry.time_obj.minute - 420) / 660) * 100 }}%; 
-                            width: {{ (entry.shift_length / 540) * 100 }}%"  // Update to 540 minutes for 9 hours
+                            width: {{ (entry.shift_length / 660) * 100 }}%"  // Update to 660 minutes for alignment
                      title="{{ entry.name }}: {{ entry.time }} - {{ entry.end_time }}">
                     <span class="timeline-time">{{ entry.time }}</span>
                     <span class="timeline-end-time">{{ entry.end_time }}</span>

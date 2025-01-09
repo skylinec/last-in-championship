@@ -2141,6 +2141,88 @@ class QueryProcessor:
         
         return list(set(mentioned_users))
 
+    # Add these new extraction methods
+    def _extract_date_range(self, query):
+        """Extract date range from query"""
+        # First check for explicit ranges
+        range_patterns = {
+            'today': r'\btoday\b',
+            'yesterday': r'\byesterday\b',
+            'this week': r'\bthis\s+week\b',
+            'last week': r'\blast\s+week\b',
+            'this month': r'\bthis\s+month\b',
+            'last month': r'\blast\s+month\b'
+        }
+        
+        for range_type, pattern in range_patterns.items():
+            if re.search(pattern, query, re.IGNORECASE):
+                return range_type
+        
+        # Check for specific date mentions
+        date_pattern = r'(?:on|for|at)\s+(\d{1,2}(?:st|nd|rd|th)?\s+(?:of\s+)?(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?))'
+        match = re.search(date_pattern, query, re.IGNORECASE)
+        if match:
+            return match.group(1)
+        
+        return None
+
+    def _extract_status(self, query):
+        """Extract status type from query"""
+        status_patterns = {
+            'in-office': r'\b(?:in|at)\s*(?:the\s*)?office\b',
+            'remote': r'\b(?:remote|wfh|home)\b',
+            'sick': r'\b(?:sick|ill|unwell)\b',
+            'leave': r'\b(?:leave|holiday|vacation)\b'
+        }
+        
+        for status, pattern in status_patterns.items():
+            if re.search(pattern, query, re.IGNORECASE):
+                return status
+        return None
+
+    def _extract_metrics(self, query):
+        """Extract metrics to analyze"""
+        metrics = []
+        metric_patterns = {
+            'attendance': r'\b(?:attend|present|here)\w*\b',
+            'points': r'\b(?:point|score|ranking)\w*\b',
+            'streak': r'\b(?:streak|consecutive|row)\w*\b',
+            'time': r'\b(?:time|arrival|start)\w*\b'
+        }
+        
+        for metric, pattern in metric_patterns.items():
+            if re.search(pattern, query, re.IGNORECASE):
+                metrics.append(metric)
+        
+        return metrics if metrics else ['attendance']  # Default to attendance
+
+    def _extract_limit(self, query):
+        """Extract numerical limits from query"""
+        limit_pattern = r'\b(?:top|first|best|worst|bottom)\s+(\d+)\b'
+        match = re.search(limit_pattern, query, re.IGNORECASE)
+        if match:
+            return int(match.group(1))
+        return None
+
+    def _extract_comparison_type(self, query):
+        """Extract type of comparison requested"""
+        if re.search(r'\b(?:compare|vs|versus|against)\b', query, re.IGNORECASE):
+            if re.search(r'\b(?:time|arrival)\b', query, re.IGNORECASE):
+                return 'time'
+            elif re.search(r'\b(?:point|score)\b', query, re.IGNORECASE):
+                return 'points'
+            elif re.search(r'\b(?:streak)\b', query, re.IGNORECASE):
+                return 'streaks'
+        return None
+
+    def _extract_sort_preference(self, query):
+        """Extract sorting preference"""
+        if re.search(r'\b(?:earliest|first|early)\b', query, re.IGNORECASE):
+            return 'asc'
+        elif re.search(r'\b(?:latest|last|late)\b', query, re.IGNORECASE):
+            return 'desc'
+        return None
+
 # Update the chatbot route to use the new query processor
 @app.route("/chatbot", methods=["POST"])
 @login_required

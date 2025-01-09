@@ -790,7 +790,7 @@ def calculate_scores(data, period, current_date):
                     }
                 }
             
-            # Calculate position bonus based on mode - THIS IS THE KEY FIX
+            # Calculate position bonus based on mode
             if mode == 'early-bird':
                 # Early bird: first position gets highest bonus
                 bonus_position = total_entries - position + 1
@@ -831,8 +831,8 @@ def calculate_scores(data, period, current_date):
                 "average_arrival_time": calculate_average_time(arrival_times) if arrival_times else "N/A"
             })
     
-    # Sort rankings by score, reverse order only for last-in mode
-    rankings.sort(key=lambda x: x["score"], reverse=(mode == 'last-in'))
+    # Sort rankings by score
+    rankings.sort(key=lambda x: x["score"], reverse=False)
     return rankings
 
 def calculate_average_time(times):

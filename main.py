@@ -565,25 +565,30 @@ def parse_uk_date(date_str):
 
 def calculate_daily_score(entry, settings, position=None, total_entries=None):
     """Calculate score for a single day's entry with all bonuses"""
-    mode = request.args.get('mode', 'last-in')
     status = entry["status"].replace("-", "_")
     base_points = settings["points"][status]
-    position_bonus = 0
+    
+    # Always calculate both early bird and last-in scores
+    early_bird_bonus = 0
+    last_in_bonus = 0
     
     if position is not None and total_entries is not None and status in ["in_office", "remote"]:
-        if mode == 'early-bird':
-            # Early bird mode: first position (earliest) gets highest bonus
-            position_bonus = (total_entries - position + 1) * settings["late_bonus"]
-        else:
-            # Last-in mode: last position gets highest bonus
-            position_bonus = position * settings["late_bonus"]
+        # Early bird bonus (first position gets highest)
+        early_bird_bonus = (total_entries - position + 1) * settings["late_bonus"]
+        # Last-in bonus (last position gets highest)
+        last_in_bonus = position * settings["late_bonus"]
     
     streak_bonus = 0
     if settings.get("enable_streaks", False):
         streak_bonus = calculate_streak_bonus(entry)
     
-    total_points = base_points + position_bonus + streak_bonus
-    return total_points
+    # Return both scoring modes
+    return {
+        "early_bird": base_points + early_bird_bonus + streak_bonus,
+        "last_in": base_points + last_in_bonus + streak_bonus,
+        "base": base_points,
+        "streak": streak_bonus
+    }
 
 def calculate_streak_bonus(entry):
     """Calculate bonus points for consecutive late arrivals"""
@@ -774,7 +779,8 @@ def calculate_scores(data, period, current_date):
             name = entry["name"]
             if name not in daily_scores:
                 daily_scores[name] = {
-                    "total_points": 0,
+                    "early_bird_total": 0,
+                    "last_in_total": 0,
                     "active_days": 0,
                     "stats": {
                         "in_office": 0,
@@ -787,15 +793,8 @@ def calculate_scores(data, period, current_date):
                     }
                 }
             
-            # Calculate position bonus based on mode
-            if mode == 'early-bird':
-                # Early bird: first position gets highest bonus
-                bonus_position = total_entries - position + 1
-            else:
-                # Last-in: last position gets highest bonus (opposite of position)
-                bonus_position = position
-                
-            points = calculate_daily_score(entry, settings, bonus_position, total_entries)
+            # Calculate scores for both modes
+            scores = calculate_daily_score(entry, settings, position, total_entries)
             
             status = entry["status"].replace("-", "_")
             daily_scores[name]["stats"][status] += 1
@@ -803,7 +802,8 @@ def calculate_scores(data, period, current_date):
             
             if status in ["in_office", "remote"]:
                 daily_scores[name]["active_days"] += 1
-                daily_scores[name]["total_points"] += points
+                daily_scores[name]["early_bird_total"] += scores["early_bird"]
+                daily_scores[name]["last_in_total"] += scores["last_in"]
                 
                 # Track achievements based on mode
                 if (mode == 'last-in' and position == total_entries) or \
@@ -817,18 +817,19 @@ def calculate_scores(data, period, current_date):
     rankings = []
     for name, scores in daily_scores.items():
         if scores["active_days"] > 0:
-            avg_score = scores["total_points"] / scores["active_days"]
+            early_bird_avg = scores["early_bird_total"] / scores["active_days"]
+            last_in_avg = scores["last_in_total"] / scores["active_days"]
             arrival_times = scores["stats"]["arrival_times"]
             
             rankings.append({
                 "name": name,
-                "score": round(avg_score, 2),
+                "score": round(last_in_avg if mode == 'last-in' else early_bird_avg, 2),
                 "streak": calculate_current_streak(name),
                 "stats": scores["stats"],
                 "average_arrival_time": calculate_average_time(arrival_times) if arrival_times else "N/A"
             })
     
-    # Always sort by descending score since the scoring logic already accounts for mode
+    # Always sort by descending score (scores are already mode-specific)
     rankings.sort(key=lambda x: x["score"], reverse=True)
     return rankings
 

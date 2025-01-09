@@ -458,6 +458,13 @@
     {% if session.get('user') %}
     <script>
     async function checkMissingAttendance() {
+        // Check if it's a weekday (0-4 = Monday-Friday)
+        const today = new Date();
+        if (today.getDay() === 0 || today.getDay() === 6) {  // Sunday or Saturday
+            document.getElementById('attendance-warning').style.display = 'none';
+            return;
+        }
+
         const response = await fetch('/check_attendance');
         const missingUsers = await response.json();
         if (missingUsers.length > 0) {

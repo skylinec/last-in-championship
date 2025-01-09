@@ -449,6 +449,10 @@ def view_audit():
 def check_attendance():
     db = SessionLocal()
     try:
+        # Check if current day is a weekday (0-4 = Monday-Friday)
+        if datetime.now().weekday() >= 5:  # Weekend
+            return jsonify([])
+            
         today = datetime.now().date().isoformat()
         today_entries = db.query(Entry).filter_by(date=today).all()
         present_users = [entry.name for entry in today_entries]

@@ -13,9 +13,30 @@ import json  # Add explicit json import
 app = Flask(__name__)
 app.secret_key = os.getenv('SECRET_KEY', 'supersecretkey')
 
-# Database setup
+# Database setup - update engine configuration
 DATABASE_URL = os.getenv('DATABASE_URL', 'postgresql://user:password@localhost:5432/championship')
-engine = create_engine(DATABASE_URL)
+engine = create_engine(
+    DATABASE_URL,
+    pool_size=20,  # Increase from default 5
+    max_overflow=30,  # Increase from default 10
+    pool_timeout=60,  # Increase from default 30
+    pool_pre_ping=True,  # Enable connection health checks
+    pool_recycle=3600  # Recycle connections after 1 hour
+)
+
+# Add connection pool logging
+@event.listens_for(engine, "connect")
+def connect(dbapi_connection, connection_record):
+    app.logger.info("New database connection created")
+
+@event.listens_for(engine, "checkout")
+def receive_checkout(dbapi_connection, connection_record, connection_proxy):
+    app.logger.debug("Database connection checked out from pool")
+
+@event.listens_for(engine, "checkin")
+def receive_checkin(dbapi_connection, connection_record):
+    app.logger.debug("Database connection returned to pool")
+
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
@@ -1757,71 +1778,80 @@ def update_user_streak(username, attendance_date):
         db.close()
 
 def generate_streaks():
-    """Generate all user streaks from scratch"""
+    """Generate all user streaks with optimized database queries"""
     db = SessionLocal()
     try:
-        # Clear existing streaks
+        # Clear existing streaks in a single query
         db.query(UserStreak).delete()
         
-        # Get all users with attendance records
-        users = db.query(Entry.name).distinct().all()
-        settings = db.query(Settings).first()
+        # Get all relevant entries in a single query
+        entries = db.query(
+            Entry.name,
+            Entry.date,
+            Entry.timestamp
+        ).filter(
+            Entry.status.in_(['in-office', 'remote'])
+        ).order_by(
+            Entry.name,
+            Entry.date.desc()
+        ).all()
         
-        if not settings or not settings.enable_streaks:
-            return
+        # Process entries by user
+        current_user = None
+        current_streak = 0
+        max_streak = 0
+        last_date = None
+        new_streaks = []
         
-        for (username,) in users:
-            # Get all entries for user, ordered by date
-            entries = (db.query(Entry)
-                      .filter(Entry.name == username)
-                      .filter(Entry.status.in_(['in-office', 'remote']))
-                      .order_by(Entry.date.asc())
-                      .all())
-            
-            if not entries:
+        for entry in entries:
+            if entry.name != current_user:
+                # Save previous user's streak
+                if current_user and current_streak > 0:
+                    new_streaks.append(UserStreak(
+                        username=current_user,
+                        current_streak=current_streak,
+                        max_streak=max_streak,
+                        last_attendance=last_timestamp
+                    ))
+                # Reset for new user
+                current_user = entry.name
+                current_streak = 1
+                max_streak = 1
+                last_date = datetime.strptime(entry.date, "%Y-%m-%d").date()
+                last_timestamp = entry.timestamp
                 continue
             
-            # Initialize streak counting
-            current_streak = 1
-            max_streak = 1
-            streak_start_date = datetime.strptime(entries[0].date, '%Y-%m-%d').date()
+            entry_date = datetime.strptime(entry.date, "%Y-%m-%d").date()
+            days_between = (last_date - entry_date).days
             
-            # Calculate streaks day by day
-            for i in range(1, len(entries)):
-                entry_date = datetime.strptime(entries[i].date, '%Y-%m-%d').date()
-                days_between = (entry_date - streak_start_date).days
-                
-                # Check if this continues the streak
-                if days_between <= 3:  # Allow for weekends
-                    # Check if any non-weekend workdays were missed
-                    has_gap = False
-                    for d in range(1, days_between):
-                        check_date = streak_start_date + timedelta(days=d)
-                        if check_date.weekday() < 5:  # Weekday
-                            has_gap = True
-                            break
-                    
-                    if not has_gap:
-                        current_streak += 1
-                        max_streak = max(max_streak, current_streak)
-                    else:
-                        current_streak = 1
-                else:
-                    current_streak = 1
-                
-                streak_start_date = entry_date
+            if days_between <= 3:  # Within streak range
+                if days_between <= 1 or all(
+                    (last_date - timedelta(days=d)).weekday() >= 5
+                    for d in range(1, days_between)
+                ):
+                    current_streak += 1
+                    max_streak = max(max_streak, current_streak)
+            else:
+                current_streak = 1
             
-            # Create streak record
-            streak = UserStreak(
-                username=username,
+            last_date = entry_date
+            last_timestamp = entry.timestamp
+        
+        # Don't forget the last user
+        if current_user and current_streak > 0:
+            new_streaks.append(UserStreak(
+                username=current_user,
                 current_streak=current_streak,
                 max_streak=max_streak,
-                last_attendance=entries[-1].timestamp
-            )
-            db.add(streak)
+                last_attendance=last_timestamp
+            ))
         
-        db.commit()
-        app.logger.info(f"Generated streaks for {len(users)} users")
+        # Bulk insert all streaks
+        if new_streaks:
+            db.bulk_save_objects(new_streaks)
+            db.commit()
+        
+        app.logger.info(f"Generated streaks for {len(new_streaks)} users")
         
     except Exception as e:
         db.rollback()
@@ -2712,16 +2742,20 @@ def chatbot():
         })
 
 def calculate_streak_for_date(name, target_date, db):
-    """Calculate streak for a user up to a specific date"""
+    """Calculate streak for a user up to a specific date with optimized queries"""
     try:
         target_date = datetime.strptime(target_date, '%Y-%m-%d').date() if isinstance(target_date, str) else target_date
         
-        # Get entries up to target date
-        entries = db.query(Entry).filter(
+        # Get all relevant entries in a single query
+        entries = db.query(
+            Entry.date
+        ).filter(
             Entry.name == name,
             Entry.status.in_(['in-office', 'remote']),
             Entry.date <= target_date.isoformat()
-        ).order_by(Entry.date.desc()).all()
+        ).order_by(
+            Entry.date.desc()
+        ).all()
         
         if not entries:
             return 0
@@ -2729,20 +2763,19 @@ def calculate_streak_for_date(name, target_date, db):
         streak = 1
         last_date = datetime.strptime(entries[0].date, "%Y-%m-%d").date()
         
-        # Skip first entry as it's counted above
-        for entry in entries[1:]:
-            entry_date = datetime.strptime(entry.date, "%Y-%m-%d").date()
+        # Process dates without additional database queries
+        dates = [datetime.strptime(entry.date, "%Y-%m-%d").date() for entry in entries[1:]]
+        for entry_date in dates:
             days_between = (last_date - entry_date).days
             
             if days_between > 3:  # More than a weekend
                 break
             elif days_between > 1:
-                weekend_only = True
-                for d in range(1, days_between):
-                    check_date = last_date - timedelta(days=d)
-                    if check_date.weekday() < 5:  # Not weekend
-                        weekend_only = False
-                        break
+                # Check if gap only includes weekend days
+                weekend_only = all(
+                    (last_date - timedelta(days=d)).weekday() >= 5
+                    for d in range(1, days_between)
+                )
                 if not weekend_only:
                     break
             

@@ -1830,5 +1830,19 @@ def calculate_scores(data, period, current_date):
     rankings.sort(key=lambda x: x["score"], reverse=True)
     return rankings
 
+def calculate_average_time(times):
+    """Calculate average time from a list of datetime objects"""
+    if not times:
+        return "N/A"
+    
+    try:
+        total_minutes = sum((t.hour * 60 + t.minute) for t in times)
+        avg_minutes = total_minutes // len(times)
+        avg_hour = avg_minutes // 60
+        avg_minute = avg_minutes % 60
+        return f"{avg_hour:02d}:{avg_minute:02d}"
+    except (AttributeError, TypeError):
+        return "N/A"
+
 if __name__ == "__main__":
     app.run(debug=True)

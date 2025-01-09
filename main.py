@@ -659,22 +659,29 @@ def view_rankings(period, date_str=None):
         
         # Process each ranking entry to add time data
         for rank in rankings:
-            # Find the most recent entry for this user in the period
+            # Find all entries for this user in the period
             user_entries = [e for e in data if e["name"] == rank["name"] and 
                           in_period(e, period, current_date)]
+            
             if user_entries:
-                # Sort entries by date and time to get the most recent
-                latest_entry = sorted(user_entries, 
-                    key=lambda x: (x["date"], x["time"]))[-1]
+                # Calculate average start time
+                times_in_minutes = []
+                for entry in user_entries:
+                    entry_time = datetime.strptime(entry["time"], "%H:%M")
+                    minutes = entry_time.hour * 60 + entry_time.minute
+                    times_in_minutes.append(minutes)
                 
-                entry_time = datetime.strptime(latest_entry["time"], "%H:%M")
-                entry_date = datetime.strptime(latest_entry["date"], "%Y-%m-%d")
+                avg_minutes = sum(times_in_minutes) / len(times_in_minutes)
+                avg_hour = int(avg_minutes // 60)
+                avg_minute = int(avg_minutes % 60)
+                
+                entry_time = datetime.strptime(f"{avg_hour:02d}:{avg_minute:02d}", "%H:%M")
+                entry_date = datetime.strptime(user_entries[0]["date"], "%Y-%m-%d")
                 is_friday = entry_date.weekday() == 4
                 shift_length = 210 if is_friday else 510
                 end_time = entry_time + timedelta(minutes=shift_length)
                 
-                rank["time"] = latest_entry["time"]
-                rank["date"] = latest_entry["date"]
+                rank["time"] = f"{avg_hour:02d}:{avg_minute:02d}"
                 rank["time_obj"] = entry_time
                 rank["shift_length"] = shift_length
                 rank["end_time"] = end_time.strftime('%H:%M')

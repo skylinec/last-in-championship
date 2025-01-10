@@ -34,7 +34,7 @@
 <div class="timeline-container">
     <h2>Daily Schedule Timeline</h2>
     <div class="timeline-scale">
-        {% for hour in range(7, 20) %}
+        {% for hour in range(earliest_hour, latest_hour + 1) %}
             <span>{{ "%02d:00"|format(hour) }}</span>
         {% endfor %}
     </div>
@@ -44,8 +44,9 @@
             <span class="timeline-name">{{ entry.name }}</span>
             <div class="timeline-bar-container">
                 <div class="timeline-bar" 
-                     style="left: {{ ((entry.time_obj.hour * 60 + entry.time_obj.minute - (start_hour * 60 + start_minute)) / (12 * 60)) * 100 }}%; 
-                            width: {{ (entry.shift_length / (12 * 60)) * 100 }}%"
+                     style="left: calc(((entry.time_obj.hour * 60 + entry.time_obj.minute) - (earliest_hour * 60))
+                                       / (((latest_hour - earliest_hour) * 60)) * 100%);
+                            width: calc((entry.shift_length / ((latest_hour - earliest_hour) * 60)) * 100%);"
                      title="{{ entry.name }}: {{ entry.time }} - {{ entry.end_time }} ({{ entry.shift_hours }} hours from {{ entry.shift_start }})">
                     <span class="timeline-time">{{ entry.time }}</span>
                     <span class="timeline-shift-length">{{ entry.shift_hours }}h</span>

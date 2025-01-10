@@ -44,10 +44,10 @@
             <span class="timeline-name">{{ entry.name }}</span>
             <div class="timeline-bar-container">
                 <div class="timeline-bar" 
-                     style="left: calc(((entry.time_obj.hour * 60 + entry.time_obj.minute) - (earliest_hour * 60))
-                                       / (((latest_hour - earliest_hour) * 60)) * 100%);
-                            width: calc((entry.shift_length / ((latest_hour - earliest_hour) * 60)) * 100%);"
-                     title="{{ entry.name }}: {{ entry.time }} - {{ entry.end_time }} ({{ entry.shift_hours }} hours from {{ entry.shift_start }})">
+                     style="left: calc((({{ entry.time_obj.hour }} * 60 + {{ entry.time_obj.minute }}) - ({{ earliest_hour }} * 60))
+                                       / (({{ latest_hour }} - {{ earliest_hour }}) * 60) * 100%);
+                            width: calc(({{ entry.shift_length }} / (({{ latest_hour }} - {{ earliest_hour }}) * 60)) * 100%);"
+                     title="{{ entry.name }}: {{ entry.time }} - {{ entry.end_time }} ({{ entry.shift_hours }} hours)">
                     <span class="timeline-time">{{ entry.time }}</span>
                     <span class="timeline-shift-length">{{ entry.shift_hours }}h</span>
                     <span class="timeline-end-time">{{ entry.end_time }}</span>
@@ -71,25 +71,71 @@ function loadDate(date) {
 
 // Add timeline scaling function
 function adjustTimelineBars() {
-    const bars = document.querySelectorAll('.timeline-bar');
-    const container = document.querySelector('.timeline-bar-container');
-    const containerWidth = container.offsetWidth;
+    const container = document.querySelector('.timeline-container');
+    if (!container) return;
+
+    const earliestHour = {{ earliest_hour }};
+    const latestHour = {{ latest_hour }};
+    const totalHours = latestHour - earliestHour;
     
-    bars.forEach(bar => {
-        // Ensure times are visible
-        const startTime = bar.querySelector('.timeline-time');
-        const endTime = bar.querySelector('.timeline-end-time');
-        const barWidth = bar.offsetWidth;
+    // Update timeline scale
+    const timelineScale = container.querySelector('.timeline-scale');
+    timelineScale.innerHTML = '';
+    
+    // Create hour markers
+    for (let hour = earliestHour; hour <= latestHour; hour++) {
+        const span = document.createElement('span');
+        span.textContent = `${hour.toString().padStart(2, '0')}:00`;
+        timelineScale.appendChild(span);
+    }
+
+    // Update grid lines for each timeline bar container
+    const barContainers = container.querySelectorAll('.timeline-bar-container');
+    barContainers.forEach(container => {
+        const gridLines = document.createElement('div');
+        gridLines.className = 'timeline-grid-lines';
         
-        if (barWidth < 80) { // If bar is too narrow
-            startTime.style.fontSize = '0.7em';
-            endTime.style.fontSize = '0.7em';
+        // Create vertical grid lines
+        for (let hour = earliestHour; hour <= latestHour; hour++) {
+            const line = document.createElement('div');
+            line.className = 'timeline-grid-line';
+            const position = ((hour - earliestHour) / totalHours) * 100;
+            line.style.left = `${position}%`;
+            gridLines.appendChild(line);
+        }
+        
+        // Remove existing grid lines
+        const existingGridLines = container.querySelector('.timeline-grid-lines');
+        if (existingGridLines) {
+            existingGridLines.remove();
+        }
+        container.appendChild(gridLines);
+    });
+
+    // Adjust visibility of time labels
+    const bars = container.querySelectorAll('.timeline-bar');
+    bars.forEach(bar => {
+        const barWidth = bar.offsetWidth;
+        const startLabel = bar.querySelector('.timeline-time');
+        const endLabel = bar.querySelector('.timeline-end-time');
+        const shiftLabel = bar.querySelector('.timeline-shift-length');
+        
+        if (barWidth < 80) {
+            startLabel.style.fontSize = '0.7em';
+            endLabel.style.fontSize = '0.7em';
+            shiftLabel.style.display = 'none';
             if (barWidth < 60) {
-                endTime.style.display = 'none';
+                endLabel.style.display = 'none';
                 if (barWidth < 40) {
-                    startTime.style.display = 'none';
+                    startLabel.style.display = 'none';
                 }
             }
+        } else {
+            startLabel.style.fontSize = '';
+            endLabel.style.fontSize = '';
+            startLabel.style.display = '';
+            endLabel.style.display = '';
+            shiftLabel.style.display = '';
         }
     });
 }
@@ -120,11 +166,12 @@ window.addEventListener('resize', adjustTimelineBars);
     margin-top: 30px;
 }
 .timeline-scale {
-    display: grid;
-    grid-template-columns: repeat(13, 1fr); /* 13 hours: 7:00 to 19:00 */
+    display: flex;
+    justify-content: space-between;
     margin-bottom: 10px;
     border-bottom: 1px solid #eee;
     padding-bottom: 5px;
+    position: relative;
 }
 
 .timeline-scale span {
@@ -132,15 +179,23 @@ window.addEventListener('resize', adjustTimelineBars);
     color: #666;
     text-align: center;
     position: relative;
+    flex: 1;
 }
 
-.timeline-scale span::after {
-    content: '';
+.timeline-grid-lines {
     position: absolute;
-    bottom: -5px;
-    left: 50%;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    pointer-events: none;
+}
+
+.timeline-grid-line {
+    position: absolute;
+    top: 0;
+    bottom: 0;
     width: 1px;
-    height: 5px;
     background: #eee;
 }
 

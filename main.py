@@ -1094,6 +1094,26 @@ def day_rankings(date=None):
     earliest_hour = 7  # e.g., fallback default
     latest_hour = 19   # e.g., fallback default
     
+    # Calculate earliest and latest hours from the actual data
+    all_times = []
+    for rank in rankings:
+        if rank.get('time'):
+            time_obj = datetime.strptime(rank['time'], '%H:%M')
+            all_times.append(time_obj)
+            if rank.get('end_time'):
+                end_obj = datetime.strptime(rank['end_time'], '%H:%M')
+                all_times.append(end_obj)
+
+    earliest_hour = 7  # Default earliest
+    latest_hour = 19  # Default latest
+    
+    if all_times:
+        earliest_time = min(all_times)
+        latest_time = max(all_times)
+        # Round down/up to nearest hour
+        earliest_hour = max(7, earliest_time.hour)  # Don't go earlier than 7am
+        latest_hour = min(19, latest_time.hour + 1)  # Don't go later than 7pm
+
     return render_template("day_rankings.html", 
                          rankings=rankings,
                          date=date,

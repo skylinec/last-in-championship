@@ -1,5 +1,5 @@
 from flask import Flask, request, jsonify, render_template, session, redirect, url_for
-from sqlalchemy import create_engine, Column, Integer, String, DateTime, Float, JSON, event, text, Boolean, inspect
+from sqlalchemy import create_engine, Column, Integer, String, DateTime, Date, Float, JSON, event, text, Boolean, inspect
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from datetime import datetime, timedelta, date  # Add date import
@@ -73,6 +73,7 @@ class Settings(Base):
     streak_multiplier = Column(Float, default=0.5)  # Points multiplier per day in streak
     streaks_enabled = Column(Boolean, default=False)
     streak_bonus = Column(Float, default=0.5)
+    monitoring_start_date = Column(Date, default=lambda: datetime.now().replace(month=1, day=1))
 
 class AuditLog(Base):
     __tablename__ = "audit_log"

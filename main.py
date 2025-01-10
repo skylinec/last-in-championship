@@ -1223,17 +1223,28 @@ def modify_entry(entry_id):
 
 def normalize_settings(settings_dict):
     """Normalize settings dictionary for consistent comparison"""
+    # Extract point values, handling nested dictionaries
+    points = settings_dict.get("points", {})
+    normalized_points = {
+        "in_office": int(points.get("in_office", 0)),
+        "remote": int(points.get("remote", 0)), 
+        "sick": int(points.get("sick", 0)),
+        "leave": int(points.get("leave", 0)),
+        "shift_length": float(points.get("shift_length", 9)),
+        "daily_shifts": points.get("daily_shifts", {}),
+        "working_days": points.get("working_days", {}),
+        "rules": points.get("rules", [])
+    }
+
     return {
-        "points": {
-            "in_office": int(settings_dict["points"]["in_office"]),
-            "remote": int(settings_dict["remote"]),
-            "sick": int(settings_dict["sick"]),
-            "leave": int(settings_dict["leave"])
-        },
-        "late_bonus": float(settings_dict["late_bonus"]),
+        "points": normalized_points,
+        "late_bonus": float(settings_dict.get("late_bonus", 0)),
         "remote_days": {
             user: sorted(days) for user, days in settings_dict.get("remote_days", {}).items()
-        }
+        },
+        "core_users": sorted(settings_dict.get("core_users", [])),
+        "enable_streaks": bool(settings_dict.get("enable_streaks", False)),
+        "streak_multiplier": float(settings_dict.get("streak_multiplier", 0.5))
     }
 
 @app.route("/settings", methods=["GET", "POST"])
@@ -1243,7 +1254,6 @@ def manage_settings():
     try:
         if request.method == "GET":
             settings_data = load_settings()
-            # Get list of registered users from database
             registered_users = [user[0] for user in db.query(User.username).all()]
             core_users = settings_data.get("core_users", [])
             
@@ -1256,76 +1266,48 @@ def manage_settings():
                 rules=settings_data.get("points", {}).get("rules", [])
             )
         else:
-            old_settings = db.query(Settings).first()
-            new_settings = request.json
-            
-            # Normalize both old and new settings for comparison
-            if old_settings:
-                old_data = {
-                    "points": dict(old_settings.points),
-                    "late_bonus": float(old_settings.late_bonus),
-                    "remote_days": dict(old_settings.remote_days),
-                    "core_users": list(old_settings.core_users),
-                    "enable_streaks": old_settings.enable_streaks,
-                    "streak_multiplier": old_settings.streak_multiplier,
-                    "streaks_enabled": old_settings.streaks_enabled,
-                    "streak_bonus": old_settings.streak_bonus
-                }
-            
-            # Update database and get normalized new settings
-            normalized_new = {
-                "points": {k: int(v) for k, v in new_settings["points"].items()},
-                "late_bonus": float(new_settings["late_bonus"]),
-                "remote_days": {k: sorted(v) for k, v in new_settings.get("remote_days", {}).items()},
-                "core_users": sorted(new_settings.get("core_users", [])),
-                "enable_streaks": new_settings.get("enable_streaks", False),
-                "streak_multiplier": float(new_settings.get("streak_multiplier", 0.5)),
-                "streaks_enabled": new_settings.get("streaks_enabled", False),
-                "streak_bonus": float(new_settings.get("streak_bonus", 0.5))
-            }
-
-            if old_settings:
-                old_settings.points = normalized_new["points"]
-                old_settings.late_bonus = normalized_new["late_bonus"]
-                old_settings.remote_days = normalized_new["remote_days"]
-                old_settings.core_users = normalized_new["core_users"]
-                old_settings.enable_streaks = normalized_new["enable_streaks"]
-                old_settings.streak_multiplier = normalized_new["streak_multiplier"]
-                old_settings.streaks_enabled = normalized_new["streaks_enabled"]
-                old_settings.streak_bonus = normalized_new["streak_bonus"]
-            else:
-                settings = Settings(**normalized_new)
-                db.add(settings)
-            
-            db.commit()
-            
-            # Log audit with the actual changes
-            log_audit(
-                "update_settings",
-                session['user'],
-                "Updated settings",
-                old_data=old_data if old_settings else None,
-                new_data=normalized_new
-            )
-            
-            # If streaks were enabled, generate them
-            if normalized_new["enable_streaks"] and (not old_settings or not old_settings.enable_streaks):
-                generate_streaks()
-            
-            settings = db.query(Settings).first()
-            if settings:
-                rules_json = request.form.get("rules")
-                if rules_json:
-                    rules_data = json.loads(rules_json)
-                    settings.points["rules"] = rules_data
-                    db.commit()
-            
-            return jsonify({"message": "Settings updated successfully"})
-            
+            try:
+                old_settings = db.query(Settings).first()
+                new_settings = request.json
+                
+                # Normalize and validate settings
+                normalized_settings = normalize_settings(new_settings)
+                
+                if old_settings:
+                    # Update existing settings
+                    old_settings.points = normalized_settings["points"]
+                    old_settings.late_bonus = normalized_settings["late_bonus"]
+                    old_settings.remote_days = normalized_settings["remote_days"]
+                    old_settings.core_users = normalized_settings["core_users"]
+                    old_settings.enable_streaks = normalized_settings["enable_streaks"]
+                    old_settings.streak_multiplier = normalized_settings["streak_multiplier"]
+                else:
+                    # Create new settings
+                    settings = Settings(**normalized_settings)
+                    db.add(settings)
+                
+                db.commit()
+                
+                # Log the update
+                log_audit(
+                    "update_settings",
+                    session['user'],
+                    "Updated settings",
+                    old_data=old_settings.__dict__ if old_settings else None,
+                    new_data=normalized_settings
+                )
+                
+                return jsonify({"message": "Settings updated successfully"})
+                
+            except (ValueError, TypeError, KeyError) as e:
+                db.rollback()
+                app.logger.error(f"Error managing settings: {str(e)}")
+                return jsonify({"error": f"Invalid settings data: {str(e)}"}), 400
+                
     except Exception as e:
         db.rollback()
         app.logger.error(f"Error managing settings: {str(e)}")
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": f"Server error: {str(e)}"}), 500
     finally:
         db.close()
 

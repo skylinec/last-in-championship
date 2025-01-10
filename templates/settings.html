@@ -186,48 +186,9 @@
                 <h2>Scoring Rules Editor</h2>
                 <span class="close">&times;</span>
             </div>
-            
-            <div class="rules-documentation">
-                <h3>How Rules Work</h3>
-                <p>Rules are evaluated in order from top to bottom. Each rule consists of a condition and an action.</p>
-                
-                <h4>Available Conditions:</h4>
-                <ul>
-                    <li><strong>Arrival Time:</strong> Check when someone arrives (e.g., "if arrival before 09:00")</li>
-                    <li><strong>Work Status:</strong> Check how they're working (e.g., "if working in-office")</li>
-                    <li><strong>Day Type:</strong> Check the type of day (e.g., "if day is Monday")</li>
-                    <li><strong>Streak Length:</strong> Check consecutive attendance (e.g., "if streak > 5")</li>
-                </ul>
-
-                <h4>Available Actions:</h4>
-                <ul>
-                    <li><strong>Award Points:</strong> Add a fixed number of points</li>
-                    <li><strong>Multiply Points:</strong> Multiply current points by a factor</li>
-                    <li><strong>Add Streak Bonus:</strong> Add points based on streak length</li>
-                </ul>
-
-                <div class="rule-examples">
-                    <h4>Example Rules:</h4>
-                    <pre class="example-rule">
-# Early Bird Bonus
-if arrival before 09:00
-award 2 points
-
-# Office Attendance
-if working in-office
-award 10 points
-
-# Remote Work
-if working remote
-award 8 points
-
-# Long Streak Bonus
-if streak > 5
-multiply points by 1.5</pre>
-                </div>
-            </div>
 
             <div class="scoring-dsl-container">
+                <!-- Move scoring blocks above documentation -->
                 <div class="scoring-blocks-palette">
                     <h3>Available Blocks</h3>
                     <div class="block-category">
@@ -261,7 +222,7 @@ multiply points by 1.5</pre>
                 
                 <div class="scoring-rules-builder">
                     <h3>Current Rules</h3>
-                    <div id="rulesContainer" class="rules-container">
+                    <div id="rulesContainer" class="rules-container scrollable-container">
                         <!-- Rules will be added here -->
                     </div>
                     <div class="rules-actions">
@@ -277,6 +238,49 @@ multiply points by 1.5</pre>
                     <div class="test-results" style="display: none">
                         <h3>Test Results</h3>
                         <div id="testResults"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Add documentation section below the editor -->
+            <div class="rules-documentation-section">
+                <div class="rules-documentation scrollable-container">
+                    <h3>How Rules Work</h3>
+                    <p>Rules are evaluated in order from top to bottom. Each rule consists of a condition and an action.</p>
+                    
+                    <h4>Available Conditions:</h4>
+                    <ul>
+                        <li><strong>Arrival Time:</strong> Check when someone arrives (e.g., "if arrival before 09:00")</li>
+                        <li><strong>Work Status:</strong> Check how they're working (e.g., "if working in-office")</li>
+                        <li><strong>Day Type:</strong> Check the type of day (e.g., "if day is Monday")</li>
+                        <li><strong>Streak Length:</strong> Check consecutive attendance (e.g., "if streak > 5")</li>
+                    </ul>
+
+                    <h4>Available Actions:</h4>
+                    <ul>
+                        <li><strong>Award Points:</strong> Add a fixed number of points</li>
+                        <li><strong>Multiply Points:</strong> Multiply current points by a factor</li>
+                        <li><strong>Add Streak Bonus:</strong> Add points based on streak length</li>
+                    </ul>
+
+                    <div class="rule-examples">
+                        <h4>Example Rules:</h4>
+                        <pre class="example-rule">
+# Early Bird Bonus
+if arrival before 09:00
+award 2 points
+
+# Office Attendance
+if working in-office
+award 10 points
+
+# Remote Work
+if working remote
+award 8 points
+
+# Long Streak Bonus
+if streak > 5
+multiply points by 1.5</pre>
                     </div>
                 </div>
             </div>
@@ -438,39 +442,6 @@ multiply points by 1.5</pre>
                 </div>
             </div>
             {% endif %}
-        </div>
-
-        <!-- Add documentation section in the info column -->
-        <div class="info-section">
-            <h3>Scoring Rules System</h3>
-            <p>Create custom scoring rules using conditions and actions:</p>
-            
-            <h4>Available Conditions:</h4>
-            <ul>
-                <li><strong>Arrival Time:</strong> Check when someone arrives (e.g., before 9:00)</li>
-                <li><strong>Work Status:</strong> Check if working in-office, remote, etc.</li>
-                <li><strong>Day Type:</strong> Check if it's a weekday, weekend, or specific day</li>
-                <li><strong>Streak Length:</strong> Check consecutive attendance days</li>
-            </ul>
-
-            <h4>Available Actions:</h4>
-            <ul>
-                <li><strong>Award Points:</strong> Give a fixed number of points</li>
-                <li><strong>Apply Multiplier:</strong> Multiply current points by a value</li>
-                <li><strong>Add Streak Bonus:</strong> Add points based on streak length</li>
-            </ul>
-
-            <h4>Example Rules:</h4>
-            <pre class="rule-example">
-if arrival before 09:00
-award 2 points
-
-if working in-office
-award 10 points
-
-if streak > 5
-multiply points by 1.5
-            </pre>
         </div>
 
         <div class="example-box">
@@ -896,6 +867,11 @@ scoring-explanation ul li::before {
     max-width: 1200px;
     border-radius: 8px;
     box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    max-height: 90vh;
+    overflow: hidden;
 }
 
 .modal-header {
@@ -1104,6 +1080,59 @@ scoring-explanation ul li::before {
 
 .test-result.failure {
     color: #dc3545;
+}
+
+.rules-documentation-section {
+    padding: 20px;
+    background: #f8f9fa;
+    border-radius: 8px;
+    margin-top: 20px;
+}
+
+.scrollable-container {
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: var(--accent-color) #f0f0f0;
+}
+
+.scrollable-container::-webkit-scrollbar {
+    width: 8px;
+}
+
+.scrollable-container::-webkit-scrollbar-track {
+    background: #f0f0f0;
+    border-radius: 4px;
+}
+
+.scrollable-container::-webkit-scrollbar-thumb {
+    background: var(--accent-color);
+    border-radius: 4px;
+}
+
+.rules-container {
+    min-height: 200px;
+    max-height: 300px;
+    padding: 15px;
+    background: white;
+    border-radius: 6px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.scoring-blocks-palette {
+    background: white;
+    padding: 15px;
+    border-radius: 6px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.rules-documentation {
+    max-height: 300px;
+    padding: 15px;
+    background: white;
+    border-radius: 6px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
 }
 </style>
 

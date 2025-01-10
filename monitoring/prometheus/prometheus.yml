@@ -7,13 +7,3 @@ scrape_configs:
     static_configs:
       - targets: ['web:9000']
     scrape_interval: 5s
-    scheme: http
-
-  - job_name: 'nginx'
-    static_configs:
-      - targets: ['proxy:80']
-    metrics_path: /nginx_status
-
-  - job_name: 'db'
-    static_configs:
-      - targets: ['db:5432']

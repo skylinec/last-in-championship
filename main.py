@@ -30,6 +30,12 @@ logger = logging.getLogger(__name__)
 app = Flask(__name__)
 app.secret_key = os.getenv('SECRET_KEY', 'dev-secret-key')  # Default for development
 
+# Set up the metrics middleware properly
+metrics_app = make_wsgi_app()
+app.wsgi_app = DispatcherMiddleware(app.wsgi_app, {
+    '/metrics': metrics_app
+})
+
 # Add this after the app creation and before route definitions
 def today():
     """Return today's date for template use"""
@@ -3137,11 +3143,6 @@ if __name__ == "__main__":
     # Remove the start_http_server call as we're using WSGI middleware now
     start_metrics_updater()  # Start metrics updater
     debug_mode = os.getenv('FLASK_ENV') == 'development'
-    
-    # Set up the WSGI middleware
-    app.wsgi_app = DispatcherMiddleware(app.wsgi_app, {
-        '/metrics': make_wsgi_app()
-    })
     
     app.run(
         host=os.getenv('FLASK_HOST', '0.0.0.0'),

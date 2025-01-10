@@ -683,8 +683,21 @@ def compare_values(val1, val2, operator):
 
 def calculate_daily_score(entry, settings, position=None, total_entries=None, mode='last-in'):
     """Calculate score for a single day's entry with all bonuses"""
-    # Check if it's a working day for this user
+    # Get day-specific start time for late calculations
     entry_date = datetime.strptime(entry["date"], '%Y-%m-%d')
+    weekday = entry_date.strftime('%A').lower()
+    day_shift = settings["points"].get("daily_shifts", {}).get(weekday, {
+        "hours": settings["points"].get("shift_length", 9),
+        "start": "09:00"
+    })
+    
+    shift_start = datetime.strptime(day_shift["start"], "%H:%M").time()
+    entry_time = datetime.strptime(entry["time"], "%H:%M").time()
+    
+    # Modify late arrival logic to use configured start time
+    is_late = entry_time > shift_start
+
+    # Check if it's a working day for this user
     day_name = entry_date.strftime('%a').lower()
     user_working_days = settings.get("points", {}).get("working_days", {}).get(entry["name"], ['mon','tue','wed','thu','fri'])
     

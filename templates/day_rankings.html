@@ -44,9 +44,9 @@
             <span class="timeline-name">{{ entry.name }}</span>
             <div class="timeline-bar-container">
                 <div class="timeline-bar" 
-                     style="left: {{ ((entry.time_obj.hour * 60 + entry.time_obj.minute - 420) / 720) * 100 }}%; 
-                            width: {{ (entry.shift_length / 720) * 100 }}%"
-                     title="{{ entry.name }}: {{ entry.time }} - {{ entry.end_time }} ({{ entry.shift_hours }} hours)">
+                     style="left: {{ ((entry.time_obj.hour * 60 + entry.time_obj.minute - (start_hour * 60 + start_minute)) / (12 * 60)) * 100 }}%; 
+                            width: {{ (entry.shift_length / (12 * 60)) * 100 }}%"
+                     title="{{ entry.name }}: {{ entry.time }} - {{ entry.end_time }} ({{ entry.shift_hours }} hours from {{ entry.shift_start }})">
                     <span class="timeline-time">{{ entry.time }}</span>
                     <span class="timeline-shift-length">{{ entry.shift_hours }}h</span>
                     <span class="timeline-end-time">{{ entry.end_time }}</span>

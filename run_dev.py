@@ -7,6 +7,11 @@ def generate_demo_data():
     """Generate demo data for development environment starting from January 1st"""
     db = SessionLocal()
     try:
+        existing_users = db.query(Entry).count()
+        if existing_users > 0:
+            print("Test data already exists; skipping creation.")
+            return
+
         # Define demo users with their typical arrival patterns
         users = {
             "Alex Smith": {"early": 0.7, "time_range": (8, 9)},
@@ -29,6 +34,11 @@ def generate_demo_data():
                 continue
                 
             for username, patterns in users.items():
+                existing_user = db.query(User).filter_by(username=username).first()
+                if not existing_user:
+                    new_user = User(username=username, password="demo")
+                    db.add(new_user)
+
                 # 90% chance of attendance on regular days, lower on mondays/fridays
                 attendance_chance = 0.9
                 if date.weekday() in [0, 4]:  # Monday or Friday

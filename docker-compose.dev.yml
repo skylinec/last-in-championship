@@ -36,5 +36,15 @@ services:
       timeout: 5s
       retries: 5
 
+  monitoring:
+    build: 
+      context: ./monitoring
+      dockerfile: Dockerfile
+    environment:
+      - DATABASE_URL=${DATABASE_URL}
+      - MONITORING_INTERVAL=300000
+    depends_on:
+      - db
+
 volumes:
   postgres_dev_data:

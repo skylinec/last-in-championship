@@ -1429,13 +1429,17 @@ function handleDragEnd(e) {
 function handleDragOver(e) {
     e.preventDefault();
     e.dataTransfer.dropEffect = 'move';
-    const afterElement = getDragAfterElement(e.target, e.clientY);
-    const draggable = document.querySelector('.dragging');
-    if (draggable) {
-        if (afterElement) {
-            e.target.insertBefore(draggable, afterElement);
-        } else {
-            e.target.appendChild(draggable);
+    
+    // Fix: Only handle drag-and-drop if target is the rules container
+    if (e.target.id === 'rulesContainer') {
+        const afterElement = getDragAfterElement(e.target, e.clientY);
+        const draggable = document.querySelector('.dragging');
+        if (draggable) {
+            if (afterElement) {
+                e.target.insertBefore(draggable, afterElement);
+            } else {
+                e.target.appendChild(draggable);
+            }
         }
     }
 }
@@ -1493,8 +1497,10 @@ function createRuleBlock(type, template) {
     block.className = 'rule-block';
     block.dataset.type = type;
     block.draggable = true;
-    block.addEventListener('dragstart', handleRuleDragStart);
-    block.addEventListener('dragend', handleDragEnd);
+    
+    // Create content container
+    const content = document.createElement('div');
+    content.className = 'rule-content';
     
     const templateParts = template.split(/[{}]/);
     templateParts.forEach(part => {
@@ -1508,17 +1514,19 @@ function createRuleBlock(type, template) {
                     <option value=">=">at or after</option>
                     <option value="<=">at or before</option>
                 `;
-                block.appendChild(select);
+                content.appendChild(select);
             } else if (part.includes('time')) {
                 const input = document.createElement('input');
                 input.type = 'time';
                 input.value = '09:00';
-                block.appendChild(input);
+                content.appendChild(input);
             } else if (part.includes('value') || part.includes('points')) {
                 const input = document.createElement('input');
                 input.type = 'number';
+                input.min = '0';
+                input.step = '0.1';
                 input.placeholder = part;
-                block.appendChild(input);
+                content.appendChild(input);
             } else if (part.includes('status')) {
                 const select = document.createElement('select');
                 select.innerHTML = `
@@ -1527,7 +1535,7 @@ function createRuleBlock(type, template) {
                     <option value="sick">sick</option>
                     <option value="leave">leave</option>
                 `;
-                block.appendChild(select);
+                content.appendChild(select);
             } else if (part.includes('day')) {
                 const select = document.createElement('select');
                 select.innerHTML = `
@@ -1536,21 +1544,35 @@ function createRuleBlock(type, template) {
                     <option value="monday">Monday</option>
                     <option value="friday">Friday</option>
                 `;
-                block.appendChild(select);
+                content.appendChild(select);
             } else {
                 const span = document.createElement('span');
                 span.textContent = part;
-                block.appendChild(span);
+                content.appendChild(span);
             }
         }
     });
 
+    // Add content to block
+    block.appendChild(content);
+
+    // Add delete button
     const deleteBtn = document.createElement('button');
     deleteBtn.textContent = '✕';
-    deleteBtn.onclick = () => block.remove();
+    deleteBtn.className = 'delete-rule';
+    deleteBtn.onclick = () => {
+        block.remove();
+        updateRulePreview();
+    };
     block.appendChild(deleteBtn);
 
-    document.getElementById('rulesContainer').appendChild(block);
+    // Add event listeners
+    block.addEventListener('dragstart', handleRuleDragStart);
+    block.addEventListener('dragend', handleDragEnd);
+
+    // Append to container
+    const container = document.getElementById('rulesContainer');
+    container.appendChild(block);
     updateRulePreview();
 }
 
@@ -1639,12 +1661,20 @@ function saveRules() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(settings)
     })
-    .then(response => response.json())
+    .then(response => {
+        if (!response.ok) {
+            throw new Error('Server returned ' + response.status);
+        }
+        return response.json();
+    })
     .then(result => {
         alert('Rules saved successfully!');
         document.getElementById('rulesEditorModal').style.display = 'none';
     })
-    .catch(error => alert('Error saving rules: ' + error));
+    .catch(error => {
+        console.error('Error saving rules:', error);
+        alert('Error saving rules: ' + error.message);
+    });
 }
 
 // Add helper function to format rules preview

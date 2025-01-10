@@ -998,7 +998,6 @@ def day_rankings(date=None):
     day_entries.sort(key=lambda x: datetime.strptime(x["time"], "%H:%M"))
     
     # Get shift length based on the day
-    settings = load_settings()
     weekday = datetime.strptime(date, '%Y-%m-%d').strftime('%A').lower()
     day_shift = settings["points"].get("daily_shifts", {}).get(weekday, {
         "hours": settings["points"].get("shift_length", 9),
@@ -1008,6 +1007,8 @@ def day_rankings(date=None):
     shift_length_hours = float(day_shift["hours"])
     shift_length_minutes = int(shift_length_hours * 60)
     shift_start = datetime.strptime(day_shift["start"], "%H:%M")
+    start_hour = shift_start.hour
+    start_minute = shift_start.minute
     
     # Calculate points and prepare rankings
     rankings = []
@@ -1037,7 +1038,9 @@ def day_rankings(date=None):
     return render_template("day_rankings.html", 
                          rankings=rankings,
                          date=date,
-                         mode=mode)  # Pass mode to template
+                         mode=mode,
+                         start_hour=start_hour,
+                         start_minute=start_minute)  # Pass start_hour and start_minute to template
 
 # Update the get_entries route to handle the new filters
 @app.route("/edit", methods=["GET"])
@@ -1861,9 +1864,14 @@ def update_user_streak(username, attendance_date):
         # Convert attendance_date to datetime if it's a string
         if isinstance(attendance_date, str):
             attendance_date = datetime.strptime(attendance_date, '%Y-%m-%d')
+        
+        # Ensure we're comparing dates, not mixing date and datetime
+        attendance_date = attendance_date.date() if isinstance(attendance_date, datetime) else attendance_date
 
         if streak.last_attendance:
-            days_diff = (attendance_date - streak.last_attendance.date()).days
+            # Convert last_attendance to date for comparison
+            last_date = streak.last_attendance.date()
+            days_diff = (attendance_date - last_date).days
             if days_diff <= 3:  # Allow for weekends
                 streak.current_streak += 1
             else:
@@ -1871,7 +1879,8 @@ def update_user_streak(username, attendance_date):
         else:
             streak.current_streak = 1
 
-        streak.last_attendance = attendance_date
+        # Store the full datetime
+        streak.last_attendance = datetime.combine(attendance_date, datetime.min.time())
         streak.max_streak = max(streak.max_streak, streak.current_streak)
         db.commit()
     finally:

@@ -162,48 +162,6 @@
                 </div>
             </div>
 
-            <div class="settings-section">
-                <h2>Schedule Configuration</h2>
-                <div class="form-group">
-                    <label for="shift_length">Default Shift Length (hours):</label>
-                    <input type="number" id="shift_length" name="points.shift_length" 
-                           value="{{ settings.points.shift_length|default(9) }}" min="4" max="12" step="0.5">
-                    <p class="helper-text">Used for timeline visualization and work period calculations</p>
-                </div>
-
-                <h3>Working Days</h3>
-                <p class="helper-text">Select working days for each core member. Only selected days are used in point calculations.</p>
-                <div class="working-days-table">
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>User</th>
-                                <th>Mon</th>
-                                <th>Tue</th>
-                                <th>Wed</th>
-                                <th>Thu</th>
-                                <th>Fri</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for user in core_users %}
-                            <tr class="user-row" data-user="{{ user }}">
-                                <td>{{ user }}</td>
-                                {% for day in ['mon', 'tue', 'wed', 'thu', 'fri'] %}
-                                <td>
-                                    <input type="checkbox" 
-                                           name="points.working_days.{{ user }}"
-                                           value="{{ day }}"
-                                           {% if day in settings.points.get('working_days', {}).get(user, ['mon','tue','wed','thu','fri']) %}checked{% endif %}>
-                                </td>
-                                {% endfor %}
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-
             <button type="submit" class="save-button">Save All Settings</button>
         </form>
     </div>
@@ -463,6 +421,34 @@ multiply points by 1.5
                 <li>Remote work and office attendance only count on working days</li>
             </ul>
         </div>
+        <div class="example-box">
+                <h4>Working Hours and Schedules</h4>
+                <ul>
+                    <li>Default shift length: {{ settings.points.shift_length|default(9) }} hours</li>
+                    <li>Custom shift lengths can be set per weekday</li>
+                    <li>Start times affect late arrival calculations</li>
+                    <li>Timeline visualization reflects day-specific schedules</li>
+                </ul>
+                
+                <h5>Current Daily Schedules:</h5>
+                <table class="example-table">
+                    <tr>
+                        <th>Day</th>
+                        <th>Hours</th>
+                        <th>Start Time</th>
+                        <th>End Time</th>
+                    </tr>
+                    {% for day in ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'] %}
+                    {% set shift = settings.points.get('daily_shifts', {}).get(day|lower, {'hours': settings.points.shift_length|default(9), 'start': '09:00'}) %}
+                    <tr>
+                        <td>{{ day }}</td>
+                        <td>{{ shift.hours }}</td>
+                        <td>{{ shift.start }}</td>
+                        <td>{{ (shift.start|time_to_minutes + (shift.hours * 60))|minutes_to_time }}</td>
+                    </tr>
+                    {% endfor %}
+                </table>
+            </div>
     </div>
 </div>
 

@@ -2990,26 +2990,23 @@ def missing_entries():
         settings = db.query(Settings).first()
         start_date = settings.monitoring_start_date if settings else datetime.now().replace(month=1, day=1).date()
 
-        # Get entries with proper text expressions
-        entries = db.query(
-            text('date'),
-            text('checked_at')
-        ).from_self(
-            text('missing_entries')
-        ).filter(
-            text('date >= :start_date')
-        ).params(
-            start_date=start_date
-        ).all()
+        # Create table aliases for clarity
+        MissingEntries = db.query('missing_entries').column_descriptions[0]['type']
+        
+        # Get missing entries using native SQL via text()
+        missing = db.execute(
+            text("""
+                SELECT date, checked_at 
+                FROM missing_entries 
+                WHERE date >= :start_date 
+                ORDER BY date DESC
+            """),
+            {"start_date": start_date}
+        ).fetchall()
 
-        # Get core users for comparison
+        # Get core users and attendance records
         core_users = get_core_users()
-
-        # Get all attendance records
-        attendance = db.query(
-            Entry.date,
-            Entry.name
-        ).filter(
+        attendance = db.query(Entry.date, Entry.name).filter(
             Entry.date >= start_date
         ).all()
 
@@ -3020,7 +3017,7 @@ def missing_entries():
 
         # Format missing entries
         formatted_entries = []
-        for entry in entries:
+        for entry in missing:
             present_users = attendance_by_date.get(entry.date, [])
             missing_users = [user for user in core_users if user not in present_users]
             

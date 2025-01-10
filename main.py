@@ -3228,3 +3228,22 @@ def receive_checkout(dbapi_connection, connection_record, connection_proxy):
 @event.listens_for(engine, "checkin")
 def receive_checkin(dbapi_connection, connection_record):
     DB_CONNECTIONS.dec()
+
+# Add a new endpoint to handle loading and saving rules
+@app.route("/api/rules", methods=["GET", "POST"])
+def handle_rules():
+    db = SessionLocal()
+    try:
+        if request.method == "GET":
+            settings = db.query(Settings).first()
+            return jsonify(settings.points.get("rules", []))
+        else:
+            new_rules = request.json.get("rules", [])
+            settings = db.query(Settings).first()
+            points = settings.points
+            points["rules"] = new_rules
+            settings.points = points
+            db.commit()
+            return jsonify({"status": "ok"})
+    finally:
+        db.close()

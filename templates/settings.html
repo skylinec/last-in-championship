@@ -872,6 +872,7 @@ scoring-explanation ul li::before {
     gap: 20px;
     max-height: 90vh;
     overflow: hidden;
+    overflow-y: auto;
 }
 
 .modal-header {
@@ -1976,5 +1977,31 @@ function collectRulesFromEditor() {
 
 // ...rest of existing code...
 var settings = {{ settings_data|tojson|safe }} || {};
+</script>
+<script>
+    // ...existing code...
+    function openRulesEditor() {
+        fetch("/api/rules")
+            .then(response => response.json())
+            .then(rules => {
+                // ...existing code...
+                document.getElementById("rulesContainer").innerText = JSON.stringify(rules, null, 2);
+                document.getElementById("rulePreview").innerText = JSON.stringify(rules, null, 2);
+            });
+    }
+    function testRules() {
+        alert("Test your rules here");
+        // ...existing code...
+    }
+    function saveRules() {
+        const currentRules = JSON.parse(document.getElementById("rulesContainer").innerText || "[]");
+        fetch("/api/rules", {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({rules: currentRules})
+        }).then(() => {
+            alert("Rules saved successfully");
+        });
+    }
 </script>
 {% endblock %}

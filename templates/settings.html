@@ -1212,78 +1212,32 @@ function testRules() {
 }
 function saveRules() {
     const rules = collectRulesFromEditor();
-    
-    // Get current form data
-    const formData = new FormData(document.getElementById('settingsForm'));
-    const current_settings = load_settings();  // Get existing settings
-    
-    // Build settings object
-    const settings = {
-        points: {
-            in_office: parseInt(formData.get('points.in_office')),
-            remote: parseInt(formData.get('points.remote')),
-            sick: parseInt(formData.get('points.sick')),
-            leave: parseInt(formData.get('points.leave')),
-            shift_length: parseFloat(formData.get('points.shift_length')),
-            daily_shifts: {},
-            rules: rules  // Add rules here
-        },
-        late_bonus: parseFloat(formData.get('late_bonus')),
-        remote_days: {},
-        core_users: Array.from(document.querySelectorAll('.core-user-checkbox:checked'))
-                       .map(checkbox => checkbox.value),
-        enable_streaks: document.getElementById('enable_streaks').checked,
-        streak_multiplier: parseFloat(document.getElementById('streak_multiplier').value),
-        monitoring_start_date: formData.get('monitoring_start_date')
-    };
-
-    // Collect daily shifts
-    ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'].forEach(day => {
-        settings.points.daily_shifts[day] = {
-            hours: parseFloat(formData.get(`points.daily_shifts.${day}.hours`)) || 9,
-            start: formData.get(`points.daily_shifts.${day}.start`) || '09:00'
-        };
-    });
-
-    // Collect remote days
-    document.querySelectorAll('.user-row').forEach(row => {
-        const user = row.dataset.user;
-        const days = [];
-        row.querySelectorAll('input[type="checkbox"]:checked').forEach(checkbox => {
-            days.push(checkbox.value);
-        });
-        settings.remote_days[user] = days;
-    });
-
-    // Update rules in settings
     document.getElementById('rulesInput').value = JSON.stringify(rules);
-
-    // Send to server
-    fetch('/settings', {
+    
+    // Send rules directly to the API endpoint
+    fetch('/api/rules', {
         method: 'POST',
         headers: { 
             'Content-Type': 'application/json',
             'Accept': 'application/json'
         },
-        body: JSON.stringify(settings)
+        body: JSON.stringify({ rules: rules })
     })
     .then(response => {
         if (!response.ok) {
-            return response.json().then(err => {
-                throw new Error(err.message || `Server returned ${response.status}`);
-            });
+            throw new Error('Server returned ' + response.status);
         }
         return response.json();
     })
     .then(result => {
-        alert('Settings and rules saved successfully!');
+        alert('Rules saved successfully!');
         document.getElementById('rulesEditorModal').style.display = 'none';
         // Reload page to show updated settings
         window.location.reload();
     })
     .catch(error => {
-        console.error('Error saving settings:', error);
-        alert('Error saving settings: ' + error.message);
+        console.error('Error saving rules:', error);
+        alert('Error saving rules: ' + error.message);
     });
 }
 

@@ -3231,6 +3231,7 @@ def receive_checkin(dbapi_connection, connection_record):
 
 # Add a new endpoint to handle loading and saving rules
 @app.route("/api/rules", methods=["GET", "POST"])
+@login_required  # Add login requirement
 def handle_rules():
     db = SessionLocal()
     try:

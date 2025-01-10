@@ -2976,44 +2976,60 @@ def missing_entries():
     try:
         # Get monitoring start date
         settings = db.query(Settings).first()
-        start_date = settings.monitoring_start_date if settings else datetime.now().replace(month=1, day=1)
+        start_date = settings.monitoring_start_date if settings else datetime.now().replace(month=1, day=1).date()
 
-        # Get missing entries with user information
-        missing = db.query(
-            Entry.date,
-            func.array_agg(Entry.name).label('present_users')
-        ).group_by(Entry.date).subquery()
-
+        # Get entries with proper text expressions
         entries = db.query(
-            'missing_entries.date',
-            'missing_entries.checked_at'
-        ).select_from(
+            text('date'),
+            text('checked_at')
+        ).from_self(
             text('missing_entries')
         ).filter(
             text('date >= :start_date')
-        ).params(start_date=start_date).all()
+        ).params(
+            start_date=start_date
+        ).all()
 
-        # Get core users
+        # Get core users for comparison
         core_users = get_core_users()
 
-        # Format entries with missing users
+        # Get all attendance records
+        attendance = db.query(
+            Entry.date,
+            Entry.name
+        ).filter(
+            Entry.date >= start_date
+        ).all()
+
+        # Group attendance by date
+        attendance_by_date = defaultdict(list)
+        for record in attendance:
+            attendance_by_date[record.date].append(record.name)
+
+        # Format missing entries
         formatted_entries = []
         for entry in entries:
-            present_users = []
-            missing_users = [u for u in core_users if u not in present_users]
-            formatted_entries.append({
-                'date': entry.date,
-                'checked_at': entry.checked_at,
-                'missing_users': missing_users
-            })
+            present_users = attendance_by_date.get(entry.date, [])
+            missing_users = [user for user in core_users if user not in present_users]
+            
+            if missing_users:  # Only include dates with missing users
+                formatted_entries.append({
+                    'date': entry.date,
+                    'checked_at': entry.checked_at,
+                    'missing_users': missing_users
+                })
 
         return render_template(
             "missing_entries.html",
             missing_entries=formatted_entries,
-            start_date=start_date
+            start_date=start_date.strftime('%Y-%m-%d')
         )
+    
+    except Exception as e:
+        app.logger.error(f"Error retrieving missing entries: {str(e)}")
+        return render_template("error.html", message="Failed to retrieve missing entries")
     finally:
         db.close()
-
+        
 if __name__ == "__main__":
     app.run(debug=True)

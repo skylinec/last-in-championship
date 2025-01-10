@@ -14,7 +14,7 @@ from threading import Thread
 from werkzeug.middleware.dispatcher import DispatcherMiddleware
 
 # Add these imports near the top
-from metrics import metrics, record_request_metric, update_attendance_metrics, record_db_operation, record_audit_action
+from metrics import DB_CONNECTIONS, metrics, record_request_metric, update_attendance_metrics, record_db_operation, record_audit_action
 from werkzeug.middleware.dispatcher import DispatcherMiddleware
 from prometheus_client import make_wsgi_app
 import time

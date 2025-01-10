@@ -13,6 +13,16 @@ import json  # Add explicit json import
 app = Flask(__name__)
 app.secret_key = os.getenv('SECRET_KEY', 'supersecretkey')
 
+# Add this after the app creation and before route definitions
+def today():
+    """Return today's date for template use"""
+    return datetime.now().date()
+
+# Make today function available to all templates
+@app.context_processor
+def utility_processor():
+    return {'today': today}
+
 # Database setup - update engine configuration
 DATABASE_URL = os.getenv('DATABASE_URL', 'postgresql://user:password@localhost:5432/championship')
 engine = create_engine(
@@ -731,7 +741,7 @@ def calculate_daily_score(entry, settings, position=None, total_entries=None, mo
     entry_time = datetime.strptime(entry["time"], "%H:%M").time()
     
     # Modify late arrival logic to use configured start time
-    is_late = entry_time > shift_start
+    is_llate = entry_time > shift_start
 
     # Check if it's a working day for this user
     day_name = entry_date.strftime('%a').lower()
@@ -2990,24 +3000,23 @@ def missing_entries():
         settings = db.query(Settings).first()
         start_date = settings.monitoring_start_date if settings else datetime.now().replace(month=1, day=1).date()
 
-        # Create table aliases for clarity
-        MissingEntries = db.query('missing_entries').column_descriptions[0]['type']
-        
-        # Get missing entries using native SQL via text()
+        # Get missing entries with proper SQL query
         missing = db.execute(
             text("""
-                SELECT date, checked_at 
+                SELECT 
+                    missing_entries.date::date as date, 
+                    missing_entries.checked_at 
                 FROM missing_entries 
-                WHERE date >= :start_date 
-                ORDER BY date DESC
+                WHERE missing_entries.date >= :start_date::date
+                ORDER BY missing_entries.date DESC
             """),
-            {"start_date": start_date}
+            {"start_date": start_date.strftime('%Y-%m-%d')}
         ).fetchall()
 
         # Get core users and attendance records
         core_users = get_core_users()
         attendance = db.query(Entry.date, Entry.name).filter(
-            Entry.date >= start_date
+            Entry.date >= start_date.strftime('%Y-%m-%d')  # Convert date to string
         ).all()
 
         # Group attendance by date
@@ -3018,7 +3027,8 @@ def missing_entries():
         # Format missing entries
         formatted_entries = []
         for entry in missing:
-            present_users = attendance_by_date.get(entry.date, [])
+            entry_date = entry.date.strftime('%Y-%m-%d') if isinstance(entry.date, date) else entry.date
+            present_users = attendance_by_date.get(entry_date, [])
             missing_users = [user for user in core_users if user not in present_users]
             
             if missing_users:  # Only include dates with missing users

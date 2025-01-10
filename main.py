@@ -1066,12 +1066,19 @@ def day_rankings(date=None):
     
     # Sort by points descending
     rankings.sort(key=lambda x: x["points"], reverse=True)
+    
+    # Compute earliest and latest hour from your data (use your own logic)
+    earliest_hour = 7  # e.g., fallback default
+    latest_hour = 19   # e.g., fallback default
+    
     return render_template("day_rankings.html", 
                          rankings=rankings,
                          date=date,
                          mode=mode,
                          start_hour=start_hour,
-                         start_minute=start_minute)  # Pass start_hour and start_minute to template
+                         start_minute=start_minute,
+                         earliest_hour=earliest_hour,
+                         latest_hour=latest_hour)  # Pass start_hour and start_minute to template
 
 # Update the get_entries route to handle the new filters
 @app.route("/edit", methods=["GET"])

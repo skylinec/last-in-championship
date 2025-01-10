@@ -2299,7 +2299,7 @@ def build_dynamic_query(db, params):
         date = parse_date_reference(params["date_range"])
         if "week" in params["date_range"]:
             start_date = date - timedelta(days=date.weekday())
-            end_date = start_date + timedelta(days=6)
+            end_date = start_date + timedelta(days(6))
             query = query.filter(Entry.date.between(start_date.isoformat(), end_date.isoformat()))
         elif "month" in params["date_range"]:
             start_date = date.replace(day=1)
@@ -3000,14 +3000,14 @@ def missing_entries():
         settings = db.query(Settings).first()
         start_date = settings.monitoring_start_date if settings else datetime.now().replace(month=1, day=1).date()
 
-        # Get missing entries with proper SQL query
+        # Get missing entries with proper SQL query and PostgreSQL-style parameter binding
         missing = db.execute(
             text("""
                 SELECT 
-                    missing_entries.date::date as date, 
+                    (missing_entries.date)::date as date, 
                     missing_entries.checked_at 
                 FROM missing_entries 
-                WHERE missing_entries.date >= :start_date::date
+                WHERE missing_entries.date >= %(start_date)s
                 ORDER BY missing_entries.date DESC
             """),
             {"start_date": start_date.strftime('%Y-%m-%d')}

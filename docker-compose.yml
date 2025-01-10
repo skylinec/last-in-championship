@@ -64,7 +64,7 @@ services:
   proxy:
     image: nginx:latest
     volumes:
-      - ./nginx/proxy.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx:/etc/nginx
     ports:
       - "4030:80"
     depends_on:

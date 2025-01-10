@@ -907,19 +907,19 @@ def view_rankings(period, date_str=None):
         
         # Get current date (either from URL or today)
         try:
-            if date_str:
+            if (date_str):
                 current_date = datetime.strptime(date_str, '%Y-%m-%d')
             else:
                 current_date = datetime.now()
             
             # For weekly view, always snap to Monday
-            if period == 'week':
+            if (period == 'week'):
                 current_date = current_date - timedelta(days=current_date.weekday())
             
             # Calculate period end date
-            if period == 'week':
+            if (period == 'week'):
                 period_end = current_date + timedelta(days=6)
-            elif period == 'month':
+            elif (period == 'month'):
                 next_month = current_date.replace(day=28) + timedelta(days=4)
                 period_end = next_month - timedelta(days=next_month.day)
             else:
@@ -3000,17 +3000,17 @@ def missing_entries():
         settings = db.query(Settings).first()
         start_date = settings.monitoring_start_date if settings else datetime.now().replace(month=1, day=1).date()
 
-        # Get missing entries with proper SQL query and PostgreSQL-style parameter binding
+        # Get missing entries with proper SQL query using positional parameters
         missing = db.execute(
             text("""
                 SELECT 
-                    (missing_entries.date)::date as date, 
+                    missing_entries.date::date as date, 
                     missing_entries.checked_at 
                 FROM missing_entries 
-                WHERE missing_entries.date >= %(start_date)s
+                WHERE missing_entries.date >= $1::date
                 ORDER BY missing_entries.date DESC
             """),
-            {"start_date": start_date.strftime('%Y-%m-%d')}
+            [start_date.strftime('%Y-%m-%d')]
         ).fetchall()
 
         # Get core users and attendance records

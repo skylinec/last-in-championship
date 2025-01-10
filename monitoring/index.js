@@ -8,8 +8,8 @@ const pool = new Pool({
 async function checkMissingEntries() {
   const client = await pool.connect();
   try {
-    const settingsResult = await client.query('SELECT monitoring_start_date FROM settings LIMIT 1');
-    const startDate = settingsResult.rows[0]?.monitoring_start_date || new Date();
+    const settingsResult = await client.query('SELECT monitoring_start_date::date FROM settings LIMIT 1');
+    const startDate = settingsResult.rows[0]?.monitoring_start_date || new Date().toISOString().split('T')[0];
     
     // Get all weekdays between start date and today
     const missingEntries = await client.query(`
@@ -25,12 +25,12 @@ async function checkMissingEntries() {
           date < CURRENT_DATE
       ),
       weekdays AS (
-        SELECT date
+        SELECT date::date
         FROM dates
         WHERE EXTRACT(DOW FROM date) BETWEEN 1 AND 5  -- 1=Monday, 5=Friday
       ),
       entries_by_date AS (
-        SELECT DISTINCT date
+        SELECT DISTINCT date::date
         FROM entries
       )
       SELECT w.date
@@ -42,13 +42,15 @@ async function checkMissingEntries() {
     
     // Insert or update missing entries
     if (missingEntries.rows.length > 0) {
-      const values = missingEntries.rows.map(r => `('${r.date}', NOW())`).join(',');
-      await client.query(`
-        INSERT INTO missing_entries (date, checked_at)
-        VALUES ${values}
-        ON CONFLICT (date) 
-        DO UPDATE SET checked_at = NOW()
-      `);
+      const values = missingEntries.rows.map(r => `('${r.date.toISOString().split('T')[0]}'::date, NOW())`).join(',');
+      if (values) {
+        await client.query(`
+          INSERT INTO missing_entries (date, checked_at)
+          VALUES ${values}
+          ON CONFLICT (date) 
+          DO UPDATE SET checked_at = NOW()
+        `);
+      }
     }
   } finally {
     client.release();

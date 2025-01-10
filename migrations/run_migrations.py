@@ -13,6 +13,7 @@ def run_migrations():
     # List all migration modules in order
     migrations = [
         'add_user_streaks',
+        '20240124_add_monitoring_date'  # Add the new migration
     ]
     
     for migration in migrations:

@@ -186,6 +186,47 @@
                 <h2>Scoring Rules Editor</h2>
                 <span class="close">&times;</span>
             </div>
+            
+            <div class="rules-documentation">
+                <h3>How Rules Work</h3>
+                <p>Rules are evaluated in order from top to bottom. Each rule consists of a condition and an action.</p>
+                
+                <h4>Available Conditions:</h4>
+                <ul>
+                    <li><strong>Arrival Time:</strong> Check when someone arrives (e.g., "if arrival before 09:00")</li>
+                    <li><strong>Work Status:</strong> Check how they're working (e.g., "if working in-office")</li>
+                    <li><strong>Day Type:</strong> Check the type of day (e.g., "if day is Monday")</li>
+                    <li><strong>Streak Length:</strong> Check consecutive attendance (e.g., "if streak > 5")</li>
+                </ul>
+
+                <h4>Available Actions:</h4>
+                <ul>
+                    <li><strong>Award Points:</strong> Add a fixed number of points</li>
+                    <li><strong>Multiply Points:</strong> Multiply current points by a factor</li>
+                    <li><strong>Add Streak Bonus:</strong> Add points based on streak length</li>
+                </ul>
+
+                <div class="rule-examples">
+                    <h4>Example Rules:</h4>
+                    <pre class="example-rule">
+# Early Bird Bonus
+if arrival before 09:00
+award 2 points
+
+# Office Attendance
+if working in-office
+award 10 points
+
+# Remote Work
+if working remote
+award 8 points
+
+# Long Streak Bonus
+if streak > 5
+multiply points by 1.5</pre>
+                </div>
+            </div>
+
             <div class="scoring-dsl-container">
                 <div class="scoring-blocks-palette">
                     <h3>Available Blocks</h3>
@@ -223,12 +264,20 @@
                     <div id="rulesContainer" class="rules-container">
                         <!-- Rules will be added here -->
                     </div>
-                    <button type="button" onclick="saveRules()">Save Rules</button>
+                    <div class="rules-actions">
+                        <button type="button" onclick="testRules()">Test Rules</button>
+                        <button type="button" onclick="saveRules()">Save Rules</button>
+                    </div>
                 </div>
 
                 <div class="scoring-preview">
                     <h3>Rule Preview</h3>
                     <pre id="rulePreview" class="rule-preview"></pre>
+                    
+                    <div class="test-results" style="display: none">
+                        <h3>Test Results</h3>
+                        <div id="testResults"></div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -976,6 +1025,85 @@ scoring-explanation ul li::before {
     color: var(--accent-color);
     position: absolute;
     left: 0;
+}
+
+.rules-documentation {
+    margin-bottom: 20px;
+    padding: 15px;
+    background: #f8f9fa;
+    border-radius: 8px;
+}
+
+.rules-documentation h3 {
+    color: var(--primary-color);
+    margin-bottom: 10px;
+}
+
+.rules-documentation ul {
+    padding-left: 20px;
+}
+
+.rules-documentation li {
+    margin: 8px 0;
+}
+
+.example-rule {
+    background: #fff;
+    padding: 15px;
+    border-radius: 4px;
+    border: 1px solid #dee2e6;
+    margin: 10px 0;
+}
+
+.rules-actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 15px;
+}
+
+.rules-actions button {
+    padding: 8px 16px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.rules-actions button:first-child {
+    background: var(--accent-color);
+    color: white;
+}
+
+.rules-actions button:last-child {
+    background: var(--primary-color);
+    color: white;
+}
+
+.test-results {
+    margin-top: 20px;
+    padding: 15px;
+    background: #fff;
+    border-radius: 4px;
+    border: 1px solid #dee2e6;
+}
+
+.test-scenario {
+    margin: 10px 0;
+    padding: 10px;
+    background: #f8f9fa;
+    border-radius: 4px;
+}
+
+.test-result {
+    margin-top: 5px;
+    font-family: monospace;
+}
+
+.test-result.success {
+    color: #28a745;
+}
+
+.test-result.failure {
+    color: #dc3545;
 }
 </style>
 

@@ -1811,7 +1811,7 @@ def in_period(entry, period, current_date):
         elif period == 'week':
             # Get Monday of the current week
             week_start = current - timedelta(days=current.weekday())
-            week_end = week_start + timedelta(days=6)
+            week_end = week_start + timedelta(days(6))
             return week_start <= entry_date <= week_end
         elif period == 'month':
             # Check if same year and month

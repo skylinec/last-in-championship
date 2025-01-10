@@ -8,7 +8,9 @@ import uuid
 import psycopg2
 import psycopg2.extras  # Add this import
 import json  # Add explicit json import
-from prometheus_client import start_http_server, Summary, Counter, Gauge
+from prometheus_client import start_http_server, Summary, Counter, Gauge, Histogram
+import time
+from threading import Thread
 
 # Configure logging
 logging.basicConfig(
@@ -378,6 +380,9 @@ def log_audit(action, user, details, old_data=None, new_data=None):
             app.logger.debug(f"Changes recorded: {changes}")
         else:
             app.logger.info("No changes detected, skipping audit log")
+        
+        # Increment audit action counter
+        AUDIT_ACTIONS.labels(action=action).inc()
         
     except Exception as e:
         db.rollback()
@@ -939,6 +944,7 @@ def get_week_bounds(date_str):
 @app.route("/rankings/<period>")
 @app.route("/rankings/<period>/<date_str>")
 @login_required
+@track_response_time('rankings')
 def view_rankings(period, date_str=None):
     db = SessionLocal()
     try:
@@ -3096,6 +3102,7 @@ def missing_entries():
         
 if __name__ == "__main__":
     start_http_server(8000)  # Start Prometheus metrics server
+    start_metrics_updater()  # Start metrics updater
     debug_mode = os.getenv('FLASK_ENV') == 'development'
     app.run(
         host=os.getenv('FLASK_HOST', '0.0.0.0'),
@@ -3121,6 +3128,56 @@ def internal_error(error):
 REQUEST_TIME = Summary('request_processing_seconds', 'Time spent processing request')
 REQUEST_COUNT = Counter('request_count', 'Total request count')
 IN_PROGRESS = Gauge('in_progress_requests', 'In-progress requests')
+ATTENDANCE_COUNT = Counter('attendance_count_total', 'Total attendance records', ['status'])
+USER_STREAK = Gauge('user_streak_days', 'Current streak for user', ['username'])
+POINTS_GAUGE = Gauge('user_points', 'Current points for user', ['username', 'period'])
+RESPONSE_TIME = Histogram('response_time_seconds', 'Response time in seconds', ['endpoint'])
+AUDIT_ACTIONS = Counter('audit_actions_total', 'Total audit actions', ['action'])
+ARRIVAL_TIME = Histogram('arrival_time_hours', 'Arrival time distribution', ['username'])
+
+def update_prometheus_metrics():
+    """Update all Prometheus metrics based on current data"""
+    db = SessionLocal()
+    try:
+        # Update attendance counts
+        status_counts = calculate_status_counts(load_data())
+        for status, count in status_counts.items():
+            ATTENDANCE_COUNT.labels(status=status).inc(count)
+
+        # Update user streaks
+        streaks = db.query(UserStreak).all()
+        for streak in streaks:
+            USER_STREAK.labels(username=streak.username).set(streak.current_streak)
+
+        # Update points for different periods
+        data = load_data()
+        for period in ['day', 'week', 'month']:
+            rankings = calculate_scores(data, period, datetime.now())
+            for rank in rankings:
+                POINTS_GAUGE.labels(username=rank['name'], period=period).set(rank['score'])
+
+        # Update arrival time distributions
+        entries = db.query(Entry).filter(Entry.status.in_(['in-office', 'remote'])).all()
+        for entry in entries:
+            time_obj = datetime.strptime(entry.time, '%H:%M')
+            hours = time_obj.hour + time_obj.minute / 60
+            ARRIVAL_TIME.labels(username=entry.name).observe(hours)
+
+    finally:
+        db.close()
+
+# Add this decorator to key routes to track response times
+def track_response_time(route_name):
+    def decorator(f):
+        @wraps(f)
+        def wrapped(*args, **kwargs):
+            start = time.time()
+            response = f(*args, **kwargs)
+            duration = time.time() - start
+            RESPONSE_TIME.labels(endpoint=route_name).observe(duration)
+            return response
+        return wrapped
+    return decorator
 
 @app.before_request
 def before_request():
@@ -3136,3 +3193,16 @@ def after_request(response):
 def metrics():
     from prometheus_client import generate_latest
     return generate_latest()
+
+# Add periodic metrics update
+def start_metrics_updater():
+    def update_loop():
+        while True:
+            try:
+                update_prometheus_metrics()
+            except Exception as e:
+                app.logger.error(f"Error updating metrics: {str(e)}")
+            time.sleep(300)  # Update every 5 minutes
+
+    thread = Thread(target=update_loop, daemon=True)
+    thread.start()

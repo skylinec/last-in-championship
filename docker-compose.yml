@@ -63,6 +63,8 @@ services:
     environment:
       - GF_SERVER_ROOT_URL=https://lic.mattdh.me/grafana
       - GF_SECURITY_ADMIN_PASSWORD=admin
+    volumes:
+      - grafana-storage:/var/lib/grafana
     ports:
       - "3000:3000"
     depends_on:

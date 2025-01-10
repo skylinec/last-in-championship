@@ -1,7 +1,8 @@
 from flask import Flask, request, jsonify, render_template, session, redirect, url_for
 import os
 import logging
-from sqlalchemy import create_engine, event
+from sqlalchemy import create_engine, event, Column, Integer, String, DateTime, Date, Float, JSON, text, Boolean, inspect
+from sqlalchemy.orm import sessionmaker, declarative_base
 from datetime import datetime, timedelta, date  # Add date import
 import uuid
 import psycopg2

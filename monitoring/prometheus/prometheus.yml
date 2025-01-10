@@ -1,13 +1,59 @@
 global:
   scrape_interval: 15s
+
 scrape_configs:
   - job_name: 'flask_app'
     metrics_path: /metrics
     static_configs:
       - targets: ['web:9000']
-  - job_name: 'db'
-    static_configs:
-      - targets: ['db:5432']
+    metric_relabel_configs:
+      - source_labels: [__name__]
+        regex: '^(request_processing_seconds.*|request_count.*|in_progress_requests.*|attendance_count_total.*|user_streak_days.*|user_points.*|response_time_seconds.*|audit_actions_total.*|arrival_time_hours.*)$'
+        action: keep
+
   - job_name: 'nginx'
     static_configs:
       - targets: ['proxy:80']
+    metrics_path: /nginx_status
+    metric_relabel_configs:
+      - source_labels: [__name__]
+        regex: '^(nginx_.*|http_.*|proxy_.*)$'
+        action: keep
+
+  - job_name: 'db'
+    static_configs:
+      - targets: ['db:5432']
+    metric_relabel_configs:
+      - source_labels: [__name__]
+        regex: '^(pg_.*|postgresql_.*)$'
+        action: keep
+
+  # Add more service-specific metrics collection
+  - job_name: 'app_metrics'
+    static_configs:
+      - targets: ['web:9000']
+    metrics_path: /metrics
+    metric_relabel_configs:
+      # User stats
+      - source_labels: [__name__]
+        regex: '^(user_streak_days|user_points)$'
+        target_label: metric_type
+        replacement: user_stats
+
+      # Attendance stats
+      - source_labels: [__name__]
+        regex: '^(attendance_count_total|arrival_time_hours)$'
+        target_label: metric_type
+        replacement: attendance_stats
+
+      # Performance metrics
+      - source_labels: [__name__]
+        regex: '^(response_time_seconds|request_count|in_progress_requests)$'
+        target_label: metric_type
+        replacement: performance_metrics
+
+      # Audit metrics
+      - source_labels: [__name__]
+        regex: '^(audit_actions_total)$'
+        target_label: metric_type
+        replacement: audit_metrics

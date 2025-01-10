@@ -8,9 +8,10 @@ import uuid
 import psycopg2
 import psycopg2.extras  # Add this import
 import json  # Add explicit json import
-from prometheus_client import start_http_server, Summary, Counter, Gauge, Histogram
+from prometheus_client import start_http_server, Summary, Counter, Gauge, Histogram, make_wsgi_app
 import time
 from threading import Thread
+from werkzeug.middleware.dispatcher import DispatcherMiddleware
 
 # Configure logging
 logging.basicConfig(
@@ -3113,13 +3114,28 @@ def missing_entries():
     finally:
         db.close()
         
+# Add periodic metrics update
+def start_metrics_updater():
+    def update_loop():
+        while True:
+            try:
+                update_prometheus_metrics()
+            except Exception as e:
+                app.logger.error(f"Error updating metrics: {str(e)}")
+            time.sleep(300)  # Update every 5 minutes
+
+    thread = Thread(target=update_loop, daemon=True)
+    thread.start()
+        
 if __name__ == "__main__":
-    start_http_server(8000)  # Start Prometheus metrics server
     start_metrics_updater()  # Start metrics updater
     debug_mode = os.getenv('FLASK_ENV') == 'development'
+    app.wsgi_app = DispatcherMiddleware(app.wsgi_app, {
+        '/metrics': make_wsgi_app()
+    })
     app.run(
         host=os.getenv('FLASK_HOST', '0.0.0.0'),
-        port=int(os.getenv('FLASK_PORT', '5000')),
+        port=int(os.getenv('FLASK_PORT', '9000')),  # Make sure this matches your config
         debug=debug_mode
     )
 
@@ -3188,21 +3204,3 @@ def after_request(response):
     IN_PROGRESS.dec()
     REQUEST_COUNT.inc()
     return response
-
-@app.route('/metrics')
-def metrics():
-    from prometheus_client import generate_latest
-    return generate_latest()
-
-# Add periodic metrics update
-def start_metrics_updater():
-    def update_loop():
-        while True:
-            try:
-                update_prometheus_metrics()
-            except Exception as e:
-                app.logger.error(f"Error updating metrics: {str(e)}")
-            time.sleep(300)  # Update every 5 minutes
-
-    thread = Thread(target=update_loop, daemon=True)
-    thread.start()

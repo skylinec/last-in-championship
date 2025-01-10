@@ -994,15 +994,25 @@ document.getElementById('settingsForm').addEventListener('submit', async (event)
             in_office: parseInt(formData.get('points.in_office')),
             remote: parseInt(formData.get('points.remote')),
             sick: parseInt(formData.get('points.sick')),
-            leave: parseInt(formData.get('points.leave'))
+            leave: parseInt(formData.get('points.leave')),
+            shift_length: parseFloat(formData.get('points.shift_length')),
+            daily_shifts: {}
         },
-        late_bonus: parseInt(formData.get('late_bonus')),
+        late_bonus: parseFloat(formData.get('late_bonus')),
         remote_days: {},
         core_users: Array.from(document.querySelectorAll('.core-user-checkbox:checked'))
                        .map(checkbox => checkbox.value),
         enable_streaks: document.getElementById('enable_streaks').checked,
         streak_multiplier: parseFloat(document.getElementById('streak_multiplier').value)
     };
+    
+    // Collect daily shifts
+    ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'].forEach(day => {
+        settings.points.daily_shifts[day] = {
+            hours: parseFloat(formData.get(`points.daily_shifts.${day}.hours`)),
+            start: formData.get(`points.daily_shifts.${day}.start`)
+        };
+    });
     
     // Collect remote days settings
     document.querySelectorAll('.user-row').forEach(row => {
@@ -1013,10 +1023,6 @@ document.getElementById('settingsForm').addEventListener('submit', async (event)
         });
         settings.remote_days[user] = days;
     });
-    
-    // Collect rules from the editor
-    const rulesData = collectRulesFromEditor(); // Implement your own
-    document.getElementById('rulesInput').value = JSON.stringify(rulesData);
 
     try {
         const response = await fetch('/settings', {

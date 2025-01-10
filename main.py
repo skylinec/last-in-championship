@@ -214,12 +214,22 @@ def save_settings(settings_data):
     try:
         settings = db.query(Settings).first()
         if settings:
-            # Ensure points is a dictionary and includes rules
+            # Save daily shifts properly
             points_data = settings_data.get("points", {})
             if isinstance(points_data, dict):
+                # Extract daily shifts from form data
+                daily_shifts = {}
+                for day in ["monday", "tuesday", "wednesday", "thursday", "friday"]:
+                    daily_shifts[day] = {
+                        "hours": float(points_data.get(f"daily_shifts.{day}.hours", 9)),
+                        "start": points_data.get(f"daily_shifts.{day}.start", "09:00")
+                    }
+                points_data["daily_shifts"] = daily_shifts
+                
                 # Preserve existing rules if not being updated
-                if 'rules' not in points_data and hasattr(settings, 'points') and isinstance(settings.points, dict):
+                if 'rules' not in points_data and hasattr(settings, 'points'):
                     points_data['rules'] = settings.points.get('rules', [])
+            
             settings.points = points_data
             settings.late_bonus = settings_data["late_bonus"]
             settings.remote_days = settings_data["remote_days"]

@@ -336,6 +336,27 @@ from functools import wraps
 # Core users list
 CORE_USERS = ['Matt', 'Kushal', 'Nathan', 'Michael', 'Ben']
 
+# Add these before the route definitions in main.py
+@app.template_filter('time_to_minutes')
+def time_to_minutes(time_str):
+    """Convert time string (HH:MM) to minutes since midnight"""
+    try:
+        hours, minutes = map(int, time_str.split(':'))
+        return hours * 60 + minutes
+    except (ValueError, AttributeError):
+        return 0
+
+@app.template_filter('minutes_to_time')
+def minutes_to_time(minutes):
+    """Convert minutes since midnight to time string (HH:MM)"""
+    try:
+        minutes = int(minutes)
+        hours = minutes // 60
+        minutes = minutes % 60
+        return f"{hours:02d}:{minutes:02d}"
+    except (ValueError, TypeError):
+        return "00:00"
+
 def verify_user(username, password):
     """Verify user credentials from database"""
     db = SessionLocal()

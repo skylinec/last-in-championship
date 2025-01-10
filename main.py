@@ -941,6 +941,19 @@ def get_week_bounds(date_str):
     last_day = first_day + timedelta(days=6)
     return first_day, last_day
 
+# Add this decorator to key routes to track response times
+def track_response_time(route_name):
+    def decorator(f):
+        @wraps(f)
+        def wrapped(*args, **kwargs):
+            start = time.time()
+            response = f(*args, **kwargs)
+            duration = time.time() - start
+            RESPONSE_TIME.labels(endpoint=route_name).observe(duration)
+            return response
+        return wrapped
+    return decorator
+
 @app.route("/rankings/<period>")
 @app.route("/rankings/<period>/<date_str>")
 @login_required
@@ -3165,19 +3178,6 @@ def update_prometheus_metrics():
 
     finally:
         db.close()
-
-# Add this decorator to key routes to track response times
-def track_response_time(route_name):
-    def decorator(f):
-        @wraps(f)
-        def wrapped(*args, **kwargs):
-            start = time.time()
-            response = f(*args, **kwargs)
-            duration = time.time() - start
-            RESPONSE_TIME.labels(endpoint=route_name).observe(duration)
-            return response
-        return wrapped
-    return decorator
 
 @app.before_request
 def before_request():

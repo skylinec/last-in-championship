@@ -3128,14 +3128,12 @@ def start_metrics_updater():
     thread.start()
         
 if __name__ == "__main__":
+    # Remove the start_http_server call as we're using WSGI middleware now
     start_metrics_updater()  # Start metrics updater
     debug_mode = os.getenv('FLASK_ENV') == 'development'
-    app.wsgi_app = DispatcherMiddleware(app.wsgi_app, {
-        '/metrics': make_wsgi_app()
-    })
     app.run(
         host=os.getenv('FLASK_HOST', '0.0.0.0'),
-        port=int(os.getenv('FLASK_PORT', '9000')),  # Make sure this matches your config
+        port=int(os.getenv('FLASK_PORT', '9000')),
         debug=debug_mode
     )
 

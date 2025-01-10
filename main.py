@@ -1304,6 +1304,9 @@ def manage_settings():
     try:
         if request.method == "GET":
             settings_data = load_settings()
+            if not settings_data.get('monitoring_start_date'):
+                settings_data['monitoring_start_date'] = datetime.now().replace(month=1, day=1).date()
+            
             registered_users = [user[0] for user in db.query(User.username).all()]
             core_users = settings_data.get("core_users", [])
             
@@ -1320,11 +1323,16 @@ def manage_settings():
                 old_settings = db.query(Settings).first()
                 new_settings = request.json
                 
-                # Normalize and validate settings
+                # Add monitoring_start_date to normalized settings
                 normalized_settings = normalize_settings(new_settings)
+                normalized_settings['monitoring_start_date'] = datetime.strptime(
+                    new_settings.get('monitoring_start_date'),
+                    '%Y-%m-%d'
+                ).date()
                 
                 if old_settings:
-                    # Update existing settings
+                    # Update existing settings including monitoring_start_date
+                    old_settings.monitoring_start_date = normalized_settings['monitoring_start_date']
                     old_settings.points = normalized_settings["points"]
                     old_settings.late_bonus = normalized_settings["late_bonus"]
                     old_settings.remote_days = normalized_settings["remote_days"]
@@ -2959,6 +2967,52 @@ def calculate_streak_for_date(name, target_date, db):
     except Exception as e:
         app.logger.error(f"Error calculating streak: {str(e)}")
         return 0
+
+@app.route("/missing-entries")
+@login_required
+def missing_entries():
+    db = SessionLocal()
+    try:
+        # Get monitoring start date
+        settings = db.query(Settings).first()
+        start_date = settings.monitoring_start_date if settings else datetime.now().replace(month=1, day=1)
+
+        # Get missing entries with user information
+        missing = db.query(
+            Entry.date,
+            func.array_agg(Entry.name).label('present_users')
+        ).group_by(Entry.date).subquery()
+
+        entries = db.query(
+            'missing_entries.date',
+            'missing_entries.checked_at'
+        ).select_from(
+            text('missing_entries')
+        ).filter(
+            text('date >= :start_date')
+        ).params(start_date=start_date).all()
+
+        # Get core users
+        core_users = get_core_users()
+
+        # Format entries with missing users
+        formatted_entries = []
+        for entry in entries:
+            present_users = []
+            missing_users = [u for u in core_users if u not in present_users]
+            formatted_entries.append({
+                'date': entry.date,
+                'checked_at': entry.checked_at,
+                'missing_users': missing_users
+            })
+
+        return render_template(
+            "missing_entries.html",
+            missing_entries=formatted_entries,
+            start_date=start_date
+        )
+    finally:
+        db.close()
 
 if __name__ == "__main__":
     app.run(debug=True)

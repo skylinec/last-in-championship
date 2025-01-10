@@ -1,0 +1,103 @@
+{% extends "base.html" %}
+{% block title %}Missing Entries Monitor{% endblock %}
+
+{% block content %}
+<div class="missing-entries-container">
+    <h1>Missing Entries Monitor</h1>
+    <p class="info">Showing entries missing since {{ start_date|default('monitoring start date') }}</p>
+
+    {% if missing_entries %}
+    <div class="missing-entries-table">
+        <table>
+            <thead>
+                <tr>
+                    <th>Date</th>
+                    <th>Day</th>
+                    <th>Last Checked</th>
+                    <th>Missing Users</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for entry in missing_entries %}
+                <tr>
+                    <td>{{ entry.date.strftime('%Y-%m-%d') }}</td>
+                    <td>{{ entry.date.strftime('%A') }}</td>
+                    <td>{{ entry.checked_at.strftime('%H:%M:%S') }}</td>
+                    <td>
+                        <ul class="missing-users-list">
+                            {% for user in entry.missing_users %}
+                            <li>{{ user }}</li>
+                            {% endfor %}
+                        </ul>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="no-entries">
+        <p>No missing entries found! 🎉</p>
+    </div>
+    {% endif %}
+</div>
+
+<style>
+.missing-entries-container {
+    max-width: 1200px;
+    margin: 20px auto;
+    padding: 20px;
+}
+
+.info {
+    color: #666;
+    margin-bottom: 20px;
+}
+
+.missing-entries-table {
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    overflow: hidden;
+}
+
+.missing-entries-table table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.missing-entries-table th {
+    background: var(--primary-color);
+    color: white;
+    padding: 12px;
+    text-align: left;
+}
+
+.missing-entries-table td {
+    padding: 12px;
+    border-bottom: 1px solid #eee;
+}
+
+.missing-users-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.missing-users-list li {
+    display: inline-block;
+    background: #f0f0f0;
+    padding: 4px 8px;
+    border-radius: 4px;
+    margin: 2px;
+}
+
+.no-entries {
+    text-align: center;
+    padding: 40px;
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+}
+</style>
+{% endblock %}

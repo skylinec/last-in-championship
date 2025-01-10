@@ -162,6 +162,19 @@
                 </div>
             </div>
 
+            <div class="settings-section">
+                <h2>Monitoring Configuration</h2>
+                <div class="form-group">
+                    <label for="monitoring_start_date">Check Missing Entries From:</label>
+                    <input type="date" 
+                           id="monitoring_start_date" 
+                           name="monitoring_start_date"
+                           value="{{ settings.monitoring_start_date|default(today().replace(month=1, day=1).strftime('%Y-%m-%d')) }}"
+                           max="{{ today().strftime('%Y-%m-%d') }}">
+                    <p class="helper-text">The system will check for missing entries starting from this date</p>
+                </div>
+            </div>
+
             <button type="submit" class="save-button">Save All Settings</button>
         </form>
     </div>
@@ -1003,7 +1016,8 @@ document.getElementById('settingsForm').addEventListener('submit', async (event)
         core_users: Array.from(document.querySelectorAll('.core-user-checkbox:checked'))
                        .map(checkbox => checkbox.value),
         enable_streaks: document.getElementById('enable_streaks').checked,
-        streak_multiplier: parseFloat(document.getElementById('streak_multiplier').value)
+        streak_multiplier: parseFloat(document.getElementById('streak_multiplier').value),
+        monitoring_start_date: formData.get('monitoring_start_date')
     };
     
     // Collect daily shifts

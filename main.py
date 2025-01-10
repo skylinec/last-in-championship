@@ -25,6 +25,14 @@ def today():
     """Return today's date for template use"""
     return datetime.now().date()
 
+# Add this after the today() function
+@app.context_processor
+def utility_processor():
+    """Make utility functions available to all templates"""
+    return {
+        'today': today
+    }
+
 def check_configuration():
     """Check and log important configuration settings"""
     logger.info("Checking configuration...")

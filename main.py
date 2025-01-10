@@ -1449,7 +1449,8 @@ def history():
 @app.route("/visualisations")
 @login_required
 def visualisations():
-    return render_template("visualisations.html", core_users=CORE_USERS)
+    core_users = get_core_users()  # Use the dynamic function instead of CORE_USERS constant
+    return render_template("visualisations.html", core_users=core_users)
 
 @app.route("/visualization-data")
 @login_required

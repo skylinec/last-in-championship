@@ -100,9 +100,13 @@ select {
         <option value="all">All Time</option>
     </select>
     <select id="userFilter" multiple onchange="updateCharts()" size="5">
-        {% for user in core_users %}
-        <option value="{{ user }}" selected>{{ user }}</option>
-        {% endfor %}
+        {% if core_users %}
+            {% for user in core_users %}
+            <option value="{{ user }}" selected>{{ user }}</option>
+            {% endfor %}
+        {% else %}
+            <option value="" disabled>No users configured</option>
+        {% endif %}
     </select>
 </div>
 

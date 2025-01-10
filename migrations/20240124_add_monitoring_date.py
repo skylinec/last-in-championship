@@ -1,7 +1,7 @@
 from sqlalchemy import Column, Date, text
 from datetime import datetime
 
-def upgrade(engine):
+def migrate(engine):
     # Add monitoring_start_date to settings table
     with engine.connect() as conn:
         conn.execute(text("""

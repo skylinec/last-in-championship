@@ -52,6 +52,7 @@ services:
       - prometheus_data:/prometheus
     command:
       - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--web.route-prefix=/prometheus'
     ports:
       - "9090:9090"
     depends_on:
@@ -59,6 +60,8 @@ services:
 
   grafana:
     image: grafana/grafana:latest
+    environment:
+      - GF_SERVER_ROOT_URL=https://lic.mattdh.me/grafana
     ports:
       - "3000:3000"
     depends_on:

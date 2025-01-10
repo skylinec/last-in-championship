@@ -14,7 +14,7 @@ from threading import Thread
 from werkzeug.middleware.dispatcher import DispatcherMiddleware
 
 # Add these imports near the top
-from metrics import DB_CONNECTIONS, metrics, record_request_metric, update_attendance_metrics, record_db_operation, record_audit_action
+from metrics import DB_CONNECTIONS, metrics, record_request_metric, update_attendance_metrics, record_db_operation, record_audit_action, AUDIT_TRAIL_COUNT, ATTENDANCE_DB_COUNT, RANKING_CALLS
 from werkzeug.middleware.dispatcher import DispatcherMiddleware
 from prometheus_client import make_wsgi_app
 import time
@@ -972,6 +972,7 @@ def track_response_time(route_name):
 @login_required
 @track_response_time('rankings')
 def view_rankings(period, date_str=None):
+    RANKING_CALLS.inc()
     db = SessionLocal()
     try:
         mode = request.args.get('mode', 'last-in')
@@ -3179,6 +3180,14 @@ def update_prometheus_metrics():
     """Update all Prometheus metrics based on current data"""
     db = SessionLocal()
     try:
+        # Set the gauge for total audit actions
+        count_audits = db.query(AuditLog).count()
+        AUDIT_TRAIL_COUNT.set(count_audits)
+        
+        # Set the gauge for attendance entries
+        count_entries = db.query(Entry).count()
+        ATTENDANCE_DB_COUNT.set(count_entries)
+        
         # Update attendance counts
         status_counts = calculate_status_counts(load_data())
         for status, count in status_counts.items():

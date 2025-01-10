@@ -22,6 +22,9 @@ AUDIT_ACTIONS = Counter('audit_actions_total', 'Total audit actions', ['action',
 DB_CONNECTIONS = Gauge('db_connections_current', 'Number of active database connections', registry=registry)
 CACHE_HITS = Counter('cache_hits_total', 'Total cache hits', registry=registry)
 CACHE_MISSES = Counter('cache_misses_total', 'Total cache misses', registry=registry)
+AUDIT_TRAIL_COUNT = Gauge('audit_trail_count', 'Total number of audit log entries', registry=registry)
+ATTENDANCE_DB_COUNT = Gauge('attendance_db_count', 'Total number of attendance entries in DB', registry=registry)
+RANKING_CALLS = Counter('ranking_calls_total', 'Number of times rankings have been requested', registry=registry)
 
 # Performance metrics
 DB_QUERY_TIME = Histogram('db_query_duration_seconds', 'Database query duration', ['query_type'], registry=registry)

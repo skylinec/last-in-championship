@@ -13,6 +13,12 @@ import time
 from threading import Thread
 from werkzeug.middleware.dispatcher import DispatcherMiddleware
 
+# Add these imports near the top
+from metrics import metrics, record_request_metric, update_attendance_metrics, record_db_operation, record_audit_action
+from werkzeug.middleware.dispatcher import DispatcherMiddleware
+from prometheus_client import make_wsgi_app
+import time
+
 # Configure logging
 logging.basicConfig(
     level=logging.DEBUG if os.getenv('FLASK_ENV') == 'development' else logging.INFO,
@@ -3131,6 +3137,12 @@ if __name__ == "__main__":
     # Remove the start_http_server call as we're using WSGI middleware now
     start_metrics_updater()  # Start metrics updater
     debug_mode = os.getenv('FLASK_ENV') == 'development'
+    
+    # Set up the WSGI middleware
+    app.wsgi_app = DispatcherMiddleware(app.wsgi_app, {
+        '/metrics': make_wsgi_app()
+    })
+    
     app.run(
         host=os.getenv('FLASK_HOST', '0.0.0.0'),
         port=int(os.getenv('FLASK_PORT', '9000')),
@@ -3195,10 +3207,26 @@ def update_prometheus_metrics():
 
 @app.before_request
 def before_request():
+    request.start_time = time.time()
     IN_PROGRESS.inc()
 
 @app.after_request
 def after_request(response):
     IN_PROGRESS.dec()
-    REQUEST_COUNT.inc()
+    if hasattr(request, 'start_time'):
+        duration = time.time() - request.start_time
+        record_request_metric(
+            method=request.method,
+            endpoint=request.endpoint,
+            duration=duration
+        )
     return response
+
+# Update the database session to track connections
+@event.listens_for(engine, "checkout")
+def receive_checkout(dbapi_connection, connection_record, connection_proxy):
+    DB_CONNECTIONS.inc()
+
+@event.listens_for(engine, "checkin")
+def receive_checkin(dbapi_connection, connection_record):
+    DB_CONNECTIONS.dec()

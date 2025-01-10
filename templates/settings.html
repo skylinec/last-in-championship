@@ -120,6 +120,48 @@
                 <button type="button" class="open-rules-editor">Open Rules Editor</button>
             </div>
 
+            <div class="settings-section">
+                <h2>Schedule Configuration</h2>
+                <div class="form-group">
+                    <label for="shift_length">Default Shift Length (hours):</label>
+                    <input type="number" id="shift_length" name="points.shift_length" 
+                           value="{{ settings.points.shift_length|default(9) }}" min="4" max="12" step="0.5">
+                    <p class="helper-text">Used for timeline visualization and work period calculations</p>
+                </div>
+
+                <h3>Working Days</h3>
+                <p class="helper-text">Select working days for each core member. Only selected days are used in point calculations.</p>
+                <div class="working-days-table">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>User</th>
+                                <th>Mon</th>
+                                <th>Tue</th>
+                                <th>Wed</th>
+                                <th>Thu</th>
+                                <th>Fri</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for user in core_users %}
+                            <tr class="user-row" data-user="{{ user }}">
+                                <td>{{ user }}</td>
+                                {% for day in ['mon', 'tue', 'wed', 'thu', 'fri'] %}
+                                <td>
+                                    <input type="checkbox" 
+                                           name="points.working_days.{{ user }}"
+                                           value="{{ day }}"
+                                           {% if day in settings.points.get('working_days', {}).get(user, ['mon','tue','wed','thu','fri']) %}checked{% endif %}>
+                                </td>
+                                {% endfor %}
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
             <button type="submit" class="save-button">Save All Settings</button>
         </form>
     </div>
@@ -367,6 +409,17 @@ award 10 points
 if streak > 5
 multiply points by 1.5
             </pre>
+        </div>
+
+        <div class="example-box">
+            <h4>Schedule and Working Days</h4>
+            <ul>
+                <li>Default shift length: {{ settings.points.shift_length|default(9) }} hours</li>
+                <li>Points are only calculated for designated working days</li>
+                <li>Working days can be configured per user</li>
+                <li>Non-working days don't affect streaks</li>
+                <li>Remote work and office attendance only count on working days</li>
+            </ul>
         </div>
     </div>
 </div>

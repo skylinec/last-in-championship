@@ -136,7 +136,12 @@ def init_settings():
                 "in_office": 10,
                 "remote": 8,
                 "sick": 5,
-                "leave": 5
+                "leave": 5,
+                "shift_length": 9,
+                "working_days": {
+                    user: ['mon','tue','wed','thu','fri'] 
+                    for user in ["Matt", "Kushal", "Nathan", "Michael", "Ben"]
+                }
             },
             late_bonus=1,
             remote_days={},
@@ -674,6 +679,27 @@ def compare_values(val1, val2, operator):
 
 def calculate_daily_score(entry, settings, position=None, total_entries=None, mode='last-in'):
     """Calculate score for a single day's entry with all bonuses"""
+    # Check if it's a working day for this user
+    entry_date = datetime.strptime(entry["date"], '%Y-%m-%d')
+    day_name = entry_date.strftime('%a').lower()
+    user_working_days = settings.get("points", {}).get("working_days", {}).get(entry["name"], ['mon','tue','wed','thu','fri'])
+    
+    # If it's not a working day for this user, return zero points
+    if day_name not in user_working_days:
+        return {
+            "early_bird": 0,
+            "last_in": 0,
+            "base": 0,
+            "streak": 0,
+            "position_bonus": 0,
+            "breakdown": {
+                "base_points": 0,
+                "position_bonus": 0,
+                "streak_bonus": 0
+            }
+        }
+
+    # Continue with existing scoring logic
     status = entry["status"].replace("-", "_")
     base_points = settings["points"][status]
     
@@ -954,6 +980,11 @@ def day_rankings(date=None):
     day_entries = [e for e in data if e["date"] == date]
     day_entries.sort(key=lambda x: datetime.strptime(x["time"], "%H:%M"))
     
+    # Get shift length from settings
+    settings = load_settings()
+    shift_length_hours = float(settings.get("points", {}).get("shift_length", 9))
+    shift_length_minutes = int(shift_length_hours * 60)
+    
     # Calculate points and prepare rankings
     rankings = []
     total_entries = len(day_entries)
@@ -961,7 +992,9 @@ def day_rankings(date=None):
         scores = calculate_daily_score(entry, settings, position, total_entries, mode)
         entry_time = datetime.strptime(entry["time"], "%H:%M")
         entry_date = datetime.strptime(entry["date"], "%Y-%m-%d")
-        shift_length = 540  # Always 9 hours
+        
+        # Use configured shift length
+        shift_length = shift_length_minutes
         end_time = entry_time + timedelta(minutes=shift_length)
         
         rankings.append({
@@ -969,6 +1002,7 @@ def day_rankings(date=None):
             "time": entry["time"],
             "time_obj": entry_time,
             "shift_length": shift_length,
+            "shift_hours": shift_length_hours,
             "end_time": end_time.strftime('%H:%M'),
             "status": entry["status"],
             "points": scores["last_in"] if mode == 'last-in' else scores["early_bird"]

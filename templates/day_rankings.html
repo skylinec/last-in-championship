@@ -46,7 +46,7 @@
                 <div class="timeline-bar" 
                      style="left: {{ ((entry.time_obj.hour * 60 + entry.time_obj.minute - 420) / 720) * 100 }}%; 
                             width: {{ (entry.shift_length / 720) * 100 }}%"
-                     title="{{ entry.name }}: {{ entry.time }} - {{ entry.end_time }}">
+                     title="{{ entry.name }}: {{ entry.time }} - {{ entry.end_time }} ({{ entry.shift_hours }} hours)">
                     <span class="timeline-time">{{ entry.time }}</span>
                     <span class="timeline-end-time">{{ entry.end_time }}</span>
                 </div>

@@ -45,5 +45,32 @@ services:
     depends_on:
       - db
 
+  prometheus:
+    image: prom/prometheus:latest
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    ports:
+      - "9090:9090"
+    depends_on:
+      - web
+
+  grafana:
+    image: grafana/grafana:latest
+    ports:
+      - "3000:3000"
+    depends_on:
+      - prometheus
+
+  proxy:
+    image: nginx:latest
+    volumes:
+      - ./nginx/proxy.conf:/etc/nginx/nginx.conf:ro
+    ports:
+      - "8080:80"
+    depends_on:
+      - web
+      - prometheus
+      - grafana
+
 volumes:
   postgres_data:

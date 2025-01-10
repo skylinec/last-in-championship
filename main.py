@@ -423,17 +423,19 @@ def register():
         password = request.form.get("password")
         
         if not username or not password:
-            return render_template("register.html", error="Username and password are required")
+            return render_template("error.html", 
+                                error="Username and password are required",
+                                back_link=url_for('register'))
         
         db = SessionLocal()
         try:
-            # Check if user exists
             existing_user = db.query(User).filter_by(username=username).first()
             if existing_user:
-                return render_template("register.html", error="Username already exists")
+                return render_template("error.html", 
+                                    error="Username already exists",
+                                    back_link=url_for('register'))
             
-            # Create new user
-            user = User(username=username, password=password)  # TODO: In production, hash the password
+            user = User(username=username, password=password)
             db.add(user)
             db.commit()
             
@@ -444,10 +446,12 @@ def register():
         except Exception as e:
             db.rollback()
             app.logger.error(f"Error registering user: {str(e)}")
-            return render_template("register.html", error="Registration system error")
+            return render_template("error.html", 
+                                error="Registration system error",
+                                details=str(e),
+                                back_link=url_for('register'))
         finally:
             db.close()
-            
     return render_template("register.html")
 
 @app.route("/logout")
@@ -1366,7 +1370,15 @@ def manage_settings():
     except Exception as e:
         db.rollback()
         app.logger.error(f"Error managing settings: {str(e)}")
-        return jsonify({"error": f"Server error: {str(e)}"}), 500
+        if request.method == "POST":
+            return jsonify({
+                "error": f"Server error: {str(e)}",
+                "details": str(e)
+            }), 500
+        return render_template("error.html", 
+                            error="Failed to load settings",
+                            details=str(e),
+                            back_link=url_for('index'))
     finally:
         db.close()
 
@@ -3027,9 +3039,26 @@ def missing_entries():
     
     except Exception as e:
         app.logger.error(f"Error retrieving missing entries: {str(e)}")
-        return render_template("error.html", message="Failed to retrieve missing entries")
+        return render_template("error.html", 
+                            error="Failed to retrieve missing entries",
+                            details=str(e),
+                            back_link=url_for('index'))
     finally:
         db.close()
         
 if __name__ == "__main__":
     app.run(debug=True)
+
+@app.errorhandler(404)
+def not_found_error(error):
+    return render_template('error.html',
+                         error="Page Not Found",
+                         details="The requested page could not be found.",
+                         back_link=url_for('index')), 404
+
+@app.errorhandler(500)
+def internal_error(error):
+    return render_template('error.html',
+                         error="Internal Server Error",
+                         details="An unexpected error has occurred.",
+                         back_link=url_for('index')), 500

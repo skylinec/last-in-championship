@@ -1138,6 +1138,88 @@ scoring-explanation ul li::before {
 </style>
 
 <script>
+function loadExistingRules() {
+    const rulesJson = document.getElementById('rulesJson');
+    if (rulesJson && rulesJson.value) {
+        try {
+            const rules = JSON.parse(rulesJson.value);
+            rules.forEach(rule => {
+                if (rule.type === 'condition' || rule.type === 'action') {
+                    let template = buildTemplateFromRule(rule);
+                    createRuleBlock(rule.type, template);
+                }
+            });
+            updateRulePreview();
+        } catch (e) {
+            console.error('Error loading existing rules:', e);
+        }
+    }
+}
+
+function buildTemplateFromRule(rule) {
+    if (rule.type === 'condition') {
+        if (rule.arrival) {
+            return `if arrival {operator} {time}`;
+        } else if (rule.working) {
+            return `if working {status}`;
+        } else if (rule.day) {
+            return `if day is {day}`;
+        } else if (rule.streak) {
+            return `if streak {operator} {value}`;
+        }
+    } else if (rule.type === 'action') {
+        if (rule.award) {
+            return `award {points} points`;
+        } else if (rule.multiply) {
+            return `multiply points by {value}`;
+        } else if (rule.streak) {
+            return `add streak bonus`;
+        }
+    }
+    return '';
+}
+
+// Add modal handling
+document.querySelector('.open-rules-editor').addEventListener('click', function() {
+    const modal = document.getElementById('rulesEditorModal');
+    modal.style.display = 'block';
+});
+
+document.querySelector('.close').addEventListener('click', function() {
+    const modal = document.getElementById('rulesEditorModal');
+    modal.style.display = 'none';
+});
+
+window.addEventListener('click', function(event) {
+    const modal = document.getElementById('rulesEditorModal');
+    if (event.target === modal) {
+        modal.style.display = 'none';
+    }
+});
+// ...existing code...
+function openRulesEditor() {
+    fetch("/api/rules")
+        .then(response => response.json())
+        .then(rules => {
+            // ...existing code...
+            document.getElementById("rulesContainer").innerText = JSON.stringify(rules, null, 2);
+            document.getElementById("rulePreview").innerText = JSON.stringify(rules, null, 2);
+        });
+}
+function testRules() {
+    alert("Test your rules here");
+    // ...existing code...
+}
+function saveRules() {
+    const currentRules = JSON.parse(document.getElementById("rulesContainer").innerText || "[]");
+    fetch("/api/rules", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({rules: currentRules})
+    }).then(() => {
+        alert("Rules saved successfully");
+    });
+}
 document.addEventListener('DOMContentLoaded', function() {
     // Update mode-specific info based on championship toggle
     function updateModeInfo() {
@@ -1674,31 +1756,5 @@ function collectRulesFromEditor() {
 
 // ...rest of existing code...
 var settings = {{ settings_data|tojson|safe }} || {};
-</script>
-<script>
-    // ...existing code...
-    function openRulesEditor() {
-        fetch("/api/rules")
-            .then(response => response.json())
-            .then(rules => {
-                // ...existing code...
-                document.getElementById("rulesContainer").innerText = JSON.stringify(rules, null, 2);
-                document.getElementById("rulePreview").innerText = JSON.stringify(rules, null, 2);
-            });
-    }
-    function testRules() {
-        alert("Test your rules here");
-        // ...existing code...
-    }
-    function saveRules() {
-        const currentRules = JSON.parse(document.getElementById("rulesContainer").innerText || "[]");
-        fetch("/api/rules", {
-            method: "POST",
-            headers: {"Content-Type": "application/json"},
-            body: JSON.stringify({rules: currentRules})
-        }).then(() => {
-            alert("Rules saved successfully");
-        });
-    }
 </script>
 {% endblock %}

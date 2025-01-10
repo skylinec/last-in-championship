@@ -8,6 +8,7 @@ import uuid
 import psycopg2
 import psycopg2.extras  # Add this import
 import json  # Add explicit json import
+from prometheus_client import start_http_server, Summary, Counter, Gauge
 
 # Configure logging
 logging.basicConfig(
@@ -3094,6 +3095,7 @@ def missing_entries():
         db.close()
         
 if __name__ == "__main__":
+    start_http_server(8000)  # Start Prometheus metrics server
     debug_mode = os.getenv('FLASK_ENV') == 'development'
     app.run(
         host=os.getenv('FLASK_HOST', '0.0.0.0'),
@@ -3114,3 +3116,23 @@ def internal_error(error):
                          error="Internal Server Error",
                          details="An unexpected error has occurred.",
                          back_link=url_for('index')), 500
+
+# Prometheus metrics
+REQUEST_TIME = Summary('request_processing_seconds', 'Time spent processing request')
+REQUEST_COUNT = Counter('request_count', 'Total request count')
+IN_PROGRESS = Gauge('in_progress_requests', 'In-progress requests')
+
+@app.before_request
+def before_request():
+    IN_PROGRESS.inc()
+
+@app.after_request
+def after_request(response):
+    IN_PROGRESS.dec()
+    REQUEST_COUNT.inc()
+    return response
+
+@app.route('/metrics')
+def metrics():
+    from prometheus_client import generate_latest
+    return generate_latest()

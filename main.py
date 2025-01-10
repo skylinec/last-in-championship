@@ -138,6 +138,10 @@ def init_settings():
                 "sick": 5,
                 "leave": 5,
                 "shift_length": 9,
+                "daily_shifts": {
+                    day: {"hours": 9, "start": "09:00"}
+                    for day in ["monday", "tuesday", "wednesday", "thursday", "friday"]
+                },
                 "working_days": {
                     user: ['mon','tue','wed','thu','fri'] 
                     for user in ["Matt", "Kushal", "Nathan", "Michael", "Ben"]
@@ -980,10 +984,17 @@ def day_rankings(date=None):
     day_entries = [e for e in data if e["date"] == date]
     day_entries.sort(key=lambda x: datetime.strptime(x["time"], "%H:%M"))
     
-    # Get shift length from settings
+    # Get shift length based on the day
     settings = load_settings()
-    shift_length_hours = float(settings.get("points", {}).get("shift_length", 9))
+    weekday = datetime.strptime(date, '%Y-%m-%d').strftime('%A').lower()
+    day_shift = settings["points"].get("daily_shifts", {}).get(weekday, {
+        "hours": settings["points"].get("shift_length", 9),
+        "start": "09:00"
+    })
+    
+    shift_length_hours = float(day_shift["hours"])
     shift_length_minutes = int(shift_length_hours * 60)
+    shift_start = datetime.strptime(day_shift["start"], "%H:%M")
     
     # Calculate points and prepare rankings
     rankings = []
@@ -993,7 +1004,7 @@ def day_rankings(date=None):
         entry_time = datetime.strptime(entry["time"], "%H:%M")
         entry_date = datetime.strptime(entry["date"], "%Y-%m-%d")
         
-        # Use configured shift length
+        # Use day-specific shift length
         shift_length = shift_length_minutes
         end_time = entry_time + timedelta(minutes=shift_length)
         

@@ -48,6 +48,7 @@
                             width: {{ (entry.shift_length / 720) * 100 }}%"
                      title="{{ entry.name }}: {{ entry.time }} - {{ entry.end_time }} ({{ entry.shift_hours }} hours)">
                     <span class="timeline-time">{{ entry.time }}</span>
+                    <span class="timeline-shift-length">{{ entry.shift_hours }}h</span>
                     <span class="timeline-end-time">{{ entry.end_time }}</span>
                 </div>
             </div>
@@ -193,6 +194,15 @@ window.addEventListener('resize', adjustTimelineBars);
 }
 .timeline-end-time {
     right: 5px;
+}
+.timeline-shift-length {
+    position: absolute;
+    font-size: 0.7em;
+    color: rgba(255, 255, 255, 0.8);
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    white-space: nowrap;
 }
 </style>
 {% endblock %}

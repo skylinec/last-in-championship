@@ -959,6 +959,27 @@ def view_rankings(period, date_str=None):
                     rank["max_streak"] = streak.max_streak
             
             settings = load_settings()
+            
+            # Calculate earliest and latest hours from actual data
+            all_times = []
+            for rank in rankings:
+                if rank.get('time') and rank['time'] != 'N/A':
+                    time_obj = datetime.strptime(rank['time'], '%H:%M')
+                    all_times.append(time_obj)
+                    if rank.get('end_time') and rank['end_time'] != 'N/A':
+                        end_obj = datetime.strptime(rank['end_time'], '%H:%M')
+                        all_times.append(end_obj)
+
+            earliest_hour = 7  # Default earliest
+            latest_hour = 19  # Default latest
+            
+            if all_times:
+                earliest_time = min(all_times)
+                latest_time = max(all_times)
+                # Round down/up to nearest hour
+                earliest_hour = max(7, earliest_time.hour)  # Don't go earlier than 7am
+                latest_hour = min(19, latest_time.hour + 1)  # Don't go later than 7pm
+            
             template_data = {
                 'rankings': rankings,
                 'period': period,
@@ -966,7 +987,9 @@ def view_rankings(period, date_str=None):
                 'current_display': format_date_range(current_date, period_end, period),
                 'current_month_value': current_date.strftime('%Y-%m'),
                 'mode': mode,
-                'streaks_enabled': settings.get("enable_streaks", False)
+                'streaks_enabled': settings.get("enable_streaks", False),
+                'earliest_hour': earliest_hour,
+                'latest_hour': latest_hour
             }
             
             app.logger.debug(f"Rankings template data: {template_data}")

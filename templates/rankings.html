@@ -219,11 +219,12 @@
 }
 
 .timeline-scale {
-    display: grid;
-    grid-template-columns: repeat(13, 1fr); /* 13 hours: 7:00 to 19:00 */
+    display: flex;
+    justify-content: space-between;
     margin-bottom: 10px;
     border-bottom: 1px solid #eee;
     padding-bottom: 5px;
+    position: relative;
 }
 
 .timeline-scale span {
@@ -231,6 +232,7 @@
     color: #666;
     text-align: center;
     position: relative;
+    flex: 1;
 }
 
 .timeline-scale span::after {
@@ -240,6 +242,31 @@
     left: 50%;
     width: 1px;
     height: 5px;
+    background: #eee;
+}
+
+.timeline-bar-container {
+    position: relative;
+    flex-grow: 1;
+    height: 25px;
+    background: #f5f5f5;
+    border-radius: 4px;
+}
+
+.timeline-grid-lines {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    pointer-events: none;
+}
+
+.timeline-grid-line {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 1px;
     background: #eee;
 }
 
@@ -436,30 +463,93 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // Add timeline scaling function
 function adjustTimelineBars() {
-    const bars = document.querySelectorAll('.timeline-bar');
-    const container = document.querySelector('.timeline-bar-container');
-    const containerWidth = container.offsetWidth;
+    const container = document.querySelector('.timeline-container');
+    if (!container) return;
+
+    const earliestHour = {{ earliest_hour }};
+    const latestHour = {{ latest_hour }};
+    const totalHours = latestHour - earliestHour;
     
-    bars.forEach(bar => {
-        // Ensure times are visible
-        const startTime = bar.querySelector('.timeline-time');
-        const endTime = bar.querySelector('.timeline-end-time');
-        const barWidth = bar.offsetWidth;
+    // Update timeline scale
+    const timelineScale = container.querySelector('.timeline-scale');
+    timelineScale.innerHTML = '';
+    
+    // Create hour markers
+    for (let hour = earliestHour; hour <= latestHour; hour++) {
+        const span = document.createElement('span');
+        span.textContent = `${hour.toString().padStart(2, '0')}:00`;
+        timelineScale.appendChild(span);
+    }
+
+    // Update grid lines for each timeline bar container
+    const barContainers = container.querySelectorAll('.timeline-bar-container');
+    barContainers.forEach(container => {
+        const gridLines = document.createElement('div');
+        gridLines.className = 'timeline-grid-lines';
         
-        if (barWidth < 80) { // If bar is too narrow
-            startTime.style.fontSize = '0.7em';
-            endTime.style.fontSize = '0.7em';
+        // Create vertical grid lines
+        for (let hour = earliestHour; hour <= latestHour; hour++) {
+            const line = document.createElement('div');
+            line.className = 'timeline-grid-line';
+            const position = ((hour - earliestHour) / totalHours) * 100;
+            line.style.left = `${position}%`;
+            gridLines.appendChild(line);
+        }
+        
+        // Remove existing grid lines
+        const existingGridLines = container.querySelector('.timeline-grid-lines');
+        if (existingGridLines) {
+            existingGridLines.remove();
+        }
+        container.appendChild(gridLines);
+    });
+
+    // Adjust timeline bars
+    const bars = container.querySelectorAll('.timeline-bar');
+    bars.forEach(bar => {
+        const startTime = bar.querySelector('.timeline-time').textContent;
+        const endTime = bar.querySelector('.timeline-end-time').textContent;
+        
+        const [startHour, startMinute] = startTime.split(':').map(Number);
+        const [endHour, endMinute] = endTime.split(':').map(Number);
+        
+        const startMinutes = startHour * 60 + startMinute;
+        const endMinutes = endHour * 60 + endMinute;
+        
+        const timelineStart = earliestHour * 60;
+        const timelineEnd = latestHour * 60;
+        const timelineRange = timelineEnd - timelineStart;
+        
+        const left = ((startMinutes - timelineStart) / timelineRange) * 100;
+        const width = ((endMinutes - startMinutes) / timelineRange) * 100;
+        
+        bar.style.left = `${left}%`;
+        bar.style.width = `${width}%`;
+        
+        // Adjust time label visibility based on bar width
+        const barWidth = bar.offsetWidth;
+        const startLabel = bar.querySelector('.timeline-time');
+        const endLabel = bar.querySelector('.timeline-end-time');
+        
+        if (barWidth < 80) {
+            startLabel.style.fontSize = '0.7em';
+            endLabel.style.fontSize = '0.7em';
             if (barWidth < 60) {
-                endTime.style.display = 'none';
+                endLabel.style.display = 'none';
                 if (barWidth < 40) {
-                    startTime.style.display = 'none';
+                    startLabel.style.display = 'none';
                 }
             }
+        } else {
+            startLabel.style.fontSize = '';
+            endLabel.style.fontSize = '';
+            startLabel.style.display = '';
+            endLabel.style.display = '';
         }
     });
 }
 
-// Call on load and resize
+// Call adjustTimelineBars on load and resize
 window.addEventListener('load', adjustTimelineBars);
 window.addEventListener('resize', adjustTimelineBars);
 </script>

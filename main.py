@@ -20,6 +20,11 @@ logger = logging.getLogger(__name__)
 app = Flask(__name__)
 app.secret_key = os.getenv('SECRET_KEY', 'dev-secret-key')  # Default for development
 
+# Add this after the app creation and before route definitions
+def today():
+    """Return today's date for template use"""
+    return datetime.now().date()
+
 def check_configuration():
     """Check and log important configuration settings"""
     logger.info("Checking configuration...")
@@ -3026,17 +3031,17 @@ def missing_entries():
         settings = db.query(Settings).first()
         start_date = settings.monitoring_start_date if settings else datetime.now().replace(month=1, day=1).date()
 
-        # Get missing entries with proper SQL query using positional parameters
+        # Updated query to use named parameter
         missing = db.execute(
             text("""
                 SELECT 
                     missing_entries.date::date as date, 
                     missing_entries.checked_at 
                 FROM missing_entries 
-                WHERE missing_entries.date >= $1::date
+                WHERE missing_entries.date >= :start_date
                 ORDER BY missing_entries.date DESC
             """),
-            [start_date.strftime('%Y-%m-%d')]
+            {"start_date": start_date.strftime('%Y-%m-%d')}  # Use dictionary for named parameters
         ).fetchall()
 
         # Get core users and attendance records

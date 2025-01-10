@@ -1,51 +1,76 @@
 from flask import Flask, request, jsonify, render_template, session, redirect, url_for
-from sqlalchemy import create_engine, Column, Integer, String, DateTime, Date, Float, JSON, event, text, Boolean, inspect
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
-from datetime import datetime, timedelta, date  # Add date import
 import os
+import logging
+from sqlalchemy import create_engine, event
+from datetime import datetime, timedelta, date  # Add date import
 import uuid
 import psycopg2
 import psycopg2.extras  # Add this import
 import json  # Add explicit json import
 
+# Configure logging
+logging.basicConfig(
+    level=logging.DEBUG if os.getenv('FLASK_ENV') == 'development' else logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
+
 # Create Flask app first, before any route definitions
 app = Flask(__name__)
-app.secret_key = os.getenv('SECRET_KEY', 'supersecretkey')
+app.secret_key = os.getenv('SECRET_KEY', 'dev-secret-key')  # Default for development
 
-# Add this after the app creation and before route definitions
-def today():
-    """Return today's date for template use"""
-    return datetime.now().date()
+def check_configuration():
+    """Check and log important configuration settings"""
+    logger.info("Checking configuration...")
+    config = {
+        'FLASK_ENV': os.getenv('FLASK_ENV', 'production'),
+        'DATABASE_URL': os.getenv('DATABASE_URL', '[MASKED]'),
+        'DEBUG': app.debug
+    }
+    for key, value in config.items():
+        if key == 'DATABASE_URL':
+            logger.info(f"{key}: {'[MASKED]'}")
+        else:
+            logger.info(f"{key}: {value}")
+    return config
 
-# Make today function available to all templates
-@app.context_processor
-def utility_processor():
-    return {'today': today}
+# Database configuration with better error handling
+def get_database_url():
+    """Get database URL with fallback for development"""
+    db_url = os.getenv('DATABASE_URL')
+    if not db_url:
+        logger.warning("DATABASE_URL not set, using development default")
+        db_url = 'postgresql://postgres:postgres@localhost:5432/championship'
+    return db_url
 
-# Database setup - update engine configuration
-DATABASE_URL = os.getenv('DATABASE_URL', 'postgresql://user:password@localhost:5432/championship')
-engine = create_engine(
-    DATABASE_URL,
-    pool_size=20,  # Increase from default 5
-    max_overflow=30,  # Increase from default 10
-    pool_timeout=60,  # Increase from default 30
-    pool_pre_ping=True,  # Enable connection health checks
-    pool_recycle=3600  # Recycle connections after 1 hour
-)
+try:
+    DATABASE_URL = get_database_url()
+    engine = create_engine(
+        DATABASE_URL,
+        pool_size=int(os.getenv('DB_POOL_SIZE', '20')),
+        max_overflow=int(os.getenv('DB_MAX_OVERFLOW', '30')),
+        pool_timeout=int(os.getenv('DB_POOL_TIMEOUT', '60')),
+        pool_pre_ping=True,
+        pool_recycle=3600
+    )
+    logger.info("Database engine created successfully")
+except Exception as e:
+    logger.error(f"Failed to create database engine: {str(e)}")
+    raise
 
-# Add connection pool logging
-@event.listens_for(engine, "connect")
-def connect(dbapi_connection, connection_record):
-    app.logger.info("New database connection created")
+# Add connection pool logging with environment check
+if os.getenv('FLASK_ENV') == 'development':
+    @event.listens_for(engine, "connect")
+    def connect(dbapi_connection, connection_record):
+        logger.debug("New database connection created")
 
-@event.listens_for(engine, "checkout")
-def receive_checkout(dbapi_connection, connection_record, connection_proxy):
-    app.logger.debug("Database connection checked out from pool")
+    @event.listens_for(engine, "checkout")
+    def receive_checkout(dbapi_connection, connection_record, connection_proxy):
+        logger.debug("Database connection checked out from pool")
 
-@event.listens_for(engine, "checkin")
-def receive_checkin(dbapi_connection, connection_record):
-    app.logger.debug("Database connection returned to pool")
+    @event.listens_for(engine, "checkin")
+    def receive_checkin(dbapi_connection, connection_record):
+        logger.debug("Database connection returned to pool")
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
@@ -3054,7 +3079,12 @@ def missing_entries():
         db.close()
         
 if __name__ == "__main__":
-    app.run(debug=True)
+    debug_mode = os.getenv('FLASK_ENV') == 'development'
+    app.run(
+        host=os.getenv('FLASK_HOST', '0.0.0.0'),
+        port=int(os.getenv('FLASK_PORT', '5000')),
+        debug=debug_mode
+    )
 
 @app.errorhandler(404)
 def not_found_error(error):

@@ -1,0 +1,18 @@
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Install build dependencies
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    libpq-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY requirements.txt .
+RUN pip install -r requirements.txt
+
+# Add watchdog for hot reloading
+RUN pip install watchdog
+
+# Don't copy code - it will be mounted as volume
+CMD ["python", "run_dev.py"]

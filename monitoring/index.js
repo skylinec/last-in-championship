@@ -103,15 +103,34 @@ async function generateStreaks() {
   const client = await pool.connect();
   try {
     const startTime = Date.now();
-    // Clear existing streaks
     await client.query('DELETE FROM user_streaks');
+
+    // Get settings first to check if streaks are enabled
+    const settings = await client.query('SELECT enable_streaks FROM settings LIMIT 1');
+    if (!settings.rows[0]?.enable_streaks) {
+      await logMonitoringEvent('streak_generation', {
+        duration: Date.now() - startTime,
+        streaks_generated: 0,
+        message: 'Streaks disabled in settings'
+      });
+      return;
+    }
+
+    // First get working days for each user
+    const settingsQuery = await client.query('SELECT points FROM settings LIMIT 1');
+    const workingDays = settingsQuery.rows[0]?.points?.working_days || {};
 
     // Get all relevant entries ordered by user and date
     const entries = await client.query(`
-      SELECT name, date::date, timestamp
-      FROM entries
-      WHERE status IN ('in-office', 'remote')
-      ORDER BY name, date DESC
+      SELECT 
+        e.name, 
+        e.date::date, 
+        e.timestamp,
+        e.status,
+        EXTRACT(DOW FROM e.date::date) as day_of_week
+      FROM entries e
+      WHERE e.status IN ('in-office', 'remote')
+      ORDER BY e.name, e.date DESC
     `);
 
     if (!entries.rows.length) return;
@@ -144,13 +163,41 @@ async function generateStreaks() {
       }
 
       const daysBetween = Math.floor((lastDate - entry.date) / (1000 * 60 * 60 * 24));
-
+      
+      // Get user's working days
+      const userWorkingDays = workingDays[entry.name] || ['mon', 'tue', 'wed', 'thu', 'fri'];
+      const dayMap = {0: 'sun', 1: 'mon', 2: 'tue', 3: 'wed', 4: 'thu', 5: 'fri', 6: 'sat'};
+      
+      // Check if this is a working day for the user
+      const isWorkingDay = userWorkingDays.includes(dayMap[entry.day_of_week]);
+      
       if (daysBetween <= 3) { // Within streak range
-        if (daysBetween <= 1 || isWeekendGap(lastDate, entry.date)) {
-          currentStreak++;
-          maxStreak = Math.max(maxStreak, currentStreak);
+        if (daysBetween <= 1) {
+          // Consecutive days
+          if (isWorkingDay) {
+            currentStreak++;
+            maxStreak = Math.max(maxStreak, currentStreak);
+          }
         } else {
-          currentStreak = 1;
+          // Check if gap only includes non-working days
+          let onlyNonWorkingDays = true;
+          for (let d = 1; d < daysBetween; d++) {
+            const checkDate = new Date(lastDate);
+            checkDate.setDate(checkDate.getDate() - d);
+            const checkDayOfWeek = checkDate.getDay();
+            const isDayWorking = userWorkingDays.includes(dayMap[checkDayOfWeek]);
+            if (isDayWorking) {
+              onlyNonWorkingDays = false;
+              break;
+            }
+          }
+          
+          if (onlyNonWorkingDays && isWorkingDay) {
+            currentStreak++;
+            maxStreak = Math.max(maxStreak, currentStreak);
+          } else {
+            currentStreak = 1;
+          }
         }
       } else {
         currentStreak = 1;
@@ -184,8 +231,10 @@ async function generateStreaks() {
 
     await logMonitoringEvent('streak_generation', {
       duration: Date.now() - startTime,
-      streaks_generated: streaks.length
+      streaks_generated: streaks.length,
+      message: 'Streaks generated successfully'
     });
+
   } catch (error) {
     await logMonitoringEvent('streak_generation', {
       error: error.message

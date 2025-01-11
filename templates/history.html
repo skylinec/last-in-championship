@@ -37,6 +37,16 @@
                     <option value="leave">Leave</option>
                 </select>
             </div>
+
+            <div class="filter-group">
+                <label for="entriesPerPage">Entries per page:</label>
+                <select id="entriesPerPage" class="form-control">
+                    <option value="50">50 entries</option>
+                    <option value="100">100 entries</option>
+                    <option value="200">200 entries</option>
+                    <option value="500">500 entries</option>
+                </select>
+            </div>
         </div>
 
         <div class="filter-section date-range">
@@ -85,7 +95,13 @@
 
 <script>
 let currentPage = 1;
-const ITEMS_PER_PAGE = 20;
+let ITEMS_PER_PAGE = 50;
+
+document.getElementById('entriesPerPage').addEventListener('change', function() {
+    ITEMS_PER_PAGE = parseInt(this.value);
+    currentPage = 1;
+    loadHistory();
+});
 
 async function loadHistory() {
     const periodSelect = document.getElementById('periodFilter');
@@ -101,6 +117,7 @@ async function loadHistory() {
     try {
         const params = new URLSearchParams({
             page: currentPage,
+            per_page: ITEMS_PER_PAGE,
             from: fromDate,
             to: toDate
         });

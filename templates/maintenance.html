@@ -47,6 +47,12 @@
                     <option value="success">Success</option>
                     <option value="error">Error</option>
                 </select>
+                <select id="entriesPerPage">
+                    <option value="50">50 entries</option>
+                    <option value="100">100 entries</option>
+                    <option value="200">200 entries</option>
+                    <option value="500">500 entries</option>
+                </select>
             </div>
             <div class="log-container">
                 <table class="log-table">
@@ -75,6 +81,11 @@
                         {% endfor %}
                     </tbody>
                 </table>
+            </div>
+            <div class="pagination">
+                <button class="btn-nav" onclick="changePage(-1)">&laquo; Previous</button>
+                <span>Page <span id="currentPage">1</span> of <span id="totalPages">1</span></span>
+                <button class="btn-nav" onclick="changePage(1)">Next &raquo;</button>
             </div>
         </div>
     </div>
@@ -392,17 +403,62 @@ window.onclick = function(event) {
 
 document.getElementById('logFilter').addEventListener('change', filterLogs);
 document.getElementById('statusFilter').addEventListener('change', filterLogs);
+document.getElementById('entriesPerPage').addEventListener('change', function() {
+    itemsPerPage = parseInt(this.value);
+    currentPage = 1;
+    filterLogs();
+});
 
-function filterLogs() {
+let currentPage = 1;
+let itemsPerPage = 50;
+
+function changePage(delta) {
+    const totalPages = Math.ceil(getVisibleLogs().length / itemsPerPage);
+    const newPage = currentPage + delta;
+    
+    if (newPage >= 1 && newPage <= totalPages) {
+        currentPage = newPage;
+        updateLogDisplay();
+    }
+}
+
+function getVisibleLogs() {
     const eventType = document.getElementById('logFilter').value;
     const status = document.getElementById('statusFilter').value;
-    const logs = document.querySelectorAll('.log-entry');
+    const logs = Array.from(document.querySelectorAll('.log-entry'));
     
-    logs.forEach(log => {
+    return logs.filter(log => {
         const showEvent = eventType === 'all' || log.classList.contains(eventType);
         const showStatus = status === 'all' || log.classList.contains(status);
-        log.style.display = (showEvent && showStatus) ? '' : 'none';
+        return showEvent && showStatus;
     });
 }
+
+function updateLogDisplay() {
+    const logs = getVisibleLogs();
+    const totalPages = Math.ceil(logs.length / itemsPerPage);
+    const start = (currentPage - 1) * itemsPerPage;
+    const end = start + itemsPerPage;
+    
+    logs.forEach((log, index) => {
+        log.style.display = (index >= start && index < end) ? '' : 'none';
+    });
+    
+    document.getElementById('currentPage').textContent = currentPage;
+    document.getElementById('totalPages').textContent = totalPages;
+    
+    const prevButton = document.querySelector('.btn-nav:first-of-type');
+    const nextButton = document.querySelector('.btn-nav:last-of-type');
+    prevButton.disabled = currentPage <= 1;
+    nextButton.disabled = currentPage >= totalPages;
+}
+
+function filterLogs() {
+    currentPage = 1;
+    updateLogDisplay();
+}
+
+// Initialize display
+updateLogDisplay();
 </script>
 {% endblock %}

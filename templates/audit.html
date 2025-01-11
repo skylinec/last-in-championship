@@ -40,6 +40,18 @@
             </div>
         </div>
         
+        <div class="filter-section">
+            <div class="filter-group">
+                <label for="entriesPerPage">Entries per page:</label>
+                <select id="entriesPerPage" name="per_page">
+                    <option value="50">50 entries</option>
+                    <option value="100">100 entries</option>
+                    <option value="200">200 entries</option>
+                    <option value="500">500 entries</option>
+                </select>
+            </div>
+        </div>
+
         <div class="filter-actions">
             <button type="submit" class="btn-primary">Apply Filters</button>
             <button type="button" class="btn-secondary" onclick="resetFilters()">Reset</button>
@@ -101,15 +113,9 @@
 </div>
 
 <div class="pagination">
-    {% if total_pages > 1 %}
-        {% for p in range(1, total_pages + 1) %}
-            <a href="#" 
-               onclick="changePage({{ p }})"
-               class="page-link {% if p == current_page %}active{% endif %}">
-                {{ p }}
-            </a>
-        {% endfor %}
-    {% endif %}
+    <button class="btn-nav" onclick="changePage(-1)">&laquo; Previous</button>
+    <span>Page <span id="currentPage">{{ current_page }}</span> of <span id="totalPages">{{ total_pages }}</span></span>
+    <button class="btn-nav" onclick="changePage(1)">Next &raquo;</button>
 </div>
 
 <style>
@@ -403,6 +409,7 @@ function applyFilters(page = 1) {
     const userSelect = document.getElementById('user');
     const fromDate = document.getElementById('from').value;
     const toDate = document.getElementById('to').value;
+    const perPage = document.getElementById('entriesPerPage').value;
 
     const actions = Array.from(actionSelect.selectedOptions).map(opt => opt.value);
     const users = Array.from(userSelect.selectedOptions).map(opt => opt.value);
@@ -412,7 +419,8 @@ function applyFilters(page = 1) {
         user: users.join(','),
         from: fromDate,
         to: toDate,
-        page: page
+        page: page,
+        per_page: perPage
     });
 
     window.location.href = `/audit?${params.toString()}`;
@@ -433,6 +441,22 @@ document.addEventListener('DOMContentLoaded', () => {
         const date = new Date(cell.textContent);
         cell.textContent = date.toLocaleString();
     });
+
+    // Initialize per_page from URL params
+    const params = new URLSearchParams(window.location.search);
+    const perPage = params.get('per_page') || '50';
+    document.getElementById('entriesPerPage').value = perPage;
+    
+    // Disable nav buttons if needed
+    const currentPage = parseInt(document.getElementById('currentPage').textContent);
+    const totalPages = parseInt(document.getElementById('totalPages').textContent);
+    const prevButton = document.querySelector('.btn-nav:first-of-type');
+    const nextButton = document.querySelector('.btn-nav:last-of-type');
+    
+    if (prevButton && nextButton) {
+        prevButton.disabled = currentPage <= 1;
+        nextButton.disabled = currentPage >= totalPages;
+    }
 });
 </script>
 {% endblock %}

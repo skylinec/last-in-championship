@@ -536,9 +536,12 @@ def view_audit():
     try:
         app.logger.info("Fetching audit logs...")
         
-        # Get filter parameters
+        # Get filter parameters with new per_page parameter
         page = request.args.get('page', 1, type=int)
-        per_page = 20
+        per_page = request.args.get('per_page', 50, type=int)
+        # Ensure per_page is within limits
+        per_page = min(max(per_page, 50), 500)
+        
         action_filter = request.args.get('action', 'all')
         user_filter = request.args.get('user', 'all')
         date_from = request.args.get('from')
@@ -1213,9 +1216,11 @@ def day_rankings(date=None):
 def get_entries():
     db = SessionLocal()
     try:
-        # Get filter parameters
+        # Get filter parameters with new per_page parameter
         page = int(request.args.get("page", 1))
-        per_page = 20
+        per_page = int(request.args.get("per_page", 50))
+        # Ensure per_page is within limits
+        per_page = min(max(per_page, 50), 500)
         
         query = db.query(Entry)
         
@@ -1839,7 +1844,16 @@ def period_filter(entry, period):
 def maintenance():
     db = SessionLocal()
     try:
-        # Fetch recent monitoring logs
+        # Get pagination parameters
+        page = request.args.get('page', 1, type=int)
+        per_page = request.args.get('per_page', 50, type=int)
+        # Ensure per_page is within limits
+        per_page = min(max(per_page, 50), 500)
+
+        # Calculate offset
+        offset = (page - 1) * per_page
+        
+        # Fetch monitoring logs with pagination
         monitoring_logs = db.execute(
             text("""
                 SELECT 
@@ -1849,13 +1863,24 @@ def maintenance():
                     status
                 FROM monitoring_logs
                 ORDER BY timestamp DESC
-                LIMIT 100
-            """)
+                LIMIT :limit OFFSET :offset
+            """),
+            {
+                "limit": per_page,
+                "offset": offset
+            }
         ).fetchall()
+
+        # Get total count for pagination
+        total_logs = db.scalar(text("SELECT COUNT(*) FROM monitoring_logs"))
+        total_pages = (total_logs + per_page - 1) // per_page
         
         return render_template(
             "maintenance.html",
-            monitoring_logs=monitoring_logs
+            monitoring_logs=monitoring_logs,
+            current_page=page,
+            total_pages=total_pages,
+            per_page=per_page
         )
     finally:
         db.close()

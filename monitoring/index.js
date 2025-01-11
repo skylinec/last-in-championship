@@ -5,6 +5,8 @@ const pool = new Pool({
   connectionString: process.env.DATABASE_URL
 });
 
+const MAX_LOG_ENTRIES = 5000;
+
 async function initDb() {
   const client = await pool.connect();
   try {
@@ -18,6 +20,11 @@ async function initDb() {
         status VARCHAR(20) DEFAULT 'success'
       )
     `);
+    
+    // Add periodic cleanup
+    setInterval(cleanupOldLogs, 1800000); // Run every 30 minutes
+    await cleanupOldLogs(); // Initial cleanup
+    
   } finally {
     client.release();
   }
@@ -30,6 +37,26 @@ async function logMonitoringEvent(eventType, details, status = 'success') {
       'INSERT INTO monitoring_logs (event_type, details, status) VALUES ($1, $2, $3)',
       [eventType, JSON.stringify(details), status]
     );
+  } finally {
+    client.release();
+  }
+}
+
+async function cleanupOldLogs() {
+  const client = await pool.connect();
+  try {
+    // Delete oldest logs keeping only MAX_LOG_ENTRIES most recent
+    await client.query(`
+      DELETE FROM monitoring_logs 
+      WHERE id IN (
+        SELECT id 
+        FROM monitoring_logs 
+        ORDER BY timestamp DESC 
+        OFFSET $1
+      )
+    `, [MAX_LOG_ENTRIES]);
+  } catch (error) {
+    console.error('Error cleaning up old logs:', error);
   } finally {
     client.release();
   }

@@ -1837,7 +1837,28 @@ def period_filter(entry, period):
 @app.route("/maintenance")
 @login_required
 def maintenance():
-    return render_template("maintenance.html")
+    db = SessionLocal()
+    try:
+        # Fetch recent monitoring logs
+        monitoring_logs = db.execute(
+            text("""
+                SELECT 
+                    timestamp,
+                    event_type,
+                    details,
+                    status
+                FROM monitoring_logs
+                ORDER BY timestamp DESC
+                LIMIT 100
+            """)
+        ).fetchall()
+        
+        return render_template(
+            "maintenance.html",
+            monitoring_logs=monitoring_logs
+        )
+    finally:
+        db.close()
 
 @app.route("/export-data")
 @login_required

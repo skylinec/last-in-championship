@@ -5,9 +5,41 @@ const pool = new Pool({
   connectionString: process.env.DATABASE_URL
 });
 
+async function initDb() {
+  const client = await pool.connect();
+  try {
+    // Create monitoring_logs table if it doesn't exist
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS monitoring_logs (
+        id SERIAL PRIMARY KEY,
+        timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        event_type VARCHAR(50) NOT NULL,
+        details JSONB,
+        status VARCHAR(20) DEFAULT 'success'
+      )
+    `);
+  } finally {
+    client.release();
+  }
+}
+
+async function logMonitoringEvent(eventType, details, status = 'success') {
+  const client = await pool.connect();
+  try {
+    await client.query(
+      'INSERT INTO monitoring_logs (event_type, details, status) VALUES ($1, $2, $3)',
+      [eventType, JSON.stringify(details), status]
+    );
+  } finally {
+    client.release();
+  }
+}
+
+// Update existing functions to include logging
 async function checkMissingEntries() {
   const client = await pool.connect();
   try {
+    const startTime = Date.now();
     const settingsResult = await client.query('SELECT monitoring_start_date::date FROM settings LIMIT 1');
     const startDate = settingsResult.rows[0]?.monitoring_start_date || new Date().toISOString().split('T')[0];
     
@@ -52,6 +84,16 @@ async function checkMissingEntries() {
         `);
       }
     }
+
+    await logMonitoringEvent('missing_entries_check', {
+      duration: Date.now() - startTime,
+      entries_found: missingEntries.rows.length
+    });
+  } catch (error) {
+    await logMonitoringEvent('missing_entries_check', {
+      error: error.message
+    }, 'error');
+    throw error;
   } finally {
     client.release();
   }
@@ -60,6 +102,7 @@ async function checkMissingEntries() {
 async function generateStreaks() {
   const client = await pool.connect();
   try {
+    const startTime = Date.now();
     // Clear existing streaks
     await client.query('DELETE FROM user_streaks');
 
@@ -139,6 +182,15 @@ async function generateStreaks() {
       `);
     }
 
+    await logMonitoringEvent('streak_generation', {
+      duration: Date.now() - startTime,
+      streaks_generated: streaks.length
+    });
+  } catch (error) {
+    await logMonitoringEvent('streak_generation', {
+      error: error.message
+    }, 'error');
+    throw error;
   } finally {
     client.release();
   }
@@ -168,3 +220,6 @@ setInterval(generateStreaks, INTERVAL);
 // Initial runs on startup
 checkMissingEntries().catch(console.error);
 generateStreaks().catch(console.error);
+
+// Initialize database on startup
+initDb().catch(console.error);

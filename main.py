@@ -19,6 +19,27 @@ from werkzeug.middleware.dispatcher import DispatcherMiddleware
 from prometheus_client import make_wsgi_app
 import time
 
+# Add new imports
+from functools import lru_cache
+from prometheus_client import Counter
+
+# Add new metrics
+CACHE_HITS = Counter('cache_hits_total', 'Cache hit count', ['function'])
+CACHE_MISSES = Counter('cache_misses_total', 'Cache miss count', ['function'])
+
+class CacheWithMetrics:
+    def __init__(self, func):
+        self.func = lru_cache(maxsize=128)(func)
+        self.name = func.__name__
+
+    def __call__(self, *args, **kwargs):
+        result = self.func(*args, **kwargs)
+        if self.func.cache_info().hits > self.func.cache_info().misses:
+            CACHE_HITS.labels(function=self.name).inc()
+        else:
+            CACHE_MISSES.labels(function=self.name).inc()
+        return result
+
 # Configure logging
 logging.basicConfig(
     level=logging.DEBUG if os.getenv('FLASK_ENV') == 'development' else logging.INFO,
@@ -253,6 +274,7 @@ def save_data(entries):
     db.commit()
     db.close()
 
+@CacheWithMetrics
 def load_settings():
     db = SessionLocal()
     try:
@@ -275,7 +297,10 @@ def load_settings():
     finally:
         db.close()
 
+# Add cache invalidation on settings update
 def save_settings(settings_data):
+    """Update settings with cache invalidation"""
+    load_settings.func.cache_clear()  # Clear the cached settings
     db = SessionLocal()
     try:
         settings = db.query(Settings).first()
@@ -784,6 +809,7 @@ def compare_values(val1, val2, operator):
     }
     return ops.get(operator, lambda: False)()
 
+@CacheWithMetrics
 def calculate_daily_score(entry, settings, position=None, total_entries=None, mode='last-in'):
     """Calculate score for a single day's entry with all bonuses"""
     # Get day-specific start time for late calculations
@@ -3231,5 +3257,64 @@ def handle_rules():
             settings.points = points
             db.commit()
             return jsonify({"status": "ok"})
+    finally:
+        db.close()
+
+# Add performance monitoring for database operations
+def record_db_timing(f):
+    @wraps(f)
+    def wrapper(*args, **kwargs):
+        start_time = time.time()
+        result = f(*args, **kwargs)
+        duration = time.time() - start_time
+        DB_OPERATION_TIME.labels(
+            operation=f.__name__
+        ).observe(duration)
+        return result
+    return wrapper
+
+# Add new metric for DB operation timing
+DB_OPERATION_TIME = Histogram(
+    'db_operation_seconds',
+    'Time spent in database operations',
+    ['operation']
+)
+
+@record_db_timing
+def load_data():
+    """Monitor database load operations"""
+    db = SessionLocal()
+    entries = db.query(Entry).all()
+    data = [
+        {
+            "id": entry.id,
+            "date": entry.date,
+            "time": entry.time,
+            "name": entry.name,
+            "status": entry.status,
+            "timestamp": entry.timestamp.isoformat()
+        }
+        for entry in entries
+    ]
+    db.close()
+    return data
+
+@app.route("/health")
+def health_check():
+    try:
+        db = SessionLocal()
+        db.execute("SELECT 1")
+        settings = load_settings()
+        metrics = {
+            "database": "healthy",
+            "settings": "loaded" if settings else "missing",
+            "cache_stats": {
+                "settings": load_settings.func.cache_info()._asdict(),
+                "scores": calculate_daily_score.func.cache_info()._asdict()
+            }
+        }
+        return jsonify({"status": "healthy", "metrics": metrics})
+    except Exception as e:
+        return jsonify({"status": "unhealthy", "error": str(e)}), 500
     finally:
         db.close()

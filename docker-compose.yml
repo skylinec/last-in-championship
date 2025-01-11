@@ -84,6 +84,15 @@ services:
       - prometheus
       - grafana
 
+  postgres_exporter:
+    image: prometheuscommunity/postgres-exporter
+    environment:
+      DATA_SOURCE_NAME: "postgresql://user:password@db:5432/championship?sslmode=disable"
+    ports:
+      - "9187:9187"
+    depends_on:
+      - db
+
 volumes:
   postgres_data:
   prometheus_data:

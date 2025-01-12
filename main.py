@@ -1480,7 +1480,12 @@ def normalize_settings(settings_dict):
         },
         "core_users": sorted(settings_dict.get("core_users", [])),
         "enable_streaks": bool(settings_dict.get("enable_streaks", False)),
-        "streak_multiplier": float(settings_dict.get("streak_multiplier", 0.5))
+        "streak_multiplier": float(settings_dict.get("streak_multiplier", 0.5)),
+        # Add tie breaker settings
+        "enable_tiebreakers": bool(settings_dict.get("enable_tiebreakers", False)),
+        "tiebreaker_points": int(settings_dict.get("tiebreaker_points", 5)),
+        "tiebreaker_expiry": int(settings_dict.get("tiebreaker_expiry", 24)),
+        "auto_resolve_tiebreakers": bool(settings_dict.get("auto_resolve_tiebreakers", False))
     }
 
 @app.route("/settings", methods=["GET", "POST"])
@@ -1512,6 +1517,14 @@ def manage_settings():
                 old_settings = db.query(Settings).first()
                 new_settings = request.json
                 
+                # Force boolean conversion for checkboxes
+                new_settings["enable_tiebreakers"] = bool(new_settings.get("enable_tiebreakers"))
+                new_settings["auto_resolve_tiebreakers"] = bool(new_settings.get("auto_resolve_tiebreakers"))
+                
+                # Force integer conversion for numeric fields
+                new_settings["tiebreaker_points"] = int(new_settings.get("tiebreaker_points", 5))
+                new_settings["tiebreaker_expiry"] = int(new_settings.get("tiebreaker_expiry", 24))
+
                 # Add monitoring_start_date to normalized settings
                 normalized_settings = normalize_settings(new_settings)
                 normalized_settings['monitoring_start_date'] = datetime.strptime(

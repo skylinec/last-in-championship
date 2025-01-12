@@ -2,14 +2,15 @@
 {% block title %}Tie Breakers{% endblock %}
 
 {% block content %}
-<h1>Championship Tie Breakers</h1>
-
 <div class="tie-breakers-container">
+    <h1>Championship Tie Breakers</h1>
+
     {% for tie in tie_breakers %}
-    <div class="tie-breaker-card">
+    <div class="tie-breaker-card {% if tie.status == 'pending' %}pending{% elif tie.status == 'in_progress' %}in-progress{% else %}completed{% endif %}">
         <div class="tie-header">
             <h3>{{ tie.period|title }} Tie - {{ tie.period_end|format_date }}</h3>
             <span class="points">{{ tie.points }} points</span>
+            <span class="status-badge">{{ tie.status|title }}</span>
         </div>
         
         <div class="participants">
@@ -17,16 +18,17 @@
             <div class="participant {% if participant.ready %}ready{% endif %}">
                 <span class="name">{{ participant.username }}</span>
                 {% if participant.game_choice %}
-                <span class="game-choice">Chose: {{ participant.game_choice }}</span>
+                    <span class="game-choice">{{ participant.game_choice|title }}</span>
                 {% endif %}
                 {% if participant.winner %}
-                <span class="winner-badge">🏆</span>
+                    <span class="winner-badge">🏆 Winner</span>
                 {% endif %}
             </div>
             {% endfor %}
         </div>
 
-        {% if current_user in tie.participant_names and not tie.is_ready %}
+        <!-- Show game selection form only for pending tie breakers -->
+        {% if tie.status == 'pending' and current_user in tie.participant_names and not tie.is_ready %}
         <div class="game-choice-form">
             <form method="POST" action="{{ url_for('choose_game', tie_id=tie.id) }}">
                 <select name="game_choice" required>
@@ -34,20 +36,33 @@
                     <option value="tictactoe">Tic-tac-toe</option>
                     <option value="connect4">Connect 4</option>
                 </select>
-                <button type="submit">I'm Ready</button>
+                <button type="submit" class="btn">I'm Ready</button>
             </form>
         </div>
         {% endif %}
 
-        {% if tie.status == 'in_progress' and tie.current_game %}
-        <div class="current-game">
-            <h4>Current Game</h4>
-            <p>{{ tie.current_game.player1 }} vs {{ tie.current_game.player2 }}</p>
-            <a href="{{ url_for('play_game', game_id=tie.current_game.id) }}" class="game-link">
-                Play Game
-            </a>
-        </div>
+        <!-- Show current game or start game button for in-progress tie breakers -->
+        {% if tie.status == 'in_progress' %}
+            {% if tie.current_game %}
+            <div class="current-game">
+                <h4>Current Game</h4>
+                <p>{{ tie.current_game.player1 }} vs {{ tie.current_game.player2 }}</p>
+                {% if current_user in [tie.current_game.player1, tie.current_game.player2] %}
+                    <a href="{{ url_for('play_game', game_id=tie.current_game.id) }}" class="btn game-link">
+                        Play Your Game
+                    </a>
+                {% else %}
+                    <a href="{{ url_for('play_game', game_id=tie.current_game.id) }}" class="btn game-link spectate">
+                        Watch Game
+                    </a>
+                {% endif %}
+            </div>
+            {% endif %}
         {% endif %}
+    </div>
+    {% else %}
+    <div class="no-tiebreakers">
+        <p>No active tie breakers at the moment.</p>
     </div>
     {% endfor %}
 </div>
@@ -109,17 +124,56 @@
 }
 
 .winner-badge {
-    font-size: 1.2em;
+    background: #ffd700;
+    color: #000;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 0.9em;
 }
 
 .game-link {
     display: inline-block;
+    padding: 10px 20px;
+    border-radius: 4px;
     background: var(--accent-color);
     color: white;
-    padding: 8px 16px;
-    border-radius: 4px;
     text-decoration: none;
     margin-top: 10px;
+    transition: background-color 0.3s;
+}
+
+.game-link:hover {
+    background: var(--primary-color);
+}
+
+.game-link.spectate {
+    background: #607d8b;
+}
+
+.game-link.spectate:hover {
+    background: #455a64;
+}
+
+.status-badge {
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 0.9em;
+    font-weight: 500;
+}
+
+.tie-breaker-card.pending .status-badge {
+    background: #ffd700;
+    color: #000;
+}
+
+.tie-breaker-card.in-progress .status-badge {
+    background: #4CAF50;
+    color: white;
+}
+
+.tie-breaker-card.completed .status-badge {
+    background: #9e9e9e;
+    color: white;
 }
 </style>
 {% endblock %}

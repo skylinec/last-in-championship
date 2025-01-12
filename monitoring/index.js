@@ -333,40 +333,38 @@ async function checkForTieBreakers() {
       return;
     }
 
-    // Check for ties at period ends only for weekly and monthly periods
+    // Modified query to prevent duplicates by using DISTINCT ON
     const tieCheckQuery = `
-      WITH period_end_scores AS (
-        SELECT 
+      WITH period_scores AS (
+        SELECT DISTINCT ON (period, period_end, points)
           period,
           period_start,
           period_end,
-          username,
           points,
-          ROW_NUMBER() OVER (PARTITION BY period, period_end ORDER BY points DESC) as rank,
-          COUNT(*) OVER (PARTITION BY period, period_end, points) as tied_count
+          array_agg(username) OVER (
+            PARTITION BY period, period_end, points
+            ORDER BY username
+          ) as usernames,
+          COUNT(*) OVER (
+            PARTITION BY period, period_end, points
+          ) as tied_count
         FROM rankings
         WHERE period IN ('weekly', 'monthly')
         AND period_end < CURRENT_DATE
         AND period_end >= CURRENT_DATE - INTERVAL '7 days'
+        ORDER BY period, period_end, points
       )
-      SELECT DISTINCT
-        period,
-        period_start,
-        period_end,
-        array_agg(username) OVER (PARTITION BY period, period_end, points) as usernames,
-        points,
-        tied_count
-      FROM period_end_scores
+      SELECT *
+      FROM period_scores
       WHERE tied_count > 1
       AND NOT EXISTS (
         SELECT 1 
         FROM tie_breakers tb
-        WHERE tb.period = period_end_scores.period
-        AND tb.period_end = period_end_scores.period_end
-        AND tb.period_start = period_end_scores.period_start
-        AND tb.points = period_end_scores.points
-      )
-    `;
+        WHERE tb.period = period_scores.period
+        AND tb.period_end = period_scores.period_end
+        AND tb.period_start = period_scores.period_start
+        AND tb.points = period_scores.points
+      )`;
 
     const ties = await client.query(tieCheckQuery);
     let tieBreakersCreated = 0;

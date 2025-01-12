@@ -1494,13 +1494,22 @@ def normalize_settings(settings_dict):
         "rules": points.get("rules", [])
     }
 
-    # Convert boolean fields explicitly
-    bool_fields = [
-        "enable_streaks", "enable_tiebreakers", "auto_resolve_tiebreakers",
-        "tiebreaker_weekly", "tiebreaker_monthly"
-    ]
-    for field in bool_fields:
-        settings_dict[field] = bool(settings_dict.get(field, False))
+    # Explicitly convert boolean fields with default values
+    bool_fields = {
+        "enable_streaks": False,
+        "enable_tiebreakers": False,
+        "auto_resolve_tiebreakers": False,
+        "tiebreaker_weekly": True,
+        "tiebreaker_monthly": True
+    }
+    
+    for field, default in bool_fields.items():
+        # Handle both string and boolean inputs
+        value = settings_dict.get(field, default)
+        if isinstance(value, str):
+            settings_dict[field] = value.lower() in ['true', '1', 'yes', 'on']
+        else:
+            settings_dict[field] = bool(value)
 
     return {
         "points": normalized_points,
@@ -1523,24 +1532,15 @@ def manage_settings():
     db = SessionLocal()
     try:
         if request.method == "GET":
+            # Clear any stale cache before loading
+            load_settings.cache_clear()
             settings_data = load_settings()
-            if not settings_data.get('monitoring_start_date'):
-                settings_data['monitoring_start_date'] = datetime.now().replace(month=1, day=1).date()
             
-            registered_users = [user[0] for user in db.query(User.username).all()]
-            core_users = settings_data.get("core_users", [])
+            # ...existing GET code...
             
-            return render_template(
-                "settings.html",
-                settings=settings_data,
-                settings_data=settings_data,
-                registered_users=registered_users,
-                core_users=core_users,
-                rules=settings_data.get("points", {}).get("rules", [])
-            )
         else:
             try:
-                # Clear the settings cache before making changes
+                # Clear the settings cache immediately
                 load_settings.cache_clear()
                 
                 # Get current settings for comparison
@@ -1562,10 +1562,12 @@ def manage_settings():
 
                 # Normalize new settings
                 new_settings = request.json
+                app.logger.debug(f"Received settings: {new_settings}")
                 normalized_settings = normalize_settings(new_settings)
+                app.logger.debug(f"Normalized settings: {normalized_settings}")
 
                 if old_settings:
-                    # Update existing settings
+                    # Update existing settings, explicitly setting each field
                     for key, value in normalized_settings.items():
                         setattr(old_settings, key, value)
                 else:
@@ -1583,6 +1585,8 @@ def manage_settings():
                 )
 
                 db.commit()
+                # Clear cache again after commit to ensure fresh data on next load
+                load_settings.cache_clear()
 
                 return jsonify({"message": "Settings updated successfully"})
                 

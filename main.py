@@ -3319,7 +3319,7 @@ def start_metrics_updater():
     thread = Thread(target=update_loop, daemon=True)
     thread.start()
         
-if __name__ "__main__":
+if __name__ == "__main__":
     # Remove the start_http_server call as we're using WSGI middleware now
     start_metrics_updater()  # Start metrics updater
     debug_mode = os.getenv('FLASK_ENV') == 'development'

@@ -410,7 +410,7 @@ multiply points by 1.5</pre>
                 <div class="mode-specific">
                     <h5>Early Bird Mode</h5>
                     <ul>
-                        <li>Streaks subtract {{ settings.streak_multiplier }} points per day (rewards consistent earliness)</li>
+                        <li>Streaks add {{ settings.streak_multiplier }} points per day (rewards consistent earliness)</li>
                         {% if settings.enable_tiebreakers %}
                         <li>Tie breaker wins add {{ settings.tiebreaker_points }} points (rewards winning early competitions)</li>
                         {% endif %}
@@ -418,7 +418,7 @@ multiply points by 1.5</pre>
                     
                     <h5>Last-In Mode</h5>
                     <ul>
-                        <li>Streaks add {{ settings.streak_multiplier }} points per day (rewards consistent lateness)</li>
+                        <li>Streaks subtract {{ settings.streak_multiplier }} points per day (penalizes consistent lateness)</li>
                         {% if settings.enable_tiebreakers %}
                         <li>Tie breaker wins remove {{ settings.tiebreaker_points }} points (penalizes winning late competitions)</li>
                         {% endif %}
@@ -436,12 +436,12 @@ multiply points by 1.5</pre>
                         <tr>
                             <td>Early Bird</td>
                             <td>3 days</td>
-                            <td>-{{ 3 * settings.streak_multiplier }} points</td>
+                            <td>+{{ 3 * settings.streak_multiplier }} points</td>
                         </tr>
                         <tr>
                             <td>Last-In</td>
                             <td>3 days</td>
-                            <td>+{{ 3 * settings.streak_multiplier }} points</td>
+                            <td>-{{ 3 * settings.streak_multiplier }} points</td>
                         </tr>
                     </table>
                 </div>

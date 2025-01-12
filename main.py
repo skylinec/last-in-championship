@@ -991,9 +991,9 @@ def calculate_daily_score(entry, settings, position=None, total_entries=None, mo
                 streak = calculate_streak_for_date(entry["name"], entry_date, db)
                 if streak > 0:
                     multiplier = settings.get("streak_multiplier", 0.5)
-                    # In last-in mode, streak adds points (rewards consistent lateness)
-                    # In early-bird mode, streak subtracts points (penalizes consistent earliness)
-                    streak_bonus = streak * multiplier if mode == 'last-in' else -streak * multiplier
+                    # Reverse logic: In last-in mode, streak subtracts points (penalizes consistent lateness)
+                    # In early-bird mode, streak adds points (rewards consistent earliness)
+                    streak_bonus = -streak * multiplier if mode == 'last-in' else streak * multiplier
             finally:
                 db.close()
 

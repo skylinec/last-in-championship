@@ -365,6 +365,8 @@ def load_settings():
             "tiebreaker_points": settings.tiebreaker_points,
             "tiebreaker_expiry": settings.tiebreaker_expiry,
             "auto_resolve_tiebreakers": settings.auto_resolve_tiebreakers,
+            "tiebreaker_weekly": settings.tiebreaker_weekly,  # Add this
+            "tiebreaker_monthly": settings.tiebreaker_monthly,  # Add this
         }
         return result
     finally:
@@ -400,11 +402,14 @@ def save_settings(settings_data):
             settings.core_users = settings_data.get("core_users", [])
             settings.enable_streaks = settings_data.get("enable_streaks", False)
             settings.streak_multiplier = settings_data.get("streak_multiplier", 0.5)
-            # Add explicit tie breaker settings
+            # Add explicit tie breaker settings including timing
             settings.enable_tiebreakers = settings_data.get("enable_tiebreakers", False)
             settings.tiebreaker_points = settings_data.get("tiebreaker_points", 5)
             settings.tiebreaker_expiry = settings_data.get("tiebreaker_expiry", 24)
             settings.auto_resolve_tiebreakers = settings_data.get("auto_resolve_tiebreakers", False)
+            settings.tiebreaker_weekly = settings_data.get("tiebreaker_weekly", True)  # Add this
+            settings.tiebreaker_monthly = settings_data.get("tiebreaker_monthly", True)  # Add this
+            
         else:
             settings = Settings(**settings_data)
             db.add(settings)
@@ -1489,7 +1494,9 @@ def normalize_settings(settings_dict):
         "enable_tiebreakers": bool(settings_dict.get("enable_tiebreakers", False)),
         "tiebreaker_points": int(settings_dict.get("tiebreaker_points", 5)),
         "tiebreaker_expiry": int(settings_dict.get("tiebreaker_expiry", 24)),
-        "auto_resolve_tiebreakers": bool(settings_dict.get("auto_resolve_tiebreakers", False))
+        "auto_resolve_tiebreakers": bool(settings_dict.get("auto_resolve_tiebreakers", False)),
+        "tiebreaker_weekly": bool(settings_dict.get("tiebreaker_weekly", True)),  # Add this
+        "tiebreaker_monthly": bool(settings_dict.get("tiebreaker_monthly", True)),  # Add this
     }
 
 @app.route("/settings", methods=["GET", "POST"])

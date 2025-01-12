@@ -367,7 +367,7 @@ async function checkForTieBreakers() {
         AND EXTRACT(DAY FROM CURRENT_DATE + INTERVAL '1 day') = 1  -- Only run on last day of month
         GROUP BY username, date_trunc('month', date)
         ` : ''}
-      )
+      ),
       max_points AS (
         SELECT period_type, period_end, MAX(total_points) as max_points
         FROM period_scores

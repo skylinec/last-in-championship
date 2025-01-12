@@ -219,7 +219,7 @@ class Settings(Base):
     monitoring_start_date = Column(Date, default=lambda: datetime.now().replace(month=1, day=1))
     enable_tiebreakers = Column(Boolean, default=False)
     tiebreaker_points = Column(Integer, default=5)
-    tiebreaker_expiry = Column(Integer, default(24))
+    tiebreaker_expiry = Column(Integer, default=24)  # Fix: Changed default(24) to default=24
     auto_resolve_tiebreakers = Column(Boolean, default=False)
 
 class AuditLog(Base):

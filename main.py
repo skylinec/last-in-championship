@@ -3494,38 +3494,41 @@ def health_check():
 def tie_breakers():
     db = SessionLocal()
     try:
-        # Fixed query with proper GROUP BY clause including period_end
+        # Use a CTE to handle the period_end column properly
         tie_breakers = db.execute(text("""
-            SELECT 
-                t.id,
-                t.period,
-                t.points,
-                t.status,
-                t.created_at,
-                t.resolved_at,
-                t.period_end::timestamp as period_end,
-                jsonb_agg(jsonb_build_object(
-                    'username', tp.username,
-                    'game_choice', tp.game_choice,
-                    'ready', tp.ready,
-                    'winner', tp.winner
-                )) as participants,
-                (
-                    SELECT jsonb_build_object(
-                        'id', g.id,
-                        'player1', g.player1,
-                        'player2', g.player2
-                    )
-                    FROM tie_breaker_games g
-                    WHERE g.tie_breaker_id = t.id
-                    AND g.winner IS NULL
-                    LIMIT 1
-                ) as current_game
-            FROM tie_breakers t
-            JOIN tie_breaker_participants tp ON t.id = tp.tie_breaker_id
-            WHERE t.status != 'completed'
-            GROUP BY t.id, t.period, t.points, t.status, t.created_at, t.resolved_at, t.period_end
-            ORDER BY t.created_at DESC
+            WITH tie_breakers_cte AS (
+                SELECT 
+                    t.id,
+                    t.period,
+                    t.points,
+                    t.status,
+                    t.created_at,
+                    t.resolved_at,
+                    t.period_end::timestamp as period_end,
+                    jsonb_agg(jsonb_build_object(
+                        'username', tp.username,
+                        'game_choice', tp.game_choice,
+                        'ready', tp.ready,
+                        'winner', tp.winner
+                    )) as participants,
+                    (
+                        SELECT jsonb_build_object(
+                            'id', g.id,
+                            'player1', g.player1,
+                            'player2', g.player2
+                        )
+                        FROM tie_breaker_games g
+                        WHERE g.tie_breaker_id = t.id
+                        AND g.winner IS NULL
+                        LIMIT 1
+                    ) as current_game
+                FROM tie_breakers t
+                JOIN tie_breaker_participants tp ON t.id = tp.tie_breaker_id
+                WHERE t.status != 'completed'
+                GROUP BY t.id
+            )
+            SELECT * FROM tie_breakers_cte
+            ORDER BY created_at DESC
         """)).fetchall()
         
         return render_template(

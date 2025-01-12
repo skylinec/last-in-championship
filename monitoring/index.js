@@ -147,8 +147,8 @@ async function generateStreaks() {
     const existingStreakMap = new Map(existingStreaks.rows.map(s => [s.username, s]));
 
     // Get existing streaks for comparison
-    const existingStreaks = await client.query('SELECT username, current_streak, last_attendance FROM user_streaks');
-    const existingStreakMap = new Map(existingStreaks.rows.map(s => [s.username, s]));
+    const currentStreaks = await client.query('SELECT username, current_streak, last_attendance FROM user_streaks');
+    const existingStreakMap = new Map(currentStreaks.rows.map(s => [s.username, s]));
 
     // First get working days for each user
     const settingsQuery = await client.query('SELECT points FROM settings LIMIT 1');

@@ -40,6 +40,35 @@ class CacheWithMetrics:
             CACHE_MISSES.labels(function=self.name).inc()
         return result
 
+# Add after the existing CacheWithMetrics class
+def make_hashable(obj):
+    """Convert a dictionary into a hashable tuple for caching"""
+    if isinstance(obj, dict):
+        return tuple(sorted((k, make_hashable(v)) for k, v in obj.items()))
+    elif isinstance(obj, list):
+        return tuple(make_hashable(x) for x in obj)
+    elif isinstance(obj, set):
+        return tuple(sorted(make_hashable(x) for x in obj))
+    return obj
+
+class HashableCacheWithMetrics(CacheWithMetrics):
+    """Cache decorator that handles unhashable types"""
+    def __call__(self, *args, **kwargs):
+        hashable_args = tuple(make_hashable(arg) for arg in args)
+        hashable_kwargs = tuple(sorted((k, make_hashable(v)) for k, v in kwargs.items()))
+        cache_key = (hashable_args, hashable_kwargs)
+        
+        # Check if result is in cache
+        if cache_key in self.func.cache:
+            CACHE_HITS.labels(function=self.name).inc()
+            return self.func.cache[cache_key]
+        
+        # If not in cache, compute and store
+        CACHE_MISSES.labels(function=self.name).inc()
+        result = self.func(*args, **kwargs)
+        self.func.cache[cache_key] = result
+        return result
+
 # Configure logging
 logging.basicConfig(
     level=logging.DEBUG if os.getenv('FLASK_ENV') == 'development' else logging.INFO,
@@ -274,7 +303,7 @@ def save_data(entries):
     db.commit()
     db.close()
 
-@CacheWithMetrics
+@HashableCacheWithMetrics
 def load_settings():
     db = SessionLocal()
     try:
@@ -809,7 +838,7 @@ def compare_values(val1, val2, operator):
     }
     return ops.get(operator, lambda: False)()
 
-@CacheWithMetrics
+@HashableCacheWithMetrics
 def calculate_daily_score(entry, settings, position=None, total_entries=None, mode='last-in'):
     """Calculate score for a single day's entry with all bonuses"""
     # Get day-specific start time for late calculations

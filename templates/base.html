@@ -679,21 +679,30 @@
             });
             
             const result = await response.json();
+            showToast(result.message, result.type);
             
-            // Show toast notification
-            const toast = document.createElement('div');
-            toast.className = `toast ${result.type}`;
-            toast.textContent = result.message;
-            document.body.appendChild(toast);
+            // Wait for toast to be visible before reloading
+            setTimeout(() => {
+                window.location.reload();
+            }, 1500);
             
-            setTimeout(() => toast.remove(), 3000);
-            
-            if (result.type === 'success') {
-                disableClockInButtons();
-            }
         } catch (error) {
             console.error('Error:', error);
+            showToast('Failed to clock in. Please try again.', 'error');
         }
+    }
+
+    function showToast(message, type = 'success') {
+        // Remove existing toasts
+        document.querySelectorAll('.toast').forEach(t => t.remove());
+        
+        const toast = document.createElement('div');
+        toast.className = `toast ${type}`;
+        toast.textContent = message;
+        document.body.appendChild(toast);
+        
+        // Remove toast after animation
+        setTimeout(() => toast.remove(), 3000);
     }
 
     function disableClockInButtons() {
@@ -718,13 +727,18 @@
                 color: white;
                 font-weight: 500;
                 z-index: 2000;
-                animation: slideDown 0.3s ease-out;
+                box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+                animation: toastIn 0.3s ease-out, fadeOut 0.3s ease-out 2.7s;
             }
             .toast.success { background: var(--success-color); }
             .toast.error { background: var(--warning-color); }
-            @keyframes slideDown {
+            @keyframes toastIn {
                 from { transform: translate(-50%, -20px); opacity: 0; }
                 to { transform: translate(-50%, 0); opacity: 1; }
+            }
+            @keyframes fadeOut {
+                from { opacity: 1; }
+                to { opacity: 0; }
             }
         </style>
     `);

@@ -404,12 +404,16 @@ document.getElementById('filterForm').addEventListener('submit', function(e) {
     applyFilters();
 });
 
-function applyFilters(page = 1) {
+function applyFilters(requestedPage = null) {
     const actionSelect = document.getElementById('action');
     const userSelect = document.getElementById('user');
     const fromDate = document.getElementById('from').value;
     const toDate = document.getElementById('to').value;
     const perPage = document.getElementById('entriesPerPage').value;
+    
+    // Get current page or use requested page
+    const currentPage = document.getElementById('currentPage');
+    const targetPage = requestedPage || currentPage.textContent;
 
     const actions = Array.from(actionSelect.selectedOptions).map(opt => opt.value);
     const users = Array.from(userSelect.selectedOptions).map(opt => opt.value);
@@ -417,37 +421,62 @@ function applyFilters(page = 1) {
     const params = new URLSearchParams({
         action: actions.join(','),
         user: users.join(','),
-        from: fromDate,
-        to: toDate,
-        page: page,
+        from: fromDate || '',
+        to: toDate || '',
+        page: targetPage,
         per_page: perPage
     });
 
     window.location.href = `/audit?${params.toString()}`;
 }
 
-function changePage(page) {
-    applyFilters(page);
+function changePage(delta) {
+    const currentPage = parseInt(document.getElementById('currentPage').textContent);
+    const totalPages = parseInt(document.getElementById('totalPages').textContent);
+    const newPage = currentPage + delta;
+    
+    if (newPage >= 1 && newPage <= totalPages) {
+        applyFilters(newPage);
+    }
 }
 
 function resetFilters() {
-    window.location.href = '/audit';
+    // Reset select elements
+    document.getElementById('action').value = 'all';
+    document.getElementById('user').value = 'all';
+    document.getElementById('from').value = '';
+    document.getElementById('to').value = '';
+    document.getElementById('entriesPerPage').value = '50';
+    
+    // Apply reset filters with page 1
+    applyFilters(1);
 }
 
-// Format timestamps to be more readable
 document.addEventListener('DOMContentLoaded', () => {
-    const timestamps = document.querySelectorAll('td:first-child');
-    timestamps.forEach(cell => {
-        const date = new Date(cell.textContent);
-        cell.textContent = date.toLocaleString();
-    });
-
-    // Initialize per_page from URL params
+    // Initialize form state from URL params
     const params = new URLSearchParams(window.location.search);
-    const perPage = params.get('per_page') || '50';
-    document.getElementById('entriesPerPage').value = perPage;
     
-    // Disable nav buttons if needed
+    // Set select values from URL params
+    if (params.get('action')) {
+        const actions = params.get('action').split(',');
+        Array.from(document.getElementById('action').options).forEach(opt => {
+            opt.selected = actions.includes(opt.value);
+        });
+    }
+    
+    if (params.get('user')) {
+        const users = params.get('user').split(',');
+        Array.from(document.getElementById('user').options).forEach(opt => {
+            opt.selected = users.includes(opt.value);
+        });
+    }
+    
+    // Set other form values
+    if (params.get('per_page')) {
+        document.getElementById('entriesPerPage').value = params.get('per_page');
+    }
+    
+    // Disable navigation buttons if needed
     const currentPage = parseInt(document.getElementById('currentPage').textContent);
     const totalPages = parseInt(document.getElementById('totalPages').textContent);
     const prevButton = document.querySelector('.btn-nav:first-of-type');

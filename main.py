@@ -431,34 +431,58 @@ def log_audit(action, user, details, old_data=None, new_data=None):
             if isinstance(v, (datetime, date)):
                 return v.isoformat()
             if isinstance(v, dict):
-                return {k: clean_value(v) for k, v in v.items()}
+                return {k: clean_value(v) for k, v in v.items() if not k.startswith('_')}
             if isinstance(v, (list, tuple)):
                 return [clean_value(x) for x in v]
             return str(v)
 
         # Deep clean the data
         if old_data:
-            old_data = {k: clean_value(v) for k, v in old_data.items()}
+            old_data = {k: clean_value(v) for k, v in old_data.items() if not k.startswith('_')}
         if new_data:
-            new_data = {k: clean_value(v) for k, v in new_data.items()}
+            new_data = {k: clean_value(v) for k, v in new_data.items() if not k.startswith('_')}
 
         changes = None
-        if action == "delete_entry":
-            # For deletions, show all fields as being removed
+        if action == "update_settings":
+            # Special handling for settings updates
+            changes = []
+            if old_data and new_data:
+                # Compare settings fields
+                fields_to_compare = [
+                    'points', 'late_bonus', 'remote_days', 'core_users', 
+                    'enable_streaks', 'streak_multiplier', 'enable_tiebreakers',
+                    'tiebreaker_points', 'tiebreaker_expiry', 'auto_resolve_tiebreakers',
+                    'tiebreaker_weekly', 'tiebreaker_monthly'
+                ]
+                
+                for field in fields_to_compare:
+                    old_val = old_data.get(field)
+                    new_val = new_data.get(field)
+                    
+                    if old_val != new_val:
+                        changes.append({
+                            "field": field,
+                            "old": old_val,
+                            "new": new_val,
+                            "type": "modified"
+                        })
+
+        elif action == "delete_entry":
             changes = [{
                 "field": key,
                 "old": value,
                 "new": "None",
                 "type": "deleted"
             } for key, value in old_data.items()]
+        
         elif action == "log_attendance":
-            # For new entries, show all fields as being added
             changes = [{
                 "field": key,
                 "old": "None",
                 "new": value,
                 "type": "added"
             } for key, value in new_data.items()]
+        
         elif old_data and new_data:
             # For modifications, track changes
             changes = []
@@ -467,23 +491,12 @@ def log_audit(action, user, details, old_data=None, new_data=None):
                 old_value = old_data.get(key, "None")
                 new_value = new_data.get(key, "None")
                 if old_value != new_value:
-                    if isinstance(old_value, dict) and isinstance(new_value, dict):
-                        old_str = json.dumps(old_value, sort_keys=True)
-                        new_str = json.dumps(new_value, sort_keys=True)
-                        if old_str != new_str:
-                            changes.append({
-                                "field": key,
-                                "old": old_value,
-                                "new": new_value,
-                                "type": "modified"
-                            })
-                    else:
-                        changes.append({
-                            "field": key,
-                            "old": old_value,
-                            "new": new_value,
-                            "type": "modified"
-                        })
+                    changes.append({
+                        "field": key,
+                        "old": old_value,
+                        "new": new_value,
+                        "type": "modified"
+                    })
 
         # Create audit entry if there are changes or it's a non-modification action
         if changes or not (old_data and new_data):

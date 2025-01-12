@@ -130,7 +130,6 @@ async function generateStreaks() {
   const client = await pool.connect();
   try {
     const startTime = Date.now();
-    await client.query('DELETE FROM user_streaks');
 
     // Get settings first to check if streaks are enabled
     const settings = await client.query('SELECT enable_streaks FROM settings LIMIT 1');
@@ -142,6 +141,10 @@ async function generateStreaks() {
       });
       return;
     }
+
+    // Get existing streaks for comparison
+    const existingStreaks = await client.query('SELECT username, current_streak, last_attendance FROM user_streaks');
+    const existingStreakMap = new Map(existingStreaks.rows.map(s => [s.username, s]));
 
     // First get working days for each user
     const settingsQuery = await client.query('SELECT points FROM settings LIMIT 1');
@@ -244,22 +247,37 @@ async function generateStreaks() {
       });
     }
 
-    // Bulk insert all streaks
+    // Compare and update streaks
     if (streaks.length > 0) {
-      const values = streaks.map(streak => 
-        `('${streak.username}', ${streak.currentStreak}, '${streak.lastAttendance.toISOString()}', ${streak.maxStreak})`
-      ).join(',');
-
-      await client.query(`
-        INSERT INTO user_streaks (username, current_streak, last_attendance, max_streak)
-        VALUES ${values}
-      `);
+      for (const streak of streaks) {
+        const existing = existingStreakMap.get(streak.username);
+        
+        // Only update if streak changed or doesn't exist
+        if (!existing || 
+            existing.current_streak !== streak.currentStreak || 
+            existing.last_attendance !== streak.lastAttendance) {
+          
+          await client.query(`
+            INSERT INTO user_streaks (username, current_streak, last_attendance, max_streak)
+            VALUES ($1, $2, $3, $4)
+            ON CONFLICT (username) 
+            DO UPDATE SET 
+              current_streak = EXCLUDED.current_streak,
+              last_attendance = EXCLUDED.last_attendance,
+              max_streak = GREATEST(user_streaks.max_streak, EXCLUDED.max_streak)
+          `, [streak.username, streak.currentStreak, streak.lastAttendance, streak.maxStreak]);
+        }
+      }
     }
 
     await logMonitoringEvent('streak_generation', {
       duration: Date.now() - startTime,
       streaks_generated: streaks.length,
-      message: 'Streaks generated successfully'
+      streaks_updated: streaks.filter(s => {
+        const existing = existingStreakMap.get(s.username);
+        return !existing || existing.current_streak !== s.currentStreak;
+      }).length,
+      message: 'Streaks processed successfully'
     });
 
   } catch (error) {

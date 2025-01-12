@@ -64,26 +64,31 @@ END $$;
 CREATE TABLE IF NOT EXISTS tie_breakers (
     id SERIAL PRIMARY KEY,
     period VARCHAR(10) NOT NULL, -- 'week' or 'month'
-    period_end DATE NOT NULL,
+    period_end TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     points DECIMAL NOT NULL,
     status VARCHAR(20) DEFAULT 'pending', -- pending, in_progress, completed
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     resolved_at TIMESTAMP
 );
 
--- Add column if it's missing
+-- Ensure period_end column exists with correct type
 DO $$
 BEGIN
+    -- First check if column exists
     IF NOT EXISTS (
         SELECT 1 FROM information_schema.columns 
         WHERE table_name = 'tie_breakers' 
         AND column_name = 'period_end'
     ) THEN
-        ALTER TABLE tie_breakers ADD COLUMN period_end DATE NOT NULL;
+        -- Add column if it doesn't exist
+        ALTER TABLE tie_breakers ADD COLUMN period_end TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP;
+    ELSE
+        -- If column exists but is wrong type, alter it
+        ALTER TABLE tie_breakers ALTER COLUMN period_end TYPE TIMESTAMP USING period_end::TIMESTAMP;
+        -- Ensure NOT NULL constraint
+        ALTER TABLE tie_breakers ALTER COLUMN period_end SET NOT NULL;
     END IF;
 END $$;
-
-ALTER TABLE tie_breakers ADD COLUMN IF NOT EXISTS period_end TIMESTAMP;
 
 CREATE TABLE IF NOT EXISTS tie_breaker_participants (
     id SERIAL PRIMARY KEY,

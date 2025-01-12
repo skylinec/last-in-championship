@@ -3494,7 +3494,7 @@ def health_check():
 def tie_breakers():
     db = SessionLocal()
     try:
-        # Fixed query with proper GROUP BY clause
+        # Updated query with proper timestamp handling
         tie_breakers = db.execute(text("""
             SELECT 
                 t.id,
@@ -3503,7 +3503,7 @@ def tie_breakers():
                 t.status,
                 t.created_at,
                 t.resolved_at,
-                t.period_end,
+                t.period_end::timestamp as period_end,
                 jsonb_agg(jsonb_build_object(
                     'username', tp.username,
                     'game_choice', tp.game_choice,
@@ -3527,7 +3527,7 @@ def tie_breakers():
             GROUP BY t.id
             ORDER BY t.created_at DESC
         """)).fetchall()
-
+        
         return render_template(
             "tie_breakers.html",
             tie_breakers=tie_breakers,

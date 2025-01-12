@@ -333,29 +333,29 @@ async function checkForTieBreakers() {
       return;
     }
 
-    // Modified query to properly handle dates
+    // Modified query to properly handle period fields
     const tieCheckQuery = `
       WITH tied_rankings AS (
         SELECT 
           username,
-          date::date as ranking_date,
+          period_end,
           SUM(COALESCE(points, 0)) as total_points,
-          COUNT(*) OVER (PARTITION BY date::date, points) as tied_count
+          COUNT(*) OVER (PARTITION BY period_end, points) as tied_count
         FROM rankings
-        WHERE date >= CURRENT_DATE - INTERVAL '7 days'
-        GROUP BY username, date::date, points
+        WHERE period_end >= CURRENT_DATE - INTERVAL '7 days'
+        GROUP BY username, period_end, points
         HAVING COUNT(*) > 1
       )
       SELECT 
         username,
-        ranking_date,
+        period_end,
         total_points,
         tied_count
       FROM tied_rankings tr
       WHERE NOT EXISTS (
         SELECT 1 
         FROM tie_breakers tb
-        WHERE tb.date::date = tr.ranking_date
+        WHERE tb.period_end = tr.period_end
         AND tb.points = tr.total_points
       )`;
 
@@ -364,10 +364,10 @@ async function checkForTieBreakers() {
 
     // Group ties by date and points for batch processing
     const tieGroups = ties.rows.reduce((acc, row) => {
-      const key = `${row.ranking_date}_${row.total_points}`;
+      const key = `${row.period_end}_${row.total_points}`;
       if (!acc[key]) {
         acc[key] = {
-          date: row.ranking_date,
+          date: row.period_end,
           points: row.total_points,
           users: []
         };

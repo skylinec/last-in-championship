@@ -1284,7 +1284,8 @@ document.getElementById('settingsForm').addEventListener('submit', async (event)
             leave: parseInt(formData.get('points.leave')),
             shift_length: parseFloat(formData.get('points.shift_length')),
             daily_shifts: {},
-            rules: JSON.parse(document.getElementById('rulesInput').value || '[]')
+            rules: JSON.parse(document.getElementById('rulesInput').value || '[]'),
+            working_days: {} // Preserve working days configuration
         },
         late_bonus: parseFloat(formData.get('late_bonus')),
         remote_days: {},
@@ -1292,7 +1293,9 @@ document.getElementById('settingsForm').addEventListener('submit', async (event)
                        .map(checkbox => checkbox.value),
         enable_streaks: document.getElementById('enable_streaks').checked,
         streak_multiplier: parseFloat(document.getElementById('streak_multiplier').value),
-        monitoring_start_date: formData.get('monitoring_start_date')
+        monitoring_start_date: formData.get('monitoring_start_date'),
+        streaks_enabled: document.getElementById('enable_streaks').checked,
+        streak_bonus: parseFloat(document.getElementById('streak_multiplier').value)
     };
 
     // Collect daily shifts
@@ -1322,7 +1325,8 @@ document.getElementById('settingsForm').addEventListener('submit', async (event)
         });
 
         if (!response.ok) {
-            throw new Error(await response.text());
+            const errorText = await response.text();
+            throw new Error(errorText);
         }
 
         const result = await response.json();
@@ -1330,8 +1334,9 @@ document.getElementById('settingsForm').addEventListener('submit', async (event)
         // Show success toast
         showToast(result.message || 'Settings saved successfully', 'success');
         
-        // Reload after toast is shown
-        setTimeout(() => window.location.reload(), 1500);
+        // Force cache invalidation by adding timestamp to URL
+        const timestamp = new Date().getTime();
+        window.location.href = `/settings?t=${timestamp}`;
     } catch (error) {
         console.error('Error saving settings:', error);
         showToast('Error saving settings: ' + error.message, 'error');

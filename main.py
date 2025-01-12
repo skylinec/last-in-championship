@@ -1478,6 +1478,9 @@ def manage_settings():
             )
         else:
             try:
+                # Clear the settings cache before making changes
+                load_settings.cache_clear()
+                
                 old_settings = db.query(Settings).first()
                 new_settings = request.json
                 
@@ -1489,20 +1492,16 @@ def manage_settings():
                 ).date()
                 
                 if old_settings:
-                    # Update existing settings including monitoring_start_date
-                    old_settings.monitoring_start_date = normalized_settings['monitoring_start_date']
-                    old_settings.points = normalized_settings["points"]
-                    old_settings.late_bonus = normalized_settings["late_bonus"]
-                    old_settings.remote_days = normalized_settings["remote_days"]
-                    old_settings.core_users = normalized_settings["core_users"]
-                    old_settings.enable_streaks = normalized_settings["enable_streaks"]
-                    old_settings.streak_multiplier = normalized_settings["streak_multiplier"]
+                    # Update existing settings
+                    for key, value in normalized_settings.items():
+                        setattr(old_settings, key, value)
                 else:
                     # Create new settings
                     settings = Settings(**normalized_settings)
                     db.add(settings)
                 
                 db.commit()
+                db.refresh(old_settings if old_settings else settings)
                 
                 # Log the update
                 log_audit(
@@ -1515,23 +1514,10 @@ def manage_settings():
                 
                 return jsonify({"message": "Settings updated successfully"})
                 
-            except (ValueError, TypeError, KeyError) as e:
+            except Exception as e:
                 db.rollback()
                 app.logger.error(f"Error managing settings: {str(e)}")
-                return jsonify({"error": f"Invalid settings data: {str(e)}"}), 400
-                
-    except Exception as e:
-        db.rollback()
-        app.logger.error(f"Error managing settings: {str(e)}")
-        if request.method == "POST":
-            return jsonify({
-                "error": f"Server error: {str(e)}",
-                "details": str(e)
-            }), 500
-        return render_template("error.html", 
-                            error="Failed to load settings",
-                            details=str(e),
-                            back_link=url_for('index'))
+                return jsonify({"error": str(e)}), 500
     finally:
         db.close()
 

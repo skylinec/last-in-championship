@@ -333,7 +333,7 @@ async function checkForTieBreakers() {
       return;
     }
 
-    // Query for ties
+    // Update query to explicitly set status as 'pending'
     const tieCheckQuery = `
       WITH tied_rankings AS (
         SELECT 
@@ -368,7 +368,7 @@ async function checkForTieBreakers() {
       
       try {
         for (const tie of ties.rows) {
-          // Insert tie breaker
+          // Explicitly set status to 'pending' in the INSERT
           const result = await client.query(`
             INSERT INTO tie_breakers (
               period,
@@ -395,13 +395,6 @@ async function checkForTieBreakers() {
               INSERT INTO tie_breaker_participants (tie_breaker_id, username)
               SELECT $1, unnest($2::text[])
             `, [tieBreakerId, tie.usernames]);
-            
-            // Immediately update status to in_progress if all participants are added
-            await client.query(`
-              UPDATE tie_breakers 
-              SET status = 'in_progress' 
-              WHERE id = $1
-            `, [tieBreakerId]);
             
             tieBreakersCreated++;
           }

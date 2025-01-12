@@ -3494,7 +3494,7 @@ def health_check():
 def tie_breakers():
     db = SessionLocal()
     try:
-        # Updated query to use period fields
+        # Updated query to use correct column names
         tie_breakers = db.execute(text("""
             WITH tie_breakers_cte AS (
                 SELECT 

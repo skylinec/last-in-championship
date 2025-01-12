@@ -67,14 +67,13 @@ DROP TABLE IF EXISTS tie_breakers;
 
 CREATE TABLE tie_breakers (
     id SERIAL PRIMARY KEY,
-    date DATE NOT NULL,
-    type VARCHAR(10) NOT NULL CHECK (type IN ('daily', 'weekly', 'monthly')),
+    period VARCHAR(10) NOT NULL CHECK (period IN ('daily', 'weekly', 'monthly')),
+    period_start TIMESTAMP NOT NULL,
+    period_end TIMESTAMP NOT NULL,
     points DECIMAL NOT NULL,
     status VARCHAR(20) DEFAULT 'pending' CHECK (status IN ('pending', 'in_progress', 'completed')),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    resolved_at TIMESTAMP,
-    period_start DATE,
-    period_end DATE
+    resolved_at TIMESTAMP
 );
 
 CREATE TABLE IF NOT EXISTS tie_breaker_participants (

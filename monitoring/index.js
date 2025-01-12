@@ -333,7 +333,7 @@ async function checkForTieBreakers() {
       return;
     }
 
-    // Modified query to properly handle period fields
+    // Modified query to use correct column names
     const tieCheckQuery = `
       WITH tied_rankings AS (
         SELECT 
@@ -341,7 +341,7 @@ async function checkForTieBreakers() {
           period_end,
           SUM(COALESCE(points, 0)) as total_points,
           COUNT(*) OVER (PARTITION BY period_end, points) as tied_count
-        FROM rankings
+        FROM rankings r
         WHERE period_end >= CURRENT_DATE - INTERVAL '7 days'
         GROUP BY username, period_end, points
         HAVING COUNT(*) > 1
@@ -362,12 +362,12 @@ async function checkForTieBreakers() {
     const ties = await client.query(tieCheckQuery);
     let tieBreakersCreated = 0;
 
-    // Group ties by date and points for batch processing
+    // Group ties by period_end and points for batch processing
     const tieGroups = ties.rows.reduce((acc, row) => {
       const key = `${row.period_end}_${row.total_points}`;
       if (!acc[key]) {
         acc[key] = {
-          date: row.period_end,
+          period_end: row.period_end,
           points: row.total_points,
           users: []
         };
@@ -382,12 +382,12 @@ async function checkForTieBreakers() {
       
       try {
         for (const [key, group] of Object.entries(tieGroups)) {
-          // Insert tie breaker
+          // Insert tie breaker with period fields
           const result = await client.query(`
-            INSERT INTO tie_breakers (date, points, status)
-            VALUES ($1, $2, 'pending')
+            INSERT INTO tie_breakers (period, period_start, period_end, points, status)
+            VALUES ($1, $2, $3, $4, 'pending')
             RETURNING id
-          `, [group.date, group.points]);
+          `, ['daily', group.period_end, group.period_end, group.points]);
           
           const tieBreakerId = result.rows[0].id;
           

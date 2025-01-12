@@ -384,6 +384,11 @@ def save_settings(settings_data):
             settings.core_users = settings_data.get("core_users", [])
             settings.enable_streaks = settings_data.get("enable_streaks", False)
             settings.streak_multiplier = settings_data.get("streak_multiplier", 0.5)
+            # Add explicit tie breaker settings
+            settings.enable_tiebreakers = settings_data.get("enable_tiebreakers", False)
+            settings.tiebreaker_points = settings_data.get("tiebreaker_points", 5)
+            settings.tiebreaker_expiry = settings_data.get("tiebreaker_expiry", 24)
+            settings.auto_resolve_tiebreakers = settings_data.get("auto_resolve_tiebreakers", False)
         else:
             settings = Settings(**settings_data)
             db.add(settings)

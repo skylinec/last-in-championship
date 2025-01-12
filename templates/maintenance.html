@@ -530,44 +530,64 @@ function filterLogs() {
     const eventType = document.getElementById('logFilter').value;
     const status = document.getElementById('statusFilter').value;
     const logs = document.querySelectorAll('.log-entry');
+    let visibleCount = 0;
     
     logs.forEach(log => {
-        const matchesEvent = eventType === 'all' || log.querySelector('td:nth-child(2)').textContent.toLowerCase().replace(/ /g, '_') === eventType;
-        const matchesStatus = status === 'all' || log.querySelector('.status-badge').textContent.trim().toLowerCase() === status;
-        log.style.display = matchesEvent && matchesStatus ? '' : 'none';
+        const eventText = log.querySelector('td:nth-child(2)').textContent.toLowerCase().replace(/ /g, '_');
+        const statusText = log.querySelector('.status-badge').textContent.trim().toLowerCase();
+        
+        const matchesEvent = eventType === 'all' || eventText === eventType;
+        const matchesStatus = status === 'all' || statusText === status;
+        
+        if (matchesEvent && matchesStatus) {
+            log.classList.remove('filtered');
+            visibleCount++;
+        } else {
+            log.classList.add('filtered');
+        }
     });
     
-    // Reset pagination after filtering
+    // Reset to first page and update pagination
     currentPage = 1;
     updatePagination();
 }
 
+function getVisibleLogs() {
+    return Array.from(document.querySelectorAll('.log-entry:not(.filtered)'));
+}
+
 function updatePagination() {
-    const visibleLogs = Array.from(document.querySelectorAll('.log-entry')).filter(log => log.style.display !== 'none');
+    const visibleLogs = getVisibleLogs();
     const totalLogs = visibleLogs.length;
     const totalPages = Math.ceil(totalLogs / itemsPerPage);
     
     // Update page numbers
     document.getElementById('currentPage').textContent = currentPage;
-    document.getElementById('totalPages').textContent = totalPages;
+    document.getElementById('totalPages').textContent = totalPages || 1;
     
     // Enable/disable navigation buttons
     const prevButton = document.querySelector('.btn-nav:first-of-type');
     const nextButton = document.querySelector('.btn-nav:last-of-type');
-    prevButton.disabled = currentPage === 1;
+    prevButton.disabled = currentPage <= 1;
     nextButton.disabled = currentPage >= totalPages;
     
     // Show/hide logs based on current page
     const startIndex = (currentPage - 1) * itemsPerPage;
     const endIndex = startIndex + itemsPerPage;
     
-    visibleLogs.forEach((log, index) => {
-        log.style.display = index >= startIndex && index < endIndex ? '' : 'none';
+    // First hide all logs
+    document.querySelectorAll('.log-entry').forEach(log => {
+        log.style.display = 'none';
+    });
+    
+    // Show only visible logs for current page
+    visibleLogs.slice(startIndex, endIndex).forEach(log => {
+        log.style.display = '';
     });
 }
 
 function changePage(delta) {
-    const visibleLogs = Array.from(document.querySelectorAll('.log-entry')).filter(log => log.style.display !== 'none');
+    const visibleLogs = getVisibleLogs();
     const totalPages = Math.ceil(visibleLogs.length / itemsPerPage);
     const newPage = currentPage + delta;
     
@@ -577,15 +597,24 @@ function changePage(delta) {
     }
 }
 
-// Initialize pagination
+// Add CSS for filtered logs
+document.head.insertAdjacentHTML('beforeend', `
+    <style>
+        .filtered {
+            display: none !important;
+        }
+    </style>
+`);
+
+// Initialize pagination and filters
 document.addEventListener('DOMContentLoaded', () => {
     itemsPerPage = parseInt(document.getElementById('entriesPerPage').value);
     updatePagination();
     
-    // Add event listeners for filters
+    // Add event listeners
     document.getElementById('logFilter').addEventListener('change', filterLogs);
     document.getElementById('statusFilter').addEventListener('change', filterLogs);
-    document.getElementById('entriesPerPage').addEventListener('change', () => {
+    document.getElementById('entriesPerPage').addEventListener('change', function() {
         itemsPerPage = parseInt(this.value);
         currentPage = 1;
         updatePagination();

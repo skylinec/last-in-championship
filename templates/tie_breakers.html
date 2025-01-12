@@ -44,7 +44,7 @@
         <!-- Show available games for in-progress tie breakers -->
         {% if tie.status == 'in_progress' and tie.games %}
             <div class="available-games">
-                <h4>Games</h4>
+                <h4>Available Games</h4>
                 {% for game in tie.games %}
                     {% if game.status == 'pending' and current_user != game.player1 %}
                         <div class="game-entry">

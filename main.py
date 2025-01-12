@@ -3494,7 +3494,7 @@ def health_check():
 def tie_breakers():
     db = SessionLocal()
     try:
-        # Updated query to properly show all game info
+        # Updated query to properly handle game statuses
         tie_breakers = db.execute(text("""
             WITH tie_breakers_cte AS (
                 SELECT 
@@ -3516,7 +3516,8 @@ def tie_breakers():
                         'id', g.id,
                         'game_type', g.game_type,
                         'player1', g.player1,
-                        'player2', g.status,
+                        'player2', g.player2,
+                        'status', g.status,
                         'game_state', g.game_state
                     )) FILTER (WHERE g.id IS NOT NULL) as games
                 FROM tie_breakers t
@@ -3529,14 +3530,6 @@ def tie_breakers():
             ORDER BY created_at DESC
         """)).fetchall()
 
-        # Debug logging
-        app.logger.debug(f"Current user: {session['user']}")
-        for tie in tie_breakers:
-            app.logger.debug(f"Tie breaker {tie.id}:")
-            app.logger.debug(f"Status: {tie.status}")
-            app.logger.debug(f"Participants: {tie.participants}")
-            app.logger.debug(f"Games: {tie.games}")
-        
         return render_template(
             "tie_breakers.html",
             tie_breakers=tie_breakers,
@@ -3544,6 +3537,58 @@ def tie_breakers():
         )
     finally:
         db.close()
+
+def create_next_game(db, tie_id):
+    """Create next available games between tied participants"""
+    # Get all unplayed participant pairs
+    pairs = db.execute(text("""
+        WITH played_pairs AS (
+            SELECT player1, player2
+            FROM tie_breaker_games
+            WHERE tie_breaker_id = :tie_id
+        )
+        SELECT 
+            p1.username as player1, 
+            p2.username as player2,
+            p1.game_choice as game_type
+        FROM tie_breaker_participants p1
+        CROSS JOIN tie_breaker_participants p2
+        WHERE p1.tie_breaker_id = :tie_id
+        AND p2.tie_breaker_id = :tie_id
+        AND p1.username < p2.username
+        AND NOT EXISTS (
+            SELECT 1 FROM played_pairs pp
+            WHERE (pp.player1 = p1.username AND pp.player2 = p2.username)
+            OR (pp.player1 = p2.username AND pp.player2 = p1.username)
+        )
+    """), {"tie_id": tie_id}).fetchall()
+
+    for pair in pairs:
+        # Create game with initial 'pending' status
+        db.execute(text("""
+            INSERT INTO tie_breaker_games (
+                tie_breaker_id, 
+                game_type,
+                player1,
+                status,
+                game_state
+            ) VALUES (
+                :tie_id,
+                :game_type,
+                :player1,
+                'pending',
+                :initial_state
+            )
+        """), {
+            "tie_id": tie_id,
+            "game_type": pair.game_type,
+            "player1": pair.player1,
+            "initial_state": json.dumps({
+                "board": [None] * (9 if pair.game_type == 'tictactoe' else 42),
+                "current_player": pair.player1,
+                "moves": []
+            })
+        })
 
 @app.route("/tie-breakers/<int:tie_id>/choose-game", methods=["POST"])
 @login_required
@@ -3901,61 +3946,6 @@ def notify_game_update(game_id, game_state, winner=None):
         'state': game_state,
         'winner': winner
     }, room=f'game_{game_id}')
-
-def create_next_game(db, tie_id):
-    """Create all possible pending games between tied participants"""
-    # Get all unplayed participant pairs
-    pairs = db.execute(text("""
-        WITH played_pairs AS (
-            SELECT player1, player2
-            FROM tie_breaker_games
-            WHERE tie_breaker_id = :tie_id
-        )
-        SELECT 
-            p1.username as player1, 
-            p2.username as player2,
-            p1.game_choice as game_type
-        FROM tie_breaker_participants p1
-        CROSS JOIN tie_breaker_participants p2
-        WHERE p1.tie_breaker_id = :tie_id
-        AND p2.tie_breaker_id = :tie_id
-        AND p1.username < p2.username
-        AND NOT EXISTS (
-            SELECT 1 FROM played_pairs pp
-            WHERE (pp.player1 = p1.username AND pp.player2 = p2.username)
-            OR (pp.player1 = p2.username AND pp.player2 = p1.username)
-        )
-    """), {"tie_id": tie_id}).fetchall()
-
-    for pair in pairs:
-        # Create game with correct initial state
-        db.execute(text("""
-            INSERT INTO tie_breaker_games (
-                tie_breaker_id, 
-                game_type,
-                player1,
-                game_state,
-                status
-            ) VALUES (
-                :tie_id,
-                :game_type,
-                :player1,
-                :initial_state,
-                'available'  -- Set directly to available since we have a player1
-            )
-        """), {
-            "tie_id": tie_id,
-            "game_type": pair.game_type,
-            "player1": pair.player1,
-            "initial_state": json.dumps({
-                "board": [None] * (9 if pair.game_type == 'tictactoe' else 42),
-                "current_player": pair.player1,
-                "moves": [{
-                    "player": pair.player1,
-                    "timestamp": datetime.now().isoformat()
-                }]
-            })
-        })
 
 # ...existing code...
 

@@ -143,6 +143,10 @@ async function generateStreaks() {
     }
 
     // Get existing streaks for comparison
+    const existingStreaks = await client.query('SELECT username, current_streak, max_streak FROM user_streaks');
+    const existingStreakMap = new Map(existingStreaks.rows.map(s => [s.username, s]));
+
+    // Get existing streaks for comparison
     const existingStreaks = await client.query('SELECT username, current_streak, last_attendance FROM user_streaks');
     const existingStreakMap = new Map(existingStreaks.rows.map(s => [s.username, s]));
 
@@ -249,36 +253,49 @@ async function generateStreaks() {
 
     // Compare and update streaks
     if (streaks.length > 0) {
-      for (const streak of streaks) {
-        const existing = existingStreakMap.get(streak.username);
-        
-        // Only update if streak changed or doesn't exist
-        if (!existing || 
-            existing.current_streak !== streak.currentStreak || 
-            existing.last_attendance !== streak.lastAttendance) {
+      // Use a transaction for bulk updates
+      await client.query('BEGIN');
+      
+      try {
+        for (const streak of streaks) {
+          const existing = existingStreakMap.get(streak.username);
           
-          await client.query(`
-            INSERT INTO user_streaks (username, current_streak, last_attendance, max_streak)
-            VALUES ($1, $2, $3, $4)
-            ON CONFLICT (username) 
-            DO UPDATE SET 
-              current_streak = EXCLUDED.current_streak,
-              last_attendance = EXCLUDED.last_attendance,
-              max_streak = GREATEST(user_streaks.max_streak, EXCLUDED.max_streak)
-          `, [streak.username, streak.currentStreak, streak.lastAttendance, streak.maxStreak]);
+          if (existing) {
+            // Update existing streak
+            await client.query(`
+              UPDATE user_streaks 
+              SET 
+                current_streak = $1,
+                last_attendance = $2,
+                max_streak = GREATEST(max_streak, $1)
+              WHERE username = $3
+            `, [streak.currentStreak, streak.lastAttendance, streak.username]);
+          } else {
+            // Insert new streak
+            await client.query(`
+              INSERT INTO user_streaks (username, current_streak, last_attendance, max_streak)
+              VALUES ($1, $2, $3, $2)
+            `, [streak.username, streak.currentStreak, streak.lastAttendance]);
+          }
         }
+        
+        await client.query('COMMIT');
+        
+        await logMonitoringEvent('streak_generation', {
+          duration: Date.now() - startTime,
+          streaks_generated: streaks.length,
+          streaks_updated: streaks.filter(s => {
+            const existing = existingStreakMap.get(s.username);
+            return !existing || existing.current_streak !== s.currentStreak;
+          }).length,
+          message: 'Streaks processed successfully'
+        });
+        
+      } catch (error) {
+        await client.query('ROLLBACK');
+        throw error;
       }
     }
-
-    await logMonitoringEvent('streak_generation', {
-      duration: Date.now() - startTime,
-      streaks_generated: streaks.length,
-      streaks_updated: streaks.filter(s => {
-        const existing = existingStreakMap.get(s.username);
-        return !existing || existing.current_streak !== s.currentStreak;
-      }).length,
-      message: 'Streaks processed successfully'
-    });
 
   } catch (error) {
     await logMonitoringEvent('streak_generation', {

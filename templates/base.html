@@ -672,6 +672,9 @@
         };
         
         try {
+            const menu = document.getElementById('clockInMenu');
+            menu.classList.remove('show');
+            
             const response = await fetch('/log', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -679,16 +682,28 @@
             });
             
             const result = await response.json();
-            showToast(result.message, result.type);
             
-            // Wait for toast to be visible before reloading
+            // Create and show toast
+            const toast = document.createElement('div');
+            toast.className = `toast ${result.type}`;
+            toast.textContent = result.message;
+            document.body.appendChild(toast);
+            
+            // Remove toast after animation completes
             setTimeout(() => {
-                window.location.reload();
-            }, 1500);
+                toast.remove();
+                if (result.type === 'success') {
+                    window.location.reload();
+                }
+            }, 2000);
             
         } catch (error) {
             console.error('Error:', error);
-            showToast('Failed to clock in. Please try again.', 'error');
+            const toast = document.createElement('div');
+            toast.className = 'toast error';
+            toast.textContent = 'Failed to clock in. Please try again.';
+            document.body.appendChild(toast);
+            setTimeout(() => toast.remove(), 2000);
         }
     }
 

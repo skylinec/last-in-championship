@@ -527,12 +527,70 @@ function updateLogDisplay() {
 }
 
 function filterLogs() {
+    const eventType = document.getElementById('logFilter').value;
+    const status = document.getElementById('statusFilter').value;
+    const logs = document.querySelectorAll('.log-entry');
+    
+    logs.forEach(log => {
+        const matchesEvent = eventType === 'all' || log.querySelector('td:nth-child(2)').textContent.toLowerCase().replace(/ /g, '_') === eventType;
+        const matchesStatus = status === 'all' || log.querySelector('.status-badge').textContent.trim().toLowerCase() === status;
+        log.style.display = matchesEvent && matchesStatus ? '' : 'none';
+    });
+    
+    // Reset pagination after filtering
     currentPage = 1;
-    updateLogDisplay();
+    updatePagination();
 }
 
-// Initialize display
-updateLogDisplay();
+function updatePagination() {
+    const visibleLogs = Array.from(document.querySelectorAll('.log-entry')).filter(log => log.style.display !== 'none');
+    const totalLogs = visibleLogs.length;
+    const totalPages = Math.ceil(totalLogs / itemsPerPage);
+    
+    // Update page numbers
+    document.getElementById('currentPage').textContent = currentPage;
+    document.getElementById('totalPages').textContent = totalPages;
+    
+    // Enable/disable navigation buttons
+    const prevButton = document.querySelector('.btn-nav:first-of-type');
+    const nextButton = document.querySelector('.btn-nav:last-of-type');
+    prevButton.disabled = currentPage === 1;
+    nextButton.disabled = currentPage >= totalPages;
+    
+    // Show/hide logs based on current page
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    const endIndex = startIndex + itemsPerPage;
+    
+    visibleLogs.forEach((log, index) => {
+        log.style.display = index >= startIndex && index < endIndex ? '' : 'none';
+    });
+}
+
+function changePage(delta) {
+    const visibleLogs = Array.from(document.querySelectorAll('.log-entry')).filter(log => log.style.display !== 'none');
+    const totalPages = Math.ceil(visibleLogs.length / itemsPerPage);
+    const newPage = currentPage + delta;
+    
+    if (newPage >= 1 && newPage <= totalPages) {
+        currentPage = newPage;
+        updatePagination();
+    }
+}
+
+// Initialize pagination
+document.addEventListener('DOMContentLoaded', () => {
+    itemsPerPage = parseInt(document.getElementById('entriesPerPage').value);
+    updatePagination();
+    
+    // Add event listeners for filters
+    document.getElementById('logFilter').addEventListener('change', filterLogs);
+    document.getElementById('statusFilter').addEventListener('change', filterLogs);
+    document.getElementById('entriesPerPage').addEventListener('change', () => {
+        itemsPerPage = parseInt(this.value);
+        currentPage = 1;
+        updatePagination();
+    });
+});
 
 function showLogDetails(row) {
     const modal = document.getElementById('logModal');

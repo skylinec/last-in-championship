@@ -116,6 +116,17 @@ def utility_processor():
         'today': today
     }
 
+# Add new template filter before routes
+@app.template_filter('format_date')
+def format_date(value):
+    """Format date for display in templates"""
+    if isinstance(value, str):
+        try:
+            value = datetime.strptime(value, '%Y-%m-%d').date()
+        except ValueError:
+            return value
+    return value.strftime('%d/%m/%Y') if value else ''
+
 def check_configuration():
     """Check and log important configuration settings"""
     logger.info("Checking configuration...")

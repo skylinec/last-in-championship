@@ -315,19 +315,6 @@ function isWeekendGap(date1, date2) {
   return true;
 }
 
-// Schedule both tasks
-const INTERVAL = parseInt(process.env.MONITORING_INTERVAL) || 300000;
-
-// Run missing entries check every 5 minutes
-setInterval(checkMissingEntries, INTERVAL);
-
-// Run streak generation every 5 minutes
-setInterval(generateStreaks, INTERVAL);
-
-// Initial runs on startup
-checkMissingEntries().catch(console.error);
-generateStreaks().catch(console.error);
-
 // Initialize database on startup
 initDb().catch(console.error);
 
@@ -335,6 +322,22 @@ async function checkForTieBreakers() {
   const client = await pool.connect();
   try {
     const startTime = Date.now();
+
+    // First check if tie breakers are enabled
+    const settings = await client.query('SELECT enable_tiebreakers, tiebreaker_expiry, auto_resolve_tiebreakers FROM settings LIMIT 1');
+    if (!settings.rows[0]?.enable_tiebreakers) {
+      await logMonitoringEvent('tie_breaker_check', {
+        duration: Date.now() - startTime,
+        message: 'Tie breakers disabled in settings'
+      });
+      return;
+    }
+
+    // Process expired tie breakers if auto-resolve is enabled
+    if (settings.rows[0].auto_resolve_tiebreakers) {
+      const expiryHours = settings.rows[0].tiebreaker_expiry || 24;
+      await resolveExpiredTieBreakers(client, expiryHours);
+    }
 
     // Check both weekly and monthly ties
     const tieCheckQuery = `
@@ -423,6 +426,44 @@ async function checkForTieBreakers() {
     throw error;
   } finally {
     client.release();
+  }
+}
+
+async function resolveExpiredTieBreakers(client, expiryHours) {
+  const expiredQuery = `
+    UPDATE tie_breakers
+    SET 
+      status = 'completed',
+      resolved_at = NOW()
+    WHERE 
+      status = 'pending'
+      AND created_at < NOW() - INTERVAL '${expiryHours} hours'
+    RETURNING id`;
+
+  const expired = await client.query(expiredQuery);
+  
+  // Randomly select winners for expired tie breakers
+  for (const row of expired.rows) {
+    await client.query(`
+      UPDATE tie_breaker_participants
+      SET winner = (
+        CASE WHEN username = (
+          SELECT username 
+          FROM tie_breaker_participants 
+          WHERE tie_breaker_id = $1 
+          ORDER BY RANDOM() 
+          LIMIT 1
+        ) THEN true ELSE false END
+      )
+      WHERE tie_breaker_id = $1
+    `, [row.id]);
+  }
+
+  if (expired.rows.length > 0) {
+    await logMonitoringEvent('tie_breaker_auto_resolve', {
+      resolved_count: expired.rows.length,
+      expiry_hours: expiryHours
+    });
   }
 }
 

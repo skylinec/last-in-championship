@@ -99,7 +99,7 @@
             </div>
 
             <div class="settings-section">
-                <h2>Streak Settings</h2>
+                <h2>Streak & Tie Breaker Settings</h2>
                 <div class="form-group">
                     <label class="checkbox-label">
                         <input type="checkbox" id="enable_streaks" name="enable_streaks" 
@@ -112,6 +112,33 @@
                     <label for="streak_multiplier">Streak Multiplier (points per day):</label>
                     <input type="number" id="streak_multiplier" name="streak_multiplier" 
                            value="{{ settings.streak_multiplier }}" min="0" max="5" step="0.1">
+                </div>
+
+                <div class="form-group">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="enable_tiebreakers" name="enable_tiebreakers" 
+                               {% if settings.enable_tiebreakers %}checked{% endif %}>
+                        Enable Tie Breaker System
+                    </label>
+                </div>
+
+                <div class="form-group tiebreaker-settings" {% if not settings.enable_tiebreakers %}style="display: none"{% endif %}>
+                    <label for="tiebreaker_points">Tie Breaker Win Points:</label>
+                    <input type="number" id="tiebreaker_points" name="tiebreaker_points" 
+                           value="{{ settings.tiebreaker_points|default(5) }}" min="1" max="20" step="1">
+                    <p class="helper-text">Points awarded to tie breaker winners</p>
+
+                    <label for="tiebreaker_expiry">Tie Breaker Expiry (hours):</label>
+                    <input type="number" id="tiebreaker_expiry" name="tiebreaker_expiry" 
+                           value="{{ settings.tiebreaker_expiry|default(24) }}" min="1" max="72">
+                    <p class="helper-text">Time allowed for players to complete tie breakers</p>
+
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="auto_resolve_tiebreakers" name="auto_resolve_tiebreakers" 
+                               {% if settings.auto_resolve_tiebreakers %}checked{% endif %}>
+                        Automatically Resolve Expired Tie Breakers
+                    </label>
+                    <p class="helper-text">If enabled, expired tie breakers will be resolved randomly</p>
                 </div>
             </div>
 
@@ -442,6 +469,25 @@ multiply points by 1.5</pre>
                 </div>
             </div>
             {% endif %}
+
+            <div class="example-box">
+                <h4>Tie Breaker System</h4>
+                {% if settings.enable_tiebreakers %}
+                <ul>
+                    <li>Automatically detects tied scores in weekly and monthly rankings</li>
+                    <li>Players can compete in mini-games to break ties</li>
+                    <li>Winners receive {{ settings.tiebreaker_points|default(5) }} additional points</li>
+                    <li>Tie breakers expire after {{ settings.tiebreaker_expiry|default(24) }} hours</li>
+                    {% if settings.auto_resolve_tiebreakers %}
+                    <li>Expired tie breakers are automatically resolved randomly</li>
+                    {% else %}
+                    <li>Expired tie breakers remain unresolved</li>
+                    {% endif %}
+                </ul>
+                {% else %}
+                <p>Tie breaker system is currently disabled</p>
+                {% endif %}
+            </div>
         </div>
 
         <div class="example-box">
@@ -1295,7 +1341,11 @@ document.getElementById('settingsForm').addEventListener('submit', async (event)
         streak_multiplier: parseFloat(document.getElementById('streak_multiplier').value),
         monitoring_start_date: formData.get('monitoring_start_date'),
         streaks_enabled: document.getElementById('enable_streaks').checked,
-        streak_bonus: parseFloat(document.getElementById('streak_multiplier').value)
+        streak_bonus: parseFloat(document.getElementById('streak_multiplier').value),
+        enable_tiebreakers: document.getElementById('enable_tiebreakers').checked,
+        tiebreaker_points: parseInt(document.getElementById('tiebreaker_points').value),
+        tiebreaker_expiry: parseInt(document.getElementById('tiebreaker_expiry').value),
+        auto_resolve_tiebreakers: document.getElementById('auto_resolve_tiebreakers').checked
     };
 
     // Collect daily shifts
@@ -1383,6 +1433,11 @@ document.getElementById('enable_streaks').addEventListener('change', function() 
     const streakExplanation = document.getElementById('streakExplanation');
     streakSettings.style.display = this.checked ? 'block' : 'none';
     streakExplanation.style.display = this.checked ? 'block' : 'none';
+});
+
+document.getElementById('enable_tiebreakers').addEventListener('change', function() {
+    const tiebreakerSettings = document.querySelector('.tiebreaker-settings');
+    tiebreakerSettings.style.display = this.checked ? 'block' : 'none';
 });
 
 function calculatePoints() {

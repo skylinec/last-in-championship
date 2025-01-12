@@ -67,13 +67,14 @@ DROP TABLE IF EXISTS tie_breakers;
 
 CREATE TABLE tie_breakers (
     id SERIAL PRIMARY KEY,
-    period VARCHAR(10) NOT NULL CHECK (period IN ('daily', 'weekly', 'monthly')),
-    period_start TIMESTAMP NOT NULL,
-    period_end TIMESTAMP NOT NULL,
+    date DATE NOT NULL,
+    type VARCHAR(10) NOT NULL CHECK (type IN ('daily', 'weekly', 'monthly')),
     points DECIMAL NOT NULL,
     status VARCHAR(20) DEFAULT 'pending' CHECK (status IN ('pending', 'in_progress', 'completed')),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    resolved_at TIMESTAMP
+    resolved_at TIMESTAMP,
+    period_start DATE,
+    period_end DATE
 );
 
 CREATE TABLE IF NOT EXISTS tie_breaker_participants (
@@ -98,15 +99,19 @@ CREATE TABLE IF NOT EXISTS tie_breaker_games (
     completed_at TIMESTAMP
 );
 
+-- Drop existing indices
+DROP INDEX IF EXISTS idx_tiebreakers_date;
+DROP INDEX IF EXISTS idx_tiebreakers_type;
+DROP INDEX IF EXISTS idx_tiebreakers_status;
+DROP INDEX IF EXISTS idx_tiebreakers_period;
+
 -- Add indices
 CREATE INDEX idx_tiebreakers_date ON tie_breakers(date);
 CREATE INDEX idx_tiebreakers_type ON tie_breakers(type);
 CREATE INDEX idx_tiebreakers_status ON tie_breakers(status);
 CREATE INDEX idx_tiebreakers_period ON tie_breakers(period_start, period_end);
-CREATE INDEX idx_tiebreaker_participants_username ON tie_breaker_participants(username);
-
-CREATE INDEX idx_tiebreaker_participants_tie_id ON tie_breaker_participants(tie_breaker_id);
-CREATE INDEX idx_tiebreaker_games_tie_id ON tie_breaker_games(tie_breaker_id);
+CREATE INDEX idx_tiebreakers_points ON tie_breakers(points);
+CREATE INDEX idx_tiebreakers_composite ON tie_breakers(date, points, status);
 
 -- Add tie breaker settings columns if they don't exist
 DO $$

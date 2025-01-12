@@ -71,6 +71,18 @@ CREATE TABLE IF NOT EXISTS tie_breakers (
     resolved_at TIMESTAMP
 );
 
+-- Add column if it's missing
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_name = 'tie_breakers' 
+        AND column_name = 'period_end'
+    ) THEN
+        ALTER TABLE tie_breakers ADD COLUMN period_end DATE NOT NULL;
+    END IF;
+END $$;
+
 CREATE TABLE IF NOT EXISTS tie_breaker_participants (
     id SERIAL PRIMARY KEY,
     tie_breaker_id INTEGER REFERENCES tie_breakers(id),

@@ -1494,26 +1494,27 @@ def normalize_settings(settings_dict):
         "rules": points.get("rules", [])
     }
 
-    # Explicitly handle tie breaker weekly/monthly settings
-    settings_dict["tiebreaker_weekly"] = bool(settings_dict.get("tiebreaker_weekly", True))
-    settings_dict["tiebreaker_monthly"] = bool(settings_dict.get("tiebreaker_monthly", True))
+    # Convert boolean fields explicitly
+    bool_fields = [
+        "enable_streaks", "enable_tiebreakers", "auto_resolve_tiebreakers",
+        "tiebreaker_weekly", "tiebreaker_monthly"
+    ]
+    for field in bool_fields:
+        settings_dict[field] = bool(settings_dict.get(field, False))
 
     return {
         "points": normalized_points,
         "late_bonus": float(settings_dict.get("late_bonus", 0)),
-        "remote_days": {
-            user: sorted(days) for user, days in settings_dict.get("remote_days", {}).items()
-        },
+        "remote_days": settings_dict.get("remote_days", {}),
         "core_users": sorted(settings_dict.get("core_users", [])),
-        "enable_streaks": bool(settings_dict.get("enable_streaks", False)),
+        "enable_streaks": settings_dict["enable_streaks"],
         "streak_multiplier": float(settings_dict.get("streak_multiplier", 0.5)),
-        # Add tie breaker settings
-        "enable_tiebreakers": bool(settings_dict.get("enable_tiebreakers", False)),
+        "enable_tiebreakers": settings_dict["enable_tiebreakers"],
         "tiebreaker_points": int(settings_dict.get("tiebreaker_points", 5)),
         "tiebreaker_expiry": int(settings_dict.get("tiebreaker_expiry", 24)),
-        "auto_resolve_tiebreakers": bool(settings_dict.get("auto_resolve_tiebreakers", False)),
-        "tiebreaker_weekly": bool(settings_dict.get("tiebreaker_weekly", True)),  # Add this
-        "tiebreaker_monthly": bool(settings_dict.get("tiebreaker_monthly", True)),  # Add this
+        "auto_resolve_tiebreakers": settings_dict["auto_resolve_tiebreakers"],
+        "tiebreaker_weekly": settings_dict["tiebreaker_weekly"],
+        "tiebreaker_monthly": settings_dict["tiebreaker_monthly"]
     }
 
 @app.route("/settings", methods=["GET", "POST"])
@@ -1542,47 +1543,47 @@ def manage_settings():
                 # Clear the settings cache before making changes
                 load_settings.cache_clear()
                 
+                # Get current settings for comparison
                 old_settings = db.query(Settings).first()
-                new_settings = request.json
-                
-                # Force boolean conversion for all boolean fields
-                new_settings["enable_tiebreakers"] = bool(new_settings.get("enable_tiebreakers"))
-                new_settings["auto_resolve_tiebreakers"] = bool(new_settings.get("auto_resolve_tiebreakers"))
-                new_settings["tiebreaker_weekly"] = bool(new_settings.get("tiebreaker_weekly"))
-                new_settings["tiebreaker_monthly"] = bool(new_settings.get("tiebreaker_monthly"))
-                
-                # Force integer conversion for numeric fields
-                new_settings["tiebreaker_points"] = int(new_settings.get("tiebreaker_points", 5))
-                new_settings["tiebreaker_expiry"] = int(new_settings.get("tiebreaker_expiry", 24))
+                old_settings_dict = {
+                    "points": old_settings.points,
+                    "late_bonus": old_settings.late_bonus,
+                    "remote_days": old_settings.remote_days,
+                    "core_users": old_settings.core_users,
+                    "enable_streaks": old_settings.enable_streaks,
+                    "streak_multiplier": old_settings.streak_multiplier,
+                    "enable_tiebreakers": old_settings.enable_tiebreakers,
+                    "tiebreaker_points": old_settings.tiebreaker_points,
+                    "tiebreaker_expiry": old_settings.tiebreaker_expiry,
+                    "auto_resolve_tiebreakers": old_settings.auto_resolve_tiebreakers,
+                    "tiebreaker_weekly": old_settings.tiebreaker_weekly,
+                    "tiebreaker_monthly": old_settings.tiebreaker_monthly
+                }
 
-                # Add monitoring_start_date to normalized settings
+                # Normalize new settings
+                new_settings = request.json
                 normalized_settings = normalize_settings(new_settings)
-                normalized_settings['monitoring_start_date'] = datetime.strptime(
-                    new_settings.get('monitoring_start_date'),
-                    '%Y-%m-%d'
-                ).date()
-                
+
                 if old_settings:
                     # Update existing settings
                     for key, value in normalized_settings.items():
                         setattr(old_settings, key, value)
                 else:
                     # Create new settings
-                    settings = Settings(**normalized_settings)
-                    db.add(settings)
-                
-                db.commit()
-                db.refresh(old_settings if old_settings else settings)
-                
-                # Log the update
+                    old_settings = Settings(**normalized_settings)
+                    db.add(old_settings)
+
+                # Log the changes before commit
                 log_audit(
                     "update_settings",
                     session['user'],
                     "Updated settings",
-                    old_data=old_settings.__dict__ if old_settings else None,
+                    old_data=old_settings_dict,
                     new_data=normalized_settings
                 )
-                
+
+                db.commit()
+
                 return jsonify({"message": "Settings updated successfully"})
                 
             except Exception as e:

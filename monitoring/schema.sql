@@ -104,13 +104,12 @@ DROP INDEX IF EXISTS idx_tiebreakers_type;
 DROP INDEX IF EXISTS idx_tiebreakers_status;
 DROP INDEX IF EXISTS idx_tiebreakers_period;
 
--- Add indices
-CREATE INDEX idx_tiebreakers_date ON tie_breakers(date);
-CREATE INDEX idx_tiebreakers_type ON tie_breakers(type);
+-- Add correct indices for the new schema
+CREATE INDEX idx_tiebreakers_period ON tie_breakers(period);
 CREATE INDEX idx_tiebreakers_status ON tie_breakers(status);
-CREATE INDEX idx_tiebreakers_period ON tie_breakers(period_start, period_end);
+CREATE INDEX idx_tiebreakers_period_range ON tie_breakers(period_start, period_end);
 CREATE INDEX idx_tiebreakers_points ON tie_breakers(points);
-CREATE INDEX idx_tiebreakers_composite ON tie_breakers(date, points, status);
+CREATE INDEX idx_tiebreakers_composite ON tie_breakers(period_start, points, status);
 
 -- Add tie breaker settings columns if they don't exist
 DO $$
@@ -140,14 +139,53 @@ BEGIN
     END IF;
 END $$;
 
--- Create rankings materialized view
-CREATE MATERIALIZED VIEW IF NOT EXISTS rankings AS
-WITH daily_scores AS (
+-- Drop and recreate the rankings view with period support
+DROP MATERIALIZED VIEW IF EXISTS rankings;
+CREATE MATERIALIZED VIEW rankings AS
+WITH RECURSIVE periods AS (
+    -- Generate daily, weekly, and monthly periods
+    SELECT 
+        date::date as date,
+        'daily' as period,
+        date::date as period_start,
+        date::date as period_end
+    FROM generate_series(
+        (SELECT MIN(date::date) FROM entries),
+        CURRENT_DATE,
+        '1 day'::interval
+    ) date
+    UNION ALL
+    SELECT 
+        date::date,
+        'weekly',
+        date_trunc('week', date)::date,
+        (date_trunc('week', date) + interval '6 days')::date
+    FROM generate_series(
+        (SELECT MIN(date::date) FROM entries),
+        CURRENT_DATE,
+        '1 day'::interval
+    ) date
+    UNION ALL
+    SELECT 
+        date::date,
+        'monthly',
+        date_trunc('month', date)::date,
+        (date_trunc('month', date) + interval '1 month - 1 day')::date
+    FROM generate_series(
+        (SELECT MIN(date::date) FROM entries),
+        CURRENT_DATE,
+        '1 day'::interval
+    ) date
+),
+daily_scores AS (
     SELECT 
         e.name as username,
         e.date::date,
         e.status,
         e.time,
+        p.period,
+        p.period_start,
+        p.period_end,
         CASE 
             WHEN e.status = 'in-office' THEN 
                 (SELECT points->>'in_office' FROM settings LIMIT 1)::numeric
@@ -155,26 +193,35 @@ WITH daily_scores AS (
                 (SELECT points->>'remote' FROM settings LIMIT 1)::numeric
             ELSE 0
         END as base_points,
-        ROW_NUMBER() OVER (PARTITION BY e.date ORDER BY e.time) as position,
-        COUNT(*) OVER (PARTITION BY e.date) as total_entries
+        ROW_NUMBER() OVER (PARTITION BY e.date::date ORDER BY e.time) as position,
+        COUNT(*) OVER (PARTITION BY e.date::date) as total_entries
     FROM entries e
+    JOIN periods p ON e.date::date = p.date
     WHERE e.status IN ('in-office', 'remote')
 )
 SELECT 
     username,
     date,
-    base_points + (
+    period,
+    period_start,
+    period_end,
+    SUM(base_points + (
         CASE 
             WHEN position = total_entries THEN 
                 position * (SELECT late_bonus FROM settings LIMIT 1)
             ELSE 0
         END
+    )) OVER (
+        PARTITION BY username, period, period_start
+        ORDER BY date
+        ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
     ) as points
 FROM daily_scores;
 
--- Add index on the materialized view
-CREATE UNIQUE INDEX IF NOT EXISTS idx_rankings_user_date 
-ON rankings(username, date);
+-- Update indices for the rankings view
+DROP INDEX IF EXISTS idx_rankings_user_date;
+CREATE UNIQUE INDEX idx_rankings_composite ON rankings(username, date, period);
+CREATE INDEX idx_rankings_period ON rankings(period, period_end);
 
 -- Create refresh function
 CREATE OR REPLACE FUNCTION refresh_rankings()

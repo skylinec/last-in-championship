@@ -96,3 +96,17 @@ CREATE TABLE IF NOT EXISTS tie_breaker_games (
 -- Add indices
 CREATE INDEX IF NOT EXISTS idx_tiebreakers_status ON tie_breakers(status);
 CREATE INDEX IF NOT EXISTS idx_tiebreakers_period_end ON tie_breakers(period_end);
+
+-- Add tie breaker settings columns if they don't exist
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
+                  WHERE table_name = 'settings' 
+                  AND column_name = 'enable_tiebreakers') THEN
+        ALTER TABLE settings 
+        ADD COLUMN enable_tiebreakers BOOLEAN DEFAULT false,
+        ADD COLUMN tiebreaker_points INTEGER DEFAULT 5,
+        ADD COLUMN tiebreaker_expiry INTEGER DEFAULT 24,
+        ADD COLUMN auto_resolve_tiebreakers BOOLEAN DEFAULT false;
+    END IF;
+END $$;

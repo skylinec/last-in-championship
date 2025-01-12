@@ -974,16 +974,19 @@ def calculate_daily_score(entry, settings, position=None, total_entries=None, mo
         early_bird_bonus = (total_entries - position + 1) * settings["late_bonus"]
         last_in_bonus = position * settings["late_bonus"]
     
-    # Calculate streak bonus
+    # Calculate streak bonus - modified to match the mode
     streak_bonus = 0
     if settings.get("enable_streaks", False):
         streak = context['streak']  # Use the streak calculated for the specific date
         if streak > 0:
-            streak_bonus = streak * settings.get("streak_multiplier", 0.5)
+            multiplier = settings.get("streak_multiplier", 0.5)
+            # In last-in mode, streak adds points (rewards consistent lateness)
+            # In early-bird mode, streak subtracts points (penalizes consistent earliness)
+            streak_bonus = streak * multiplier if mode == 'last-in' else -streak * multiplier
     
     return {
-        "early_bird": context['current_points'] + early_bird_bonus + streak_bonus,
-        "last_in": context['current_points'] + last_in_bonus - streak_bonus,
+        "early_bird": context['current_points'] + early_bird_bonus - streak_bonus,  # Subtract for early bird
+        "last_in": context['current_points'] + last_in_bonus + streak_bonus,  # Add for last in
         "base": context['current_points'],
         "streak": streak_bonus,
         "position_bonus": last_in_bonus if mode == 'last-in' else early_bird_bonus,

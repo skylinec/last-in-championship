@@ -410,24 +410,14 @@ multiply points by 1.5</pre>
                 <div class="mode-specific">
                     <h5>Early Bird Mode</h5>
                     <ul>
-                        <li>Streaks add bonus points (rewards consistent early arrival)</li>
-                        <li>Current multiplier: +{{ settings.streak_multiplier }} points per day in streak</li>
+                        <li>Streaks subtract points (penalizes consistent earliness)</li>
+                        <li>Current multiplier: -{{ settings.streak_multiplier }} points per day in streak</li>
                     </ul>
                     
                     <h5>Last-In Mode</h5>
                     <ul>
-                        <li>Streaks subtract points (penalizes consistent lateness)</li>
-                        <li>Current multiplier: -{{ settings.streak_multiplier }} points per day in streak</li>
-                    </ul>
-                </div>
-                
-                <div class="streak-rules">
-                    <h5>General Rules</h5>
-                    <ul>
-                        <li>Weekend days don't break streaks</li>
-                        <li>Both office and remote work count</li>
-                        <li>Sick days or annual leave break the streak</li>
-                        <li>Maximum gap allowed is 3 days (for weekends)</li>
+                        <li>Streaks add bonus points (rewards consistent lateness)</li>
+                        <li>Current multiplier: +{{ settings.streak_multiplier }} points per day in streak</li>
                     </ul>
                 </div>
                 
@@ -442,12 +432,12 @@ multiply points by 1.5</pre>
                         <tr>
                             <td>Early Bird</td>
                             <td>3 days</td>
-                            <td>+{{ 3 * settings.streak_multiplier }} points</td>
+                            <td>-{{ 3 * settings.streak_multiplier }} points</td>
                         </tr>
                         <tr>
                             <td>Last-In</td>
                             <td>3 days</td>
-                            <td>-{{ 3 * settings.streak_multiplier }} points</td>
+                            <td>+{{ 3 * settings.streak_multiplier }} points</td>
                         </tr>
                     </table>
                 </div>
@@ -461,27 +451,12 @@ multiply points by 1.5</pre>
                         <li>Maximum gap allowed is 3 days (for weekends)</li>
                         <li>Streak bonuses only affect scores up to the day being viewed</li>
                         <li>Future attendance cannot affect past scores</li>
+                        <li>In Last-In mode, staying consistently late increases points</li>
+                        <li>In Early Bird mode, staying consistently early reduces points</li>
                     </ul>
                 </div>
 
-                <div class="streak-example">
-                    <h5>Example Date-Aware Calculations</h5>
-                    <p>If viewing rankings for 2024-01-15:</p>
-                    <table class="example-table">
-                        <tr>
-                            <th>Scenario</th>
-                            <th>Effect on Score</th>
-                        </tr>
-                        <tr>
-                            <td>3-day streak up to Jan 15</td>
-                            <td>±{{ 3 * settings.streak_multiplier }} points</td>
-                        </tr>
-                        <tr>
-                            <td>Attendance on Jan 16-20</td>
-                            <td>No effect on Jan 15 score</td>
-                        </tr>
-                    </table>
-                </div>
+                <!-- ...rest of existing streak box content... -->
             </div>
             {% endif %}
 

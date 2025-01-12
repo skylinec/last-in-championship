@@ -1481,6 +1481,10 @@ def normalize_settings(settings_dict):
         "rules": points.get("rules", [])
     }
 
+    # Explicitly handle tie breaker weekly/monthly settings
+    settings_dict["tiebreaker_weekly"] = bool(settings_dict.get("tiebreaker_weekly", True))
+    settings_dict["tiebreaker_monthly"] = bool(settings_dict.get("tiebreaker_monthly", True))
+
     return {
         "points": normalized_points,
         "late_bonus": float(settings_dict.get("late_bonus", 0)),
@@ -1528,9 +1532,11 @@ def manage_settings():
                 old_settings = db.query(Settings).first()
                 new_settings = request.json
                 
-                # Force boolean conversion for checkboxes
+                # Force boolean conversion for all boolean fields
                 new_settings["enable_tiebreakers"] = bool(new_settings.get("enable_tiebreakers"))
                 new_settings["auto_resolve_tiebreakers"] = bool(new_settings.get("auto_resolve_tiebreakers"))
+                new_settings["tiebreaker_weekly"] = bool(new_settings.get("tiebreaker_weekly"))
+                new_settings["tiebreaker_monthly"] = bool(new_settings.get("tiebreaker_monthly"))
                 
                 # Force integer conversion for numeric fields
                 new_settings["tiebreaker_points"] = int(new_settings.get("tiebreaker_points", 5))

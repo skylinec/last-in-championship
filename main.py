@@ -1536,8 +1536,20 @@ def manage_settings():
             load_settings.cache_clear()
             settings_data = load_settings()
             
-            # ...existing GET code...
+            if not settings_data.get('monitoring_start_date'):
+                settings_data['monitoring_start_date'] = datetime.now().replace(month=1, day=1).date()
             
+            registered_users = [user[0] for user in db.query(User.username).all()]
+            core_users = settings_data.get("core_users", [])
+            
+            return render_template(
+                "settings.html",
+                settings=settings_data,
+                settings_data=settings_data,
+                registered_users=registered_users,
+                core_users=core_users,
+                rules=settings_data.get("points", {}).get("rules", [])
+            )
         else:
             try:
                 # Clear the settings cache immediately
@@ -3259,7 +3271,7 @@ def start_metrics_updater():
     thread = Thread(target=update_loop, daemon=True)
     thread.start()
         
-if __name__ == "__main__":
+if __name__ "__main__":
     # Remove the start_http_server call as we're using WSGI middleware now
     start_metrics_updater()  # Start metrics updater
     debug_mode = os.getenv('FLASK_ENV') == 'development'

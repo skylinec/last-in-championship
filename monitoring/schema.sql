@@ -59,3 +59,40 @@ BEGIN
         EXECUTE FUNCTION cleanup_monitoring_logs();
     END IF;
 END $$;
+
+-- Add tie breaker tables
+CREATE TABLE IF NOT EXISTS tie_breakers (
+    id SERIAL PRIMARY KEY,
+    period VARCHAR(10) NOT NULL, -- 'week' or 'month'
+    period_end DATE NOT NULL,
+    points DECIMAL NOT NULL,
+    status VARCHAR(20) DEFAULT 'pending', -- pending, in_progress, completed
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    resolved_at TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS tie_breaker_participants (
+    id SERIAL PRIMARY KEY,
+    tie_breaker_id INTEGER REFERENCES tie_breakers(id),
+    username VARCHAR(50) NOT NULL,
+    game_choice VARCHAR(20), -- 'tictactoe' or 'connect4'
+    ready BOOLEAN DEFAULT false,
+    winner BOOLEAN,
+    UNIQUE(tie_breaker_id, username)
+);
+
+CREATE TABLE IF NOT EXISTS tie_breaker_games (
+    id SERIAL PRIMARY KEY,
+    tie_breaker_id INTEGER REFERENCES tie_breakers(id),
+    game_type VARCHAR(20) NOT NULL,
+    player1 VARCHAR(50) NOT NULL,
+    player2 VARCHAR(50) NOT NULL,
+    game_state JSONB,
+    winner VARCHAR(50),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    completed_at TIMESTAMP
+);
+
+-- Add indices
+CREATE INDEX IF NOT EXISTS idx_tiebreakers_status ON tie_breakers(status);
+CREATE INDEX IF NOT EXISTS idx_tiebreakers_period_end ON tie_breakers(period_end);

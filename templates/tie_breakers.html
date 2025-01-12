@@ -1,0 +1,125 @@
+{% extends "base.html" %}
+{% block title %}Tie Breakers{% endblock %}
+
+{% block content %}
+<h1>Championship Tie Breakers</h1>
+
+<div class="tie-breakers-container">
+    {% for tie in tie_breakers %}
+    <div class="tie-breaker-card">
+        <div class="tie-header">
+            <h3>{{ tie.period|title }} Tie - {{ tie.period_end|format_date }}</h3>
+            <span class="points">{{ tie.points }} points</span>
+        </div>
+        
+        <div class="participants">
+            {% for participant in tie.participants %}
+            <div class="participant {% if participant.ready %}ready{% endif %}">
+                <span class="name">{{ participant.username }}</span>
+                {% if participant.game_choice %}
+                <span class="game-choice">Chose: {{ participant.game_choice }}</span>
+                {% endif %}
+                {% if participant.winner %}
+                <span class="winner-badge">🏆</span>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+
+        {% if current_user in tie.participant_names and not tie.is_ready %}
+        <div class="game-choice-form">
+            <form method="POST" action="{{ url_for('choose_game', tie_id=tie.id) }}">
+                <select name="game_choice" required>
+                    <option value="">Choose your game</option>
+                    <option value="tictactoe">Tic-tac-toe</option>
+                    <option value="connect4">Connect 4</option>
+                </select>
+                <button type="submit">I'm Ready</button>
+            </form>
+        </div>
+        {% endif %}
+
+        {% if tie.status == 'in_progress' and tie.current_game %}
+        <div class="current-game">
+            <h4>Current Game</h4>
+            <p>{{ tie.current_game.player1 }} vs {{ tie.current_game.player2 }}</p>
+            <a href="{{ url_for('play_game', game_id=tie.current_game.id) }}" class="game-link">
+                Play Game
+            </a>
+        </div>
+        {% endif %}
+    </div>
+    {% endfor %}
+</div>
+
+<style>
+.tie-breakers-container {
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 20px;
+}
+
+.tie-breaker-card {
+    background: white;
+    border-radius: 8px;
+    padding: 20px;
+    margin-bottom: 20px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.tie-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+}
+
+.participants {
+    display: flex;
+    gap: 15px;
+    flex-wrap: wrap;
+    margin-bottom: 15px;
+}
+
+.participant {
+    background: #f5f5f5;
+    padding: 10px;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.participant.ready {
+    background: var(--success-color);
+    color: white;
+}
+
+.game-choice-form {
+    margin-top: 15px;
+    padding-top: 15px;
+    border-top: 1px solid #eee;
+}
+
+.current-game {
+    margin-top: 15px;
+    padding: 15px;
+    background: #f8f9fa;
+    border-radius: 4px;
+}
+
+.winner-badge {
+    font-size: 1.2em;
+}
+
+.game-link {
+    display: inline-block;
+    background: var(--accent-color);
+    color: white;
+    padding: 8px 16px;
+    border-radius: 4px;
+    text-decoration: none;
+    margin-top: 10px;
+}
+</style>
+{% endblock %}

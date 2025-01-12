@@ -330,3 +330,70 @@ generateStreaks().catch(console.error);
 
 // Initialize database on startup
 initDb().catch(console.error);
+
+async function checkForTieBreakers() {
+  const client = await pool.connect();
+  try {
+    // Check weekly ties
+    const weeklyTiesQuery = `
+      WITH weekly_scores AS (
+        SELECT 
+          username,
+          date_trunc('week', date::date) as week_end,
+          SUM(points) as total_points
+        FROM rankings
+        GROUP BY username, week_end
+      ),
+      duplicates AS (
+        SELECT week_end, total_points, COUNT(*) as count
+        FROM weekly_scores
+        GROUP BY week_end, total_points
+        HAVING COUNT(*) > 1
+      )
+      SELECT 
+        ws.username,
+        ws.week_end,
+        ws.total_points
+      FROM weekly_scores ws
+      JOIN duplicates d ON ws.week_end = d.week_end 
+        AND ws.total_points = d.total_points
+      WHERE ws.week_end = date_trunc('week', CURRENT_DATE)
+      AND NOT EXISTS (
+        SELECT 1 FROM tie_breakers tb
+        WHERE tb.period = 'week'
+        AND tb.period_end = ws.week_end
+        AND tb.points = ws.total_points
+      )`;
+
+    const weeklyTies = await client.query(weeklyTiesQuery);
+
+    // Create tie breakers for any new ties
+    for (const row of weeklyTies.rows) {
+      await client.query(`
+        INSERT INTO tie_breakers (period, period_end, points, status)
+        VALUES ($1, $2, $3, 'pending')
+        RETURNING id
+      `, ['week', row.week_end, row.total_points]);
+    }
+
+    // Similar check for monthly ties
+    // ...similar query for monthly scores...
+
+    // Log monitoring event
+    await logMonitoringEvent('check_tiebreakers', {
+      ties_found: weeklyTies.rows.length,
+      timestamp: new Date()
+    });
+
+  } catch (error) {
+    console.error('Error checking tie breakers:', error);
+    await logMonitoringEvent('check_tiebreakers', {
+      error: error.message
+    }, 'error');
+  } finally {
+    client.release();
+  }
+}
+
+// Add to monitoring schedule
+cron.schedule('0 * * * *', checkForTieBreakers); // Check every hour

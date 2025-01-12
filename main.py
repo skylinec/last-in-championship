@@ -2421,7 +2421,7 @@ def build_dynamic_query(db, params):
         elif "month" in params["date_range"]:
             start_date = date.replace(day=1)
             if "last" in params["date_range"]:
-                start_date = (start_date - timedelta(days=1)).replace(day=1)
+                start_date = (start_date - timedelta(days(1)).replace(day=1))
             next_month = (start_date.replace(day=28) + timedelta(days=4)).replace(day=1)
             query = query.filter(Entry.date.between(start_date.isoformat(), (next_month - timedelta(days=1)).isoformat()))
         else:
@@ -3350,3 +3350,405 @@ def health_check():
         return jsonify({"status": "unhealthy", "error": str(e)}), 500
     finally:
         db.close()
+
+# ...existing code...
+
+@app.route("/tie-breakers")
+@login_required
+def tie_breakers():
+    db = SessionLocal()
+    try:
+        # Get all active tie breakers
+        tie_breakers = db.execute(text("""
+            SELECT 
+                t.*,
+                jsonb_agg(jsonb_build_object(
+                    'username', tp.username,
+                    'game_choice', tp.game_choice,
+                    'ready', tp.ready,
+                    'winner', tp.winner
+                )) as participants,
+                (
+                    SELECT jsonb_build_object(
+                        'id', g.id,
+                        'player1', g.player1,
+                        'player2', g.player2
+                    )
+                    FROM tie_breaker_games g
+                    WHERE g.tie_breaker_id = t.id
+                    AND g.winner IS NULL
+                    LIMIT 1
+                ) as current_game
+            FROM tie_breakers t
+            JOIN tie_breaker_participants tp ON t.id = tp.tie_breaker_id
+            WHERE t.status != 'completed'
+            GROUP BY t.id
+            ORDER BY t.created_at DESC
+        """)).fetchall()
+
+        return render_template(
+            "tie_breakers.html",
+            tie_breakers=tie_breakers,
+            current_user=session['user']
+        )
+    finally:
+        db.close()
+
+@app.route("/tie-breakers/<int:tie_id>/choose-game", methods=["POST"])
+@login_required
+def choose_game(tie_id):
+    db = SessionLocal()
+    try:
+        game_choice = request.form.get('game_choice')
+        if game_choice not in ['tictactoe', 'connect4']:
+            return jsonify({"error": "Invalid game choice"}), 400
+
+        # Update participant's choice and ready status
+        db.execute(text("""
+            UPDATE tie_breaker_participants
+            SET game_choice = :choice, ready = true
+            WHERE tie_breaker_id = :tie_id
+            AND username = :username
+        """), {
+            "choice": game_choice,
+            "tie_id": tie_id,
+            "username": session['user']
+        })
+
+        # Check if all participants are ready
+        all_ready = db.execute(text("""
+            SELECT COUNT(*) = COUNT(CASE WHEN ready THEN 1 END)
+            FROM tie_breaker_participants
+            WHERE tie_breaker_id = :tie_id
+        """), {"tie_id": tie_id}).scalar()
+
+        if all_ready:
+            # Start the first game
+            create_next_game(db, tie_id)
+
+        db.commit()
+        return redirect(url_for('tie_breakers'))
+    finally:
+        db.close()
+
+@app.route("/games/<int:game_id>")
+@login_required
+def play_game(game_id):
+    db = SessionLocal()
+    try:
+        game = db.execute(text("""
+            SELECT g.*, t.period, t.period_end
+            FROM tie_breaker_games g
+            JOIN tie_breakers t ON g.tie_breaker_id = t.id
+            WHERE g.id = :game_id
+        """), {"game_id": game_id}).fetchone()
+
+        if not game:
+            return "Game not found", 404
+
+        if session['user'] not in [game.player1, game.player2]:
+            return "You are not part of this game", 403
+
+        template = f"games/{game.game_type}.html"
+        return render_template(
+            template,
+            game=game,
+            current_user=session['user']
+        )
+    finally:
+        db.close()
+
+def create_next_game(db, tie_id):
+    """Create the next game between participants"""
+    # Get participants who haven't played against each other
+    players = db.execute(text("""
+        WITH played_pairs AS (
+            SELECT player1, player2
+            FROM tie_breaker_games
+            WHERE tie_breaker_id = :tie_id
+        )
+        SELECT p1.username as player1, p2.username as player2
+        FROM tie_breaker_participants p1
+        CROSS JOIN tie_breaker_participants p2
+        WHERE p1.tie_breaker_id = :tie_id
+        AND p2.tie_breaker_id = :tie_id
+        AND p1.username < p2.username
+        AND NOT EXISTS (
+            SELECT 1 FROM played_pairs pp
+            WHERE (pp.player1 = p1.username AND pp.player2 = p2.username)
+            OR (pp.player1 = p2.username AND pp.player2 = p1.username)
+        )
+        LIMIT 1
+    """), {"tie_id": tie_id}).fetchone()
+
+    if players:
+        # Choose game type based on participants' preferences
+        game_type = db.execute(text("""
+            SELECT game_choice
+            FROM tie_breaker_participants
+            WHERE tie_breaker_id = :tie_id
+            AND username IN (:p1, :p2)
+            GROUP BY game_choice
+            ORDER BY COUNT(*) DESC
+            LIMIT 1
+        """), {
+            "tie_id": tie_id,
+            "p1": players.player1,
+            "p2": players.player2
+        }).scalar()
+
+        # Create new game
+        db.execute(text("""
+            INSERT INTO tie_breaker_games (
+                tie_breaker_id, game_type, player1, player2, game_state
+            ) VALUES (
+                :tie_id, :game_type, :p1, :p2, 
+                :initial_state
+            )
+        """), {
+            "tie_id": tie_id,
+            "game_type": game_type,
+            "p1": players.player1,
+            "p2": players.player2,
+            "initial_state": json.dumps({
+                "board": [None] * (9 if game_type == 'tictactoe' else 42),
+                "current_player": players.player1,
+                "moves": []
+            })
+        })
+
+        db.execute(text("""
+            UPDATE tie_breakers
+            SET status = 'in_progress'
+            WHERE id = :tie_id
+        """), {"tie_id": tie_id})
+
+# ...existing code...
+
+@app.route("/games/<int:game_id>/move", methods=["POST"])
+@login_required
+def make_move(game_id):
+    """Handle game moves"""
+    db = SessionLocal()
+    try:
+        game = db.execute(text("""
+            SELECT * FROM tie_breaker_games WHERE id = :game_id
+        """), {"game_id": game_id}).fetchone()
+
+        if not game or session['user'] != game.current_player:
+            return jsonify({"error": "Invalid move"}), 400
+
+        move = request.json.get('move')
+        game_state = game.game_state
+        
+        if not is_valid_move(game_state, move, game.game_type):
+            return jsonify({"error": "Invalid move"}), 400
+
+        # Apply move
+        game_state = apply_move(game_state, move, session['user'], game.game_type)
+        
+        # Check for winner
+        winner = check_winner(game_state, game.game_type)
+        
+        # Update game state
+        db.execute(text("""
+            UPDATE tie_breaker_games 
+            SET game_state = :state,
+                winner = :winner,
+                completed_at = CASE WHEN :winner IS NOT NULL THEN NOW() ELSE NULL END
+            WHERE id = :game_id
+        """), {
+            "state": json.dumps(game_state),
+            "winner": winner,
+            "game_id": game_id
+        })
+
+        if winner:
+            # Update participant status
+            db.execute(text("""
+                UPDATE tie_breaker_participants
+                SET winner = (username = :winner)
+                WHERE tie_breaker_id = :tie_id
+                AND username IN (:p1, :p2)
+            """), {
+                "winner": winner,
+                "tie_id": game.tie_breaker_id,
+                "p1": game.player1,
+                "p2": game.player2
+            })
+
+            # Create next game if needed
+            create_next_game(db, game.tie_breaker_id)
+
+            # Check if tie breaker is complete
+            remaining_games = db.execute(text("""
+                SELECT COUNT(*) FROM tie_breaker_games
+                WHERE tie_breaker_id = :tie_id
+                AND winner IS NULL
+            """), {"tie_id": game.tie_breaker_id}).scalar()
+
+            if remaining_games == 0:
+                # Determine overall winner and award point
+                winner = db.execute(text("""
+                    SELECT username FROM tie_breaker_participants
+                    WHERE tie_breaker_id = :tie_id
+                    AND winner = true
+                    LIMIT 1
+                """), {"tie_id": game.tie_breaker_id}).scalar()
+
+                if winner:
+                    # Update tie breaker status
+                    db.execute(text("""
+                        UPDATE tie_breakers
+                        SET status = 'completed',
+                            resolved_at = NOW()
+                        WHERE id = :tie_id
+                    """), {"tie_id": game.tie_breaker_id})
+
+                    # Award bonus point to winner
+                    log_audit(
+                        "tie_breaker_resolved",
+                        session['user'],
+                        f"Tie breaker resolved with winner: {winner}",
+                        old_data={"tie_id": game.tie_breaker_id},
+                        new_data={"winner": winner}
+                    )
+
+        db.commit()
+        return jsonify({
+            "status": "success",
+            "state": game_state,
+            "winner": winner
+        })
+    finally:
+        db.close()
+
+def is_valid_move(game_state, move, game_type):
+    """Validate move based on game type"""
+    board = game_state['board']
+    
+    if game_type == 'tictactoe':
+        return 0 <= move < 9 and board[move] is None
+    elif game_type == 'connect4':
+        if not (0 <= move < 7):  # Check column is valid
+            return False
+        # Find first empty spot in column
+        for i in range(35, -1, -7):  # Check from bottom up
+            if board[i + move] is None:
+                return True
+        return False
+    return False
+
+def apply_move(game_state, move, player, game_type):
+    """Apply move to game state"""
+    board = game_state['board']
+    moves = game_state['moves']
+    
+    if game_type == 'tictactoe':
+        board[move] = player
+    elif game_type == 'connect4':
+        # Find first empty spot in column
+        for i in range(35, -1, -7):
+            if board[i + move] is None:
+                board[i + move] = player
+                break
+                
+    moves.append({
+        "player": player,
+        "position": move,
+        "timestamp": datetime.now().isoformat()
+    })
+    
+    # Update current player
+    current_player = game_state['current_player']
+    next_player = moves[0]['player'] if current_player == moves[1]['player'] else moves[1]['player']
+    
+    return {
+        "board": board,
+        "moves": moves,
+        "current_player": next_player
+    }
+
+def check_winner(game_state, game_type):
+    """Check for winner based on game type"""
+    board = game_state['board']
+    
+    if game_type == 'tictactoe':
+        # Check rows, columns and diagonals
+        lines = [
+            [0,1,2], [3,4,5], [6,7,8],  # rows
+            [0,3,6], [1,4,7], [2,5,8],  # columns
+            [0,4,8], [2,4,6]  # diagonals
+        ]
+        
+        for line in lines:
+            if (board[line[0]] is not None and
+                board[line[0]] == board[line[1]] == board[line[2]]):
+                return board[line[0]]
+                
+    elif game_type == 'connect4':
+        # Check horizontal
+        for row in range(6):
+            for col in range(4):
+                idx = row * 7 + col
+                if (board[idx] is not None and
+                    board[idx] == board[idx+1] == board[idx+2] == board[idx+3]):
+                    return board[idx]
+        
+        # Check vertical
+        for row in range(3):
+            for col in range(7):
+                idx = row * 7 + col
+                if (board[idx] is not None and
+                    board[idx] == board[idx+7] == board[idx+14] == board[idx+21]):
+                    return board[idx]
+        
+        # Check diagonal (down-right)
+        for row in range(3):
+            for col in range(4):
+                idx = row * 7 + col
+                if (board[idx] is not None and
+                    board[idx] == board[idx+8] == board[idx+16] == board[idx+24]):
+                    return board[idx]
+        
+        # Check diagonal (down-left)
+        for row in range(3):
+            for col in range(3, 7):
+                idx = row * 7 + col
+                if (board[idx] is not None and
+                    board[idx] == board[idx+6] == board[idx+12] == board[idx+18]):
+                    return board[idx]
+    
+    return None
+
+# Add WebSocket support for real-time game updates
+from flask_socketio import SocketIO, emit, join_room, leave_room
+
+socketio = SocketIO(app)
+
+@socketio.on('join_game')
+def on_join_game(data):
+    """Join game room for real-time updates"""
+    game_id = data['game_id']
+    join_room(f'game_{game_id}')
+
+@socketio.on('leave_game')
+def on_leave_game(data):
+    """Leave game room"""
+    game_id = data['game_id']
+    leave_room(f'game_{game_id}')
+
+def notify_game_update(game_id, game_state, winner=None):
+    """Notify players of game state changes"""
+    emit('game_update', {
+        'state': game_state,
+        'winner': winner
+    }, room=f'game_{game_id}')
+
+if __name__ == "__main__":
+    # ...existing code...
+    socketio.run(app,
+        host=os.getenv('FLASK_HOST', '0.0.0.0'),
+        port=int(os.getenv('FLASK_PORT', '9000')),
+        debug=debug_mode
+    )

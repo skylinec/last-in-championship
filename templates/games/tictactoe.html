@@ -1,0 +1,160 @@
+
+{% extends "base.html" %}
+{% block title %}Tic-tac-toe{% endblock %}
+
+{% block content %}
+<div class="game-container">
+    <h1>Tie Breaker: Tic-tac-toe</h1>
+    <div class="game-info">
+        <div class="player-info">
+            <div class="player {% if game.current_player == game.player1 %}active{% endif %}">
+                Player 1 (X): {{ game.player1 }}
+            </div>
+            <div class="player {% if game.current_player == game.player2 %}active{% endif %}">
+                Player 2 (O): {{ game.player2 }}
+            </div>
+        </div>
+        <div class="game-status">
+            {% if game.winner %}
+                <div class="winner">Winner: {{ game.winner }}</div>
+            {% elif game.is_draw %}
+                <div class="draw">It's a draw!</div>
+            {% else %}
+                <div class="turn">Current Turn: {{ game.current_player }}</div>
+            {% endif %}
+        </div>
+    </div>
+    <div class="board">
+        {% for row in game.board %}
+            <div class="board-row">
+                {% for cell in row %}
+                    <div class="board-cell" data-row="{{ loop.index0 }}" data-col="{{ loop.index0 }}">
+                        {{ cell }}
+                    </div>
+                {% endfor %}
+            </div>
+        {% endfor %}
+    </div>
+    <button class="reset-button" onclick="resetGame()">Reset Game</button>
+</div>
+
+<style>
+.game-container {
+    max-width: 600px;
+    margin: 0 auto;
+    text-align: center;
+}
+
+.game-info {
+    margin-bottom: 20px;
+}
+
+.player-info {
+    display: flex;
+    justify-content: space-around;
+    margin-bottom: 10px;
+}
+
+.player {
+    padding: 10px;
+    border: 2px solid #ddd;
+    border-radius: 4px;
+    width: 45%;
+}
+
+.player.active {
+    border-color: var(--accent-color);
+    background: var(--accent-color);
+    color: white;
+}
+
+.game-status {
+    margin-bottom: 20px;
+    font-size: 1.2em;
+}
+
+.board {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 5px;
+    margin-bottom: 20px;
+}
+
+.board-row {
+    display: contents;
+}
+
+.board-cell {
+    width: 100px;
+    height: 100px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 2em;
+    border: 2px solid #ddd;
+    cursor: pointer;
+    transition: background 0.3s;
+}
+
+.board-cell:hover {
+    background: #f0f0f0;
+}
+
+.reset-button {
+    padding: 10px 20px;
+    border: none;
+    border-radius: 4px;
+    background: var(--accent-color);
+    color: white;
+    cursor: pointer;
+    transition: background 0.3s;
+}
+
+.reset-button:hover {
+    background: var(--primary-color);
+}
+</style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const cells = document.querySelectorAll('.board-cell');
+    cells.forEach(cell => {
+        cell.addEventListener('click', function() {
+            const row = this.dataset.row;
+            const col = this.dataset.col;
+            makeMove(row, col);
+        });
+    });
+});
+
+function makeMove(row, col) {
+    fetch(`/tic-tac-toe/move`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ row, col })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            window.location.reload();
+        } else {
+            alert(data.message);
+        }
+    });
+}
+
+function resetGame() {
+    fetch(`/tic-tac-toe/reset`, {
+        method: 'POST'
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            window.location.reload();
+        } else {
+            alert(data.message);
+        }
+    });
+}
+</script>
+{% endblock %}

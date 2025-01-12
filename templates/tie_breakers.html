@@ -51,6 +51,12 @@
                     <a href="{{ url_for('play_game', game_id=tie.current_game.id) }}" class="btn game-link">
                         Play Your Game
                     </a>
+                {% elif not tie.current_game.player2 %}
+                    <form method="POST" action="{{ url_for('join_game', game_id=tie.current_game.id) }}" class="join-form">
+                        <button type="submit" class="btn game-link join">
+                            Join Game against {{ tie.current_game.player1 }}
+                        </button>
+                    </form>
                 {% else %}
                     <a href="{{ url_for('play_game', game_id=tie.current_game.id) }}" class="btn game-link spectate">
                         Watch Game
@@ -174,6 +180,18 @@
 .tie-breaker-card.completed .status-badge {
     background: #9e9e9e;
     color: white;
+}
+
+.join-form {
+    margin-top: 10px;
+}
+
+.game-link.join {
+    background: var(--success-color);
+}
+
+.game-link.join:hover {
+    background: #2d8d47;
 }
 </style>
 {% endblock %}

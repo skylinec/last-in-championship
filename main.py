@@ -3319,7 +3319,7 @@ def start_metrics_updater():
     thread = Thread(target=update_loop, daemon=True)
     thread.start()
         
-if __name__ == "__main__":
+if __name__ "__main__":
     # Remove the start_http_server call as we're using WSGI middleware now
     start_metrics_updater()  # Start metrics updater
     debug_mode = os.getenv('FLASK_ENV') == 'development'
@@ -3556,6 +3556,7 @@ def create_next_game(db, tie_id):
         WHERE p1.tie_breaker_id = :tie_id
         AND p2.tie_breaker_id = :tie_id
         AND p1.username < p2.username
+        AND p1.ready = true AND p2.ready = true
         AND NOT EXISTS (
             SELECT 1 FROM played_pairs pp
             WHERE (pp.player1 = p1.username AND pp.player2 = p2.username)
@@ -3563,8 +3564,8 @@ def create_next_game(db, tie_id):
         )
     """), {"tie_id": tie_id}).fetchall()
 
+    # Create games with initial state
     for pair in pairs:
-        # Create game with initial 'pending' status
         db.execute(text("""
             INSERT INTO tie_breaker_games (
                 tie_breaker_id, 
@@ -3576,7 +3577,7 @@ def create_next_game(db, tie_id):
                 :tie_id,
                 :game_type,
                 :player1,
-                'pending',
+                'available',
                 :initial_state
             )
         """), {
@@ -3613,20 +3614,30 @@ def choose_game(tie_id):
 
         # Check if all participants are ready
         all_ready = db.execute(text("""
-            SELECT COUNT(*) = COUNT(CASE WHEN ready THEN 1 END)
+            SELECT bool_and(ready) 
             FROM tie_breaker_participants
             WHERE tie_breaker_id = :tie_id
         """), {"tie_id": tie_id}).scalar()
 
         if all_ready:
-            # Start the first game and update status
+            # Create initial games
             create_next_game(db, tie_id)
-            # Update tie breaker status to in_progress
+            
+            # Update tie breaker status to in_progress only after games are created
             db.execute(text("""
                 UPDATE tie_breakers
                 SET status = 'in_progress'
                 WHERE id = :tie_id
+                AND status = 'pending'
             """), {"tie_id": tie_id})
+
+            log_audit(
+                "tie_breaker_started",
+                session['user'],
+                f"Tie breaker {tie_id} started - all participants ready",
+                old_data={"status": "pending"},
+                new_data={"status": "in_progress"}
+            )
 
         db.commit()
         return redirect(url_for('tie_breakers'))

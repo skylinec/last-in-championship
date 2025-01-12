@@ -89,6 +89,18 @@ ALTER TABLE tie_breakers
 ADD CONSTRAINT tie_breakers_period_check 
 CHECK (period IN ('weekly', 'monthly'));
 
+-- Update tie breakers table constraints
+ALTER TABLE tie_breakers 
+DROP CONSTRAINT IF EXISTS tie_breaker_status_check;
+
+ALTER TABLE tie_breakers 
+ADD CONSTRAINT tie_breaker_status_check 
+CHECK (status IN ('pending', 'in_progress', 'completed'));
+
+-- Ensure new tie breakers start as pending
+ALTER TABLE tie_breakers 
+ALTER COLUMN status SET DEFAULT 'pending';
+
 CREATE TABLE IF NOT EXISTS tie_breaker_participants (
     id SERIAL PRIMARY KEY,
     tie_breaker_id INTEGER REFERENCES tie_breakers(id) ON DELETE CASCADE,
@@ -117,11 +129,11 @@ DROP CONSTRAINT IF EXISTS tie_breaker_games_status_check;
 
 ALTER TABLE tie_breaker_games 
 ADD CONSTRAINT tie_breaker_games_status_check 
-CHECK (status IN ('pending', 'available', 'active', 'completed'));
+CHECK (status IN ('available', 'active', 'completed'));
 
 -- Fix default status
 ALTER TABLE tie_breaker_games 
-ALTER COLUMN status SET DEFAULT 'pending',
+ALTER COLUMN status SET DEFAULT 'available',
 ALTER COLUMN game_state SET DEFAULT '{"board":[], "moves":[], "current_player":null}'::jsonb;
 
 -- Add cascade delete for cleanup
@@ -140,10 +152,10 @@ DROP CONSTRAINT IF EXISTS tie_breaker_games_status_check;
 
 ALTER TABLE tie_breaker_games 
 ADD CONSTRAINT tie_breaker_games_status_check 
-CHECK (status IN ('pending', 'available', 'active', 'completed'));
+CHECK (status IN ('available', 'active', 'completed'));
 
 ALTER TABLE tie_breaker_games
-ALTER COLUMN status SET DEFAULT 'pending';
+ALTER COLUMN status SET DEFAULT 'available';
 
 -- Drop existing indices
 DROP INDEX IF EXISTS idx_tiebreakers_date;

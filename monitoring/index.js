@@ -334,66 +334,109 @@ initDb().catch(console.error);
 async function checkForTieBreakers() {
   const client = await pool.connect();
   try {
-    // Check weekly ties
-    const weeklyTiesQuery = `
-      WITH weekly_scores AS (
+    const startTime = Date.now();
+
+    // Check both weekly and monthly ties
+    const tieCheckQuery = `
+      WITH period_scores AS (
         SELECT 
           username,
-          date_trunc('week', date::date) as week_end,
+          date_trunc('week', date::date) as period_end,
+          'week' as period_type,
           SUM(points) as total_points
         FROM rankings
-        GROUP BY username, week_end
+        GROUP BY username, period_end
+        UNION ALL
+        SELECT 
+          username,
+          date_trunc('month', date::date) as period_end,
+          'month' as period_type,
+          SUM(points) as total_points
+        FROM rankings
+        GROUP BY username, period_end
       ),
       duplicates AS (
-        SELECT week_end, total_points, COUNT(*) as count
-        FROM weekly_scores
-        GROUP BY week_end, total_points
+        SELECT period_end, period_type, total_points, COUNT(*) as tied_users
+        FROM period_scores
+        GROUP BY period_end, period_type, total_points
         HAVING COUNT(*) > 1
       )
       SELECT 
-        ws.username,
-        ws.week_end,
-        ws.total_points
-      FROM weekly_scores ws
-      JOIN duplicates d ON ws.week_end = d.week_end 
-        AND ws.total_points = d.total_points
-      WHERE ws.week_end = date_trunc('week', CURRENT_DATE)
+        ps.username,
+        ps.period_end,
+        ps.period_type,
+        ps.total_points,
+        d.tied_users
+      FROM period_scores ps
+      JOIN duplicates d ON ps.period_end = d.period_end 
+        AND ps.period_type = d.period_type
+        AND ps.total_points = d.total_points
+      WHERE ps.period_end >= CURRENT_DATE - INTERVAL '7 days'
       AND NOT EXISTS (
         SELECT 1 FROM tie_breakers tb
-        WHERE tb.period = 'week'
-        AND tb.period_end = ws.week_end
-        AND tb.points = ws.total_points
+        WHERE tb.period = ps.period_type
+        AND tb.period_end = ps.period_end
+        AND tb.points = ps.total_points
       )`;
 
-    const weeklyTies = await client.query(weeklyTiesQuery);
+    const ties = await client.query(tieCheckQuery);
+    let tieBreakersCreated = 0;
 
     // Create tie breakers for any new ties
-    for (const row of weeklyTies.rows) {
-      await client.query(`
+    for (const row of ties.rows) {
+      const result = await client.query(`
         INSERT INTO tie_breakers (period, period_end, points, status)
         VALUES ($1, $2, $3, 'pending')
         RETURNING id
-      `, ['week', row.week_end, row.total_points]);
+      `, [row.period_type, row.period_end, row.total_points]);
+      
+      // Add participants
+      const participantsQuery = `
+        INSERT INTO tie_breaker_participants (tie_breaker_id, username)
+        SELECT $1, username
+        FROM period_scores
+        WHERE period_type = $2
+        AND period_end = $3
+        AND total_points = $4
+      `;
+      await client.query(participantsQuery, [
+        result.rows[0].id,
+        row.period_type,
+        row.period_end,
+        row.total_points
+      ]);
+      
+      tieBreakersCreated++;
     }
 
-    // Similar check for monthly ties
-    // ...similar query for monthly scores...
-
-    // Log monitoring event
-    await logMonitoringEvent('check_tiebreakers', {
-      ties_found: weeklyTies.rows.length,
-      timestamp: new Date()
+    await logMonitoringEvent('tie_breaker_check', {
+      duration: Date.now() - startTime,
+      ties_found: ties.rows.length,
+      tie_breakers_created: tieBreakersCreated,
+      check_date: new Date().toISOString()
     });
 
   } catch (error) {
-    console.error('Error checking tie breakers:', error);
-    await logMonitoringEvent('check_tiebreakers', {
+    await logMonitoringEvent('tie_breaker_check', {
       error: error.message
     }, 'error');
+    throw error;
   } finally {
     client.release();
   }
 }
 
-// Add to monitoring schedule
-cron.schedule('0 * * * *', checkForTieBreakers); // Check every hour
+// Update intervals section at bottom of file
+const INTERVAL = parseInt(process.env.MONITORING_INTERVAL) || 300000;
+
+// Run all checks every 5 minutes
+setInterval(checkMissingEntries, INTERVAL);
+setInterval(generateStreaks, INTERVAL);
+setInterval(checkForTieBreakers, INTERVAL);
+
+// Initial runs on startup
+checkMissingEntries().catch(console.error);
+generateStreaks().catch(console.error);
+checkForTieBreakers().catch(console.error);
+
+// Remove the cron schedule for tie breakers since we're using interval now

@@ -3586,6 +3586,7 @@ def choose_game(tie_id):
 @app.route("/games/<int:game_id>")
 @login_required
 def play_game(game_id):
+    """Handle game display and status checks"""
     db = SessionLocal()
     try:
         game = db.execute(text("""
@@ -3598,7 +3599,13 @@ def play_game(game_id):
         if not game:
             return "Game not found", 404
 
-        if session['user'] not in [game.player1, game.player2]:
+        # Only allow active games to be played
+        if game.status == 'pending':
+            if session['user'] in [game.player1, game.player2]:
+                return "Waiting for other player to join", 202
+            return "This game hasn't started yet", 400
+
+        if game.status == 'active' and session['user'] not in [game.player1, game.player2]:
             return "You are not part of this game", 403
 
         template = f"games/{game.game_type}.html"
@@ -3609,62 +3616,6 @@ def play_game(game_id):
         )
     finally:
         db.close()
-
-def create_next_game(db, tie_id):
-    """Create the next game between participants"""
-    # Get participants who haven't played against each other
-    players = db.execute(text("""
-        WITH played_pairs AS (
-            SELECT player1, player2
-            FROM tie_breaker_games
-            WHERE tie_breaker_id = :tie_id
-        )
-        SELECT p1.username as player1, p2.username as player2
-        FROM tie_breaker_participants p1
-        CROSS JOIN tie_breaker_participants p2
-        WHERE p1.tie_breaker_id = :tie_id
-        AND p2.tie_breaker_id = :tie_id
-        AND p1.username < p2.username
-        AND NOT EXISTS (
-            SELECT 1 FROM played_pairs pp
-            WHERE (pp.player1 = p1.username AND pp.player2 = p2.username)
-            OR (pp.player1 = p2.username AND pp.player2 = p1.username)
-        )
-        LIMIT 1
-    """), {"tie_id": tie_id}).fetchone()
-
-    if players:
-        # Create new game with only player1, waiting for player2 to join
-        game_type = db.execute(text("""
-            SELECT game_choice
-            FROM tie_breaker_participants
-            WHERE tie_breaker_id = :tie_id
-            AND username = :p1
-            LIMIT 1
-        """), {
-            "tie_id": tie_id,
-            "p1": players.player1
-        }).scalar()
-
-        # Create new game in pending state
-        db.execute(text("""
-            INSERT INTO tie_breaker_games (
-                tie_breaker_id, game_type, player1, game_state, status
-            ) VALUES (
-                :tie_id, :game_type, :p1, 
-                :initial_state,
-                'pending'
-            )
-        """), {
-            "tie_id": tie_id,
-            "game_type": game_type,
-            "p1": players.player1,
-            "initial_state": json.dumps({
-                "board": [None] * (9 if game_type == 'tictactoe' else 42),
-                "current_player": players.player1,
-                "moves": []
-            })
-        })
 
 @app.route("/games/<int:game_id>/join", methods=["POST"])
 @login_required
@@ -3692,36 +3643,6 @@ def join_game(game_id):
 
         db.commit()
         return redirect(url_for('play_game', game_id=game_id))
-    finally:
-        db.close()
-
-@app.route("/games/<int:game_id>")
-@login_required
-def play_game(game_id):
-    db = SessionLocal()
-    try:
-        game = db.execute(text("""
-            SELECT g.*, t.period, t.period_end
-            FROM tie_breaker_games g
-            JOIN tie_breakers t ON g.tie_breaker_id = t.id
-            WHERE g.id = :game_id
-        """), {"game_id": game_id}).fetchone()
-
-        if not game:
-            return "Game not found", 404
-
-        # Only allow active games to be played
-        if game.status != 'active':
-            if session['user'] in [game.player1, game.player2]:
-                return "Waiting for other player to join", 202
-            return "This game hasn't started yet", 400
-
-        template = f"games/{game.game_type}.html"
-        return render_template(
-            template,
-            game=game,
-            current_user=session['user']
-        )
     finally:
         db.close()
 

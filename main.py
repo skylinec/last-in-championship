@@ -3494,7 +3494,7 @@ def health_check():
 def tie_breakers():
     db = SessionLocal()
     try:
-        # Updated query with proper timestamp handling
+        # Fixed query with proper GROUP BY clause including period_end
         tie_breakers = db.execute(text("""
             SELECT 
                 t.id,
@@ -3524,7 +3524,7 @@ def tie_breakers():
             FROM tie_breakers t
             JOIN tie_breaker_participants tp ON t.id = tp.tie_breaker_id
             WHERE t.status != 'completed'
-            GROUP BY t.id
+            GROUP BY t.id, t.period, t.points, t.status, t.created_at, t.resolved_at, t.period_end
             ORDER BY t.created_at DESC
         """)).fetchall()
         

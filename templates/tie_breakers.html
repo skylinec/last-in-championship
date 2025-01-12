@@ -27,8 +27,8 @@
             {% endfor %}
         </div>
 
-        <!-- Show game selection form only for pending tie breakers -->
-        {% if tie.status == 'pending' and current_user in tie.participant_names and not tie.is_ready %}
+        <!-- Show game selection form for pending tie breakers -->
+        {% if tie.status == 'pending' and current_user in tie.participants|map(attribute='username')|list and not tie.participants|selectattr('username', 'equalto', current_user)|first|attr('ready') %}
         <div class="game-choice-form">
             <form method="POST" action="{{ url_for('choose_game', tie_id=tie.id) }}">
                 <select name="game_choice" required>
@@ -41,33 +41,32 @@
         </div>
         {% endif %}
 
-        <!-- Show current game or start game button for in-progress tie breakers -->
-        {% if tie.status == 'in_progress' %}
-            {% if tie.current_game %}
-            <div class="current-game">
-                <h4>Current Game</h4>
-                <p>{{ tie.current_game.player1 }}{% if tie.current_game.player2 %} vs {{ tie.current_game.player2 }}{% endif %}</p>
-                {% if not tie.current_game.player2 and current_user != tie.current_game.player1 %}
-                    <form method="POST" action="{{ url_for('join_game', game_id=tie.current_game.id) }}" class="join-form">
-                        <button type="submit" class="btn game-link join">
-                            Join Game against {{ tie.current_game.player1 }}
-                        </button>
-                    </form>
-                {% elif tie.current_game.player2 and current_user in [tie.current_game.player1, tie.current_game.player2] %}
-                    <a href="{{ url_for('play_game', game_id=tie.current_game.id) }}" class="btn game-link">
-                        Play Your Game
-                    </a>
-                {% elif tie.current_game.player2 %}
-                    <a href="{{ url_for('play_game', game_id=tie.current_game.id) }}" class="btn game-link spectate">
-                        Watch Game
-                    </a>
-                {% else %}
-                    <div class="pending-message">
-                        Waiting for another player to join...
+        <!-- Show available games for in-progress tie breakers -->
+        {% if tie.status == 'in_progress' and tie.available_games %}
+            <div class="available-games">
+                <h4>Available Games</h4>
+                {% for game in tie.available_games %}
+                    <div class="game-entry">
+                        {% if game.status == 'available' and current_user != game.player1 and current_user in tie.participants|map(attribute='username')|list %}
+                            <form method="POST" action="{{ url_for('join_game', game_id=game.id) }}" class="join-form">
+                                <button type="submit" class="btn game-link join">
+                                    Join {{ game.game_type|title }} against {{ game.player1 }}
+                                </button>
+                            </form>
+                        {% elif game.status == 'active' %}
+                            {% if current_user in [game.player1, game.player2] %}
+                                <a href="{{ url_for('play_game', game_id=game.id) }}" class="btn game-link">
+                                    Play {{ game.game_type|title }}
+                                </a>
+                            {% else %}
+                                <a href="{{ url_for('play_game', game_id=game.id) }}" class="btn game-link spectate">
+                                    Watch {{ game.game_type|title }}
+                                </a>
+                            {% endif %}
+                        {% endif %}
                     </div>
-                {% endif %}
+                {% endfor %}
             </div>
-            {% endif %}
         {% endif %}
     </div>
     {% else %}

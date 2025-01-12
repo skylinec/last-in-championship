@@ -156,11 +156,11 @@ DROP CONSTRAINT IF EXISTS tie_breaker_games_status_check;
 
 ALTER TABLE tie_breaker_games 
 ADD CONSTRAINT tie_breaker_games_status_check 
-CHECK (status IN ('available', 'active', 'completed'));
+CHECK (status IN ('pending', 'active', 'completed'));
 
 -- Fix default status
 ALTER TABLE tie_breaker_games 
-ALTER COLUMN status SET DEFAULT 'available',
+ALTER COLUMN status SET DEFAULT 'pending',
 ALTER COLUMN game_state SET DEFAULT '{"board":[], "moves":[], "current_player":null}'::jsonb;
 
 -- Add cascade delete for cleanup
@@ -179,10 +179,10 @@ DROP CONSTRAINT IF EXISTS tie_breaker_games_status_check;
 
 ALTER TABLE tie_breaker_games 
 ADD CONSTRAINT tie_breaker_games_status_check 
-CHECK (status IN ('available', 'active', 'completed'));
+CHECK (status IN ('pending', 'active', 'completed'));
 
 ALTER TABLE tie_breaker_games
-ALTER COLUMN status SET DEFAULT 'available';
+ALTER COLUMN status SET DEFAULT 'pending';
 
 -- Drop existing indices
 DROP INDEX IF EXISTS idx_tiebreakers_date;

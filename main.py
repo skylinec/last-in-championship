@@ -3583,6 +3583,8 @@ def choose_game(tie_id):
     finally:
         db.close()
 
+# ...existing code...
+
 def create_next_game(db, tie_id):
     """Create next available games between tied participants"""
     # Get all unplayed participant pairs
@@ -3622,6 +3624,7 @@ def create_next_game(db, tie_id):
             }
             
             try:
+                # Update the status to match the constraint
                 db.execute(text("""
                     INSERT INTO tie_breaker_games (
                         tie_breaker_id, 
@@ -3633,7 +3636,7 @@ def create_next_game(db, tie_id):
                         :tie_id,
                         :game_type,
                         :player1,
-                        'pending',
+                        'pending',  -- This now matches the constraint
                         :initial_state
                     )
                 """), {
@@ -3646,6 +3649,42 @@ def create_next_game(db, tie_id):
                 app.logger.error(f"Error creating game: {str(e)}")
                 app.logger.error(f"Failed parameters: tie_id={tie_id}, game_type={game_choice}, player1={player}")
                 raise
+
+# Update the determine_winner function to use correct status
+def determine_winner(db, tie_id):
+    """Determine the winner across all games for a tie breaker"""
+    # ... existing code ...
+
+    # Update the status value in the final tie-breaker game creation
+    db.execute(text("""
+        INSERT INTO tie_breaker_games (
+            tie_breaker_id,
+            game_type,
+            player1,
+            player2,
+            status,
+            game_state,
+            final_tiebreaker
+        ) VALUES (
+            :tie_id,
+            :game_type,
+            :player1,
+            :player2,
+            'pending',  -- Changed from 'active' to match constraint
+            :initial_state,
+            true
+        )
+    """), {
+        "tie_id": tie_id,
+        "game_type": chosen_game,
+        "player1": player1,
+        "player2": player2,
+        "initial_state": json.dumps(initial_state)
+    })
+
+    return None
+
+# ...existing code...
 
 @app.route("/games/<int:game_id>/join", methods=["POST"])
 @login_required
@@ -3899,7 +3938,7 @@ def determine_winner(db, tie_id):
             :game_type,
             :player1,
             :player2,
-            'active',
+            'pending',  -- Changed from 'active' to match constraint
             :initial_state,
             true
         )

@@ -76,6 +76,19 @@ CREATE TABLE tie_breakers (
     resolved_at TIMESTAMP
 );
 
+-- Add unique constraint to prevent duplicate tie breakers
+ALTER TABLE tie_breakers 
+ADD CONSTRAINT tie_breakers_unique_period 
+UNIQUE (period, period_start, period_end, points);
+
+-- Modify the tie_breakers table constraints
+ALTER TABLE tie_breakers 
+DROP CONSTRAINT IF EXISTS tie_breakers_period_check;
+
+ALTER TABLE tie_breakers 
+ADD CONSTRAINT tie_breakers_period_check 
+CHECK (period IN ('weekly', 'monthly'));
+
 CREATE TABLE IF NOT EXISTS tie_breaker_participants (
     id SERIAL PRIMARY KEY,
     tie_breaker_id INTEGER REFERENCES tie_breakers(id) ON DELETE CASCADE,

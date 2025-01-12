@@ -333,24 +333,27 @@ async function checkForTieBreakers() {
       return;
     }
 
-    // Check for ties at period ends
+    // Check for ties at period ends only for weekly and monthly periods
     const tieCheckQuery = `
       WITH period_end_scores AS (
         SELECT 
           period,
+          period_start,
           period_end,
           username,
           points,
           ROW_NUMBER() OVER (PARTITION BY period, period_end ORDER BY points DESC) as rank,
           COUNT(*) OVER (PARTITION BY period, period_end, points) as tied_count
         FROM rankings
-        WHERE period_end < CURRENT_DATE
+        WHERE period IN ('weekly', 'monthly')
+        AND period_end < CURRENT_DATE
         AND period_end >= CURRENT_DATE - INTERVAL '7 days'
       )
-      SELECT 
+      SELECT DISTINCT
         period,
+        period_start,
         period_end,
-        array_agg(username) as usernames,
+        array_agg(username) OVER (PARTITION BY period, period_end, points) as usernames,
         points,
         tied_count
       FROM period_end_scores
@@ -359,10 +362,10 @@ async function checkForTieBreakers() {
         SELECT 1 
         FROM tie_breakers tb
         WHERE tb.period = period_end_scores.period
-        AND tb.period_end = period_end_scores.period_end::timestamp
+        AND tb.period_end = period_end_scores.period_end
+        AND tb.period_start = period_end_scores.period_start
         AND tb.points = period_end_scores.points
       )
-      GROUP BY period, period_end, points, tied_count
     `;
 
     const ties = await client.query(tieCheckQuery);
@@ -373,7 +376,19 @@ async function checkForTieBreakers() {
       await client.query('BEGIN');
       
       try {
+        // Use Set to track unique combinations and prevent duplicates
+        const processedCombos = new Set();
+
         for (const tie of ties.rows) {
+          // Create unique key for this combination
+          const comboKey = `${tie.period}_${tie.period_end}_${tie.points}`;
+          
+          // Skip if we've already processed this combination
+          if (processedCombos.has(comboKey)) {
+            continue;
+          }
+          processedCombos.add(comboKey);
+
           // Insert tie breaker
           const result = await client.query(`
             INSERT INTO tie_breakers (
@@ -383,23 +398,27 @@ async function checkForTieBreakers() {
               points,
               status
             ) VALUES ($1, $2, $3, $4, 'pending')
+            ON CONFLICT (period, period_start, period_end, points) DO NOTHING
             RETURNING id
           `, [
             tie.period,
-            tie.period_end,
+            tie.period_start,
             tie.period_end,
             tie.points
           ]);
           
-          const tieBreakerId = result.rows[0].id;
-          
-          // Insert participants
-          await client.query(`
-            INSERT INTO tie_breaker_participants (tie_breaker_id, username)
-            SELECT $1, unnest($2::text[])
-          `, [tieBreakerId, tie.usernames]);
-          
-          tieBreakersCreated++;
+          // Only proceed if insert was successful
+          if (result.rows[0]) {
+            const tieBreakerId = result.rows[0].id;
+            
+            // Insert participants
+            await client.query(`
+              INSERT INTO tie_breaker_participants (tie_breaker_id, username)
+              SELECT $1, unnest($2::text[])
+            `, [tieBreakerId, tie.usernames]);
+            
+            tieBreakersCreated++;
+          }
         }
         
         await client.query('COMMIT');

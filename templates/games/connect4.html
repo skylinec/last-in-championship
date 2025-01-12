@@ -1,16 +1,16 @@
 {% extends "base.html" %}
-{% block title %}Tic-tac-toe{% endblock %}
+{% block title %}Connect 4{% endblock %}
 
 {% block content %}
 <div class="game-container">
-    <h1>Tie Breaker: Tic-tac-toe</h1>
+    <h1>Tie Breaker: Connect 4</h1>
     <div class="game-info">
         <div class="player-info">
             <div class="player {% if game.current_player == game.player1 %}active{% endif %}">
-                Player 1 (X): {{ game.player1 }}
+                Player 1 (Red): {{ game.player1 }}
             </div>
             <div class="player {% if game.current_player == game.player2 %}active{% endif %}">
-                Player 2 (O): {{ game.player2 }}
+                Player 2 (Yellow): {{ game.player2 }}
             </div>
         </div>
         <div class="game-status">
@@ -23,18 +23,22 @@
             {% endif %}
         </div>
     </div>
+    
     <div class="board">
-        {% for row in game.board|batch(3) %}
+        {% for row in range(6) %}
             <div class="board-row">
-                {% for cell in row %}
+                {% for col in range(7) %}
+                    {% set index = row * 7 + col %}
                     <div class="board-cell {% if not can_play %}view-only{% endif %}" 
-                         data-pos="{{ loop.index0 + (loop.parent.index0 * 3) }}">
-                        {{ cell or '' }}
+                         data-col="{{ col }}"
+                         data-value="{{ game.game_state.board[index] or '' }}">
+                        <div class="disc"></div>
                     </div>
                 {% endfor %}
             </div>
         {% endfor %}
     </div>
+    
     {% if can_play and game.status == 'active' %}
         <button class="reset-button" onclick="resetGame()">Reset Game</button>
     {% endif %}
@@ -42,7 +46,7 @@
 
 <style>
 .game-container {
-    max-width: 600px;
+    max-width: 700px;
     margin: 0 auto;
     text-align: center;
 }
@@ -77,11 +81,14 @@
 
 .board {
     display: inline-block; /* Changed from grid to inline-block */
+    background: #2196F3;
+    padding: 10px;
+    border-radius: 8px;
     margin: 0 auto 20px;
 }
 
 .board-row {
-    display: flex; /* Changed from contents to flex */
+    display: flex; /* Changed from grid to flex */
     gap: 5px;
     margin-bottom: 5px; /* Added margin between rows */
 }
@@ -91,24 +98,41 @@
 }
 
 .board-cell {
-    width: 100px;
-    height: 100px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 2em;
-    border: 2px solid #ddd;
+    width: 60px;
+    height: 60px;
+    background: white;
+    border-radius: 50%;
     cursor: pointer;
-    transition: background 0.3s;
+    position: relative;
+    overflow: hidden;
     flex: 0 0 auto; /* Prevent cell stretching */
 }
 
-.board-cell:hover {
-    background: #f0f0f0;
+.board-cell .disc {
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    transition: background-color 0.3s;
 }
 
-.board-cell.view-only {
+.board-cell[data-value="view-only"] {
     cursor: default;
+}
+
+.board-cell[data-value="{{ game.player1 }}"] .disc {
+    background-color: #ff4444;
+}
+
+.board-cell[data-value="{{ game.player2 }}"] .disc {
+    background-color: #ffeb3b;
+}
+
+.board-cell:not([data-value=""]):hover {
+    cursor: not-allowed;
+}
+
+.board-cell:hover:not([data-value]):not(.view-only) .disc {
+    background-color: rgba(0,0,0,0.1);
 }
 
 .reset-button {
@@ -124,6 +148,16 @@
 .reset-button:hover {
     background: var(--primary-color);
 }
+
+.winner {
+    color: #4CAF50;
+    font-weight: bold;
+}
+
+.draw {
+    color: #FF9800;
+    font-weight: bold;
+}
 </style>
 
 {% if can_play and game.status == 'active' %}
@@ -131,32 +165,36 @@
 document.addEventListener('DOMContentLoaded', function() {
     const cells = document.querySelectorAll('.board-cell');
     cells.forEach(cell => {
-        cell.addEventListener('click', function() {
-            if (!this.textContent.trim()) {
-                makeMove(this.dataset.pos);
-            }
-        });
+        if (!cell.dataset.value) {
+            cell.addEventListener('click', function() {
+                makeMove(parseInt(cell.dataset.col));
+            });
+        }
     });
 });
 
-function makeMove(pos) {
-    fetch(`/tic-tac-toe/move`, {
+function makeMove(col) {
+    fetch(`/games/{{ game.id }}/move`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ pos })
+        body: JSON.stringify({ move: col })
     })
     .then(response => response.json())
     .then(data => {
         if (data.success) {
             window.location.reload();
         } else {
-            alert(data.message);
+            alert(data.message || 'Invalid move');
         }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('Failed to make move');
     });
 }
 
 function resetGame() {
-    fetch(`/tic-tac-toe/reset`, {
+    fetch(`/games/{{ game.id }}/reset`, {
         method: 'POST'
     })
     .then(response => response.json())
@@ -164,8 +202,12 @@ function resetGame() {
         if (data.success) {
             window.location.reload();
         } else {
-            alert(data.message);
+            alert(data.message || 'Failed to reset game');
         }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('Failed to reset game');
     });
 }
 </script>

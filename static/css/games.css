@@ -1,0 +1,79 @@
+:root {
+    --player1-color: #ff4444;
+    --player2-color: #ffeb3b;
+    --board-background: #2196F3;
+    --cell-background: white;
+    --hover-background: rgba(0,0,0,0.1);
+}
+
+.game-container {
+    max-width: 700px;
+    margin: 0 auto;
+    text-align: center;
+    padding: 20px;
+}
+
+.game-info {
+    margin-bottom: 20px;
+}
+
+.player-info {
+    display: flex;
+    justify-content: space-around;
+    margin-bottom: 10px;
+}
+
+.player {
+    padding: 10px;
+    border: 2px solid #ddd;
+    border-radius: 4px;
+    width: 45%;
+    transition: all 0.3s;
+}
+
+.player.active {
+    border-color: var(--accent-color);
+    background: var(--accent-color);
+    color: white;
+}
+
+.game-status {
+    margin: 20px 0;
+    font-size: 1.2em;
+    font-weight: bold;
+}
+
+.winner {
+    color: #4CAF50;
+}
+
+.draw {
+    color: #FF9800;
+}
+
+.reset-button {
+    padding: 10px 20px;
+    border: none;
+    border-radius: 4px;
+    background: var(--accent-color);
+    color: white;
+    cursor: pointer;
+    transition: background 0.3s;
+    margin-top: 20px;
+}
+
+.reset-button:hover {
+    background: var(--primary-color);
+}
+
+/* Animation keyframes */
+@keyframes dropDisc {
+    from { transform: translateY(-300px); }
+    to { transform: translateY(0); }
+}
+
+@keyframes win {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.1); }
+    100% { transform: scale(1); }
+}

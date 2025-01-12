@@ -1272,8 +1272,10 @@ document.addEventListener('DOMContentLoaded', function() {
 document.getElementById('settingsForm').addEventListener('submit', async (event) => {
     event.preventDefault();
     
-    // Collect basic settings
+    // Collect form data
     const formData = new FormData(event.target);
+    
+    // Build settings object
     const settings = {
         points: {
             in_office: parseInt(formData.get('points.in_office')),
@@ -1281,7 +1283,8 @@ document.getElementById('settingsForm').addEventListener('submit', async (event)
             sick: parseInt(formData.get('points.sick')),
             leave: parseInt(formData.get('points.leave')),
             shift_length: parseFloat(formData.get('points.shift_length')),
-            daily_shifts: {}
+            daily_shifts: {},
+            rules: JSON.parse(document.getElementById('rulesInput').value || '[]')
         },
         late_bonus: parseFloat(formData.get('late_bonus')),
         remote_days: {},
@@ -1303,29 +1306,66 @@ document.getElementById('settingsForm').addEventListener('submit', async (event)
     // Collect remote days settings
     document.querySelectorAll('.user-row').forEach(row => {
         const user = row.dataset.user;
-        const days = [];
-        row.querySelectorAll('input[type="checkbox"]:checked').forEach(checkbox => {
-            days.push(checkbox.value);
-        });
+        const days = Array.from(row.querySelectorAll('input[type="checkbox"]:checked'))
+                        .map(checkbox => checkbox.value);
         settings.remote_days[user] = days;
     });
 
     try {
         const response = await fetch('/settings', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 
+                'Content-Type': 'application/json',
+                'Accept': 'application/json'
+            },
             body: JSON.stringify(settings)
         });
         
         if (!response.ok) throw new Error('Failed to save settings');
         
         const result = await response.json();
-        alert(result.message);
-        location.reload();
+        showToast(result.message || 'Settings saved successfully', 'success');
+        
+        // Wait for toast to be visible before reloading
+        setTimeout(() => window.location.reload(), 1500);
     } catch (error) {
-        alert('Error saving settings: ' + error.message);
+        showToast('Error saving settings: ' + error.message, 'error');
     }
 });
+
+// Add this toast function if not already present
+function showToast(message, type = 'success') {
+    const toast = document.createElement('div');
+    toast.className = `toast ${type}`;
+    toast.textContent = message;
+    document.body.appendChild(toast);
+    setTimeout(() => toast.remove(), 3000);
+}
+
+// Add toast styles if not already present
+document.head.insertAdjacentHTML('beforeend', `
+    <style>
+        .toast {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 12px 24px;
+            border-radius: 6px;
+            color: white;
+            font-weight: 500;
+            z-index: 2000;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            animation: toastIn 0.3s ease-out;
+        }
+        .toast.success { background: var(--success-color); }
+        .toast.error { background: var(--warning-color); }
+        @keyframes toastIn {
+            from { transform: translate(-50%, -20px); opacity: 0; }
+            to { transform: translate(-50%, 0); opacity: 1; }
+        }
+    </style>
+`);
 
 document.getElementById('enable_streaks').addEventListener('change', function() {
     const streakSettings = document.querySelector('.streak-settings');

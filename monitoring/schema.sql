@@ -111,6 +111,18 @@ BEGIN
     END IF;
 END $$;
 
+-- Add tie breaker timing settings columns if they don't exist
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
+                  WHERE table_name = 'settings' 
+                  AND column_name = 'tiebreaker_weekly') THEN
+        ALTER TABLE settings 
+        ADD COLUMN tiebreaker_weekly BOOLEAN DEFAULT true,
+        ADD COLUMN tiebreaker_monthly BOOLEAN DEFAULT true;
+    END IF;
+END $$;
+
 -- Create rankings materialized view
 CREATE MATERIALIZED VIEW IF NOT EXISTS rankings AS
 WITH daily_scores AS (

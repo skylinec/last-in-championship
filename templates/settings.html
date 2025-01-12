@@ -139,6 +139,21 @@
                         Automatically Resolve Expired Tie Breakers
                     </label>
                     <p class="helper-text">If enabled, expired tie breakers will be resolved randomly</p>
+                    
+                    <h4>Tie Breaker Generation</h4>
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="tiebreaker_weekly" name="tiebreaker_weekly" 
+                               {% if settings.tiebreaker_weekly %}checked{% endif %}>
+                        Generate tie breakers at the end of each week
+                    </label>
+                    <p class="helper-text">When enabled, tie breakers will be created for tied weekly rankings on Sundays</p>
+
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="tiebreaker_monthly" name="tiebreaker_monthly" 
+                               {% if settings.tiebreaker_monthly %}checked{% endif %}>
+                        Generate tie breakers at the end of each month
+                    </label>
+                    <p class="helper-text">When enabled, tie breakers will be created for tied monthly rankings on the last day of each month</p>
                 </div>
             </div>
 

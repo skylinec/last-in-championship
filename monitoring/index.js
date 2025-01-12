@@ -323,8 +323,8 @@ async function checkForTieBreakers() {
   try {
     const startTime = Date.now();
 
-    // First check if tie breakers are enabled
-    const settings = await client.query('SELECT enable_tiebreakers, tiebreaker_expiry, auto_resolve_tiebreakers FROM settings LIMIT 1');
+    // First check if tie breakers are enabled and get timing settings
+    const settings = await client.query('SELECT enable_tiebreakers, tiebreaker_expiry, auto_resolve_tiebreakers, tiebreaker_weekly, tiebreaker_monthly FROM settings LIMIT 1');
     if (!settings.rows[0]?.enable_tiebreakers) {
       await logMonitoringEvent('tie_breaker_check', {
         duration: Date.now() - startTime,
@@ -339,30 +339,34 @@ async function checkForTieBreakers() {
       await resolveExpiredTieBreakers(client, expiryHours);
     }
 
-    // Check both weekly and monthly ties with updated query
+    // Check ties based on enabled periods
     const tieCheckQuery = `
       WITH period_scores AS (
+        ${settings.rows[0].tiebreaker_weekly ? `
         SELECT 
-            username,
-            date_trunc('week', date) as period_end,
-            'week' as period_type,
-            SUM(points) as total_points
+          username,
+          date_trunc('week', date) as period_end,
+          'week' as period_type,
+          SUM(points) as total_points
         FROM rankings
         WHERE date_trunc('week', date) = date_trunc('week', CURRENT_DATE - INTERVAL '1 day')
         AND EXTRACT(DOW FROM CURRENT_DATE) = 0  -- Only run on Sundays
         GROUP BY username, date_trunc('week', date)
+        ` : ''}
         
-        UNION ALL
+        ${settings.rows[0].tiebreaker_weekly && settings.rows[0].tiebreaker_monthly ? 'UNION ALL' : ''}
         
+        ${settings.rows[0].tiebreaker_monthly ? `
         SELECT 
-            username,
-            date_trunc('month', date) as period_end,
-            'month' as period_type,
-            SUM(points) as total_points
+          username,
+          date_trunc('month', date) as period_end,
+          'month' as period_type,
+          SUM(points) as total_points
         FROM rankings
         WHERE date_trunc('month', date) = date_trunc('month', CURRENT_DATE - INTERVAL '1 day')
         AND EXTRACT(DAY FROM CURRENT_DATE + INTERVAL '1 day') = 1  -- Only run on last day of month
         GROUP BY username, date_trunc('month', date)
+        ` : ''}
       )
       max_points AS (
         SELECT period_type, period_end, MAX(total_points) as max_points

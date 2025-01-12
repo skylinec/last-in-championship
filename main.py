@@ -221,6 +221,8 @@ class Settings(Base):
     tiebreaker_points = Column(Integer, default=5)
     tiebreaker_expiry = Column(Integer, default=24)  # Fix: Changed default(24) to default=24
     auto_resolve_tiebreakers = Column(Boolean, default=False)
+    tiebreaker_weekly = Column(Boolean, default=True)
+    tiebreaker_monthly = Column(Boolean, default=True)
 
 class AuditLog(Base):
     __tablename__ = "audit_log"
@@ -305,7 +307,9 @@ def init_settings():
             enable_tiebreakers=False,
             tiebreaker_points=5,
             tiebreaker_expiry=24,
-            auto_resolve_tiebreakers=False
+            auto_resolve_tiebreakers=False,
+            tiebreaker_weekly=True,
+            tiebreaker_monthly=True
         )
         db.add(default_settings)
         db.commit()

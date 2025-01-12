@@ -3490,7 +3490,7 @@ def health_check():
 def tie_breakers():
     db = SessionLocal()
     try:
-        # Updated query to properly handle date casting
+        # Fixed query with proper GROUP BY clause
         tie_breakers = db.execute(text("""
             SELECT 
                 t.id,
@@ -3499,7 +3499,7 @@ def tie_breakers():
                 t.status,
                 t.created_at,
                 t.resolved_at,
-                CAST(t.period_end AS DATE) as period_end,
+                t.period_end,
                 jsonb_agg(jsonb_build_object(
                     'username', tp.username,
                     'game_choice', tp.game_choice,
@@ -3520,7 +3520,7 @@ def tie_breakers():
             FROM tie_breakers t
             JOIN tie_breaker_participants tp ON t.id = tp.tie_breaker_id
             WHERE t.status != 'completed'
-            GROUP BY t.id, t.period, t.points, t.status, t.created_at, t.resolved_at, t.period_end
+            GROUP BY t.id
             ORDER BY t.created_at DESC
         """)).fetchall()
 

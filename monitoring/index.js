@@ -339,34 +339,34 @@ async function checkForTieBreakers() {
       await resolveExpiredTieBreakers(client, expiryHours);
     }
 
-    // Check ties based on enabled periods
+    // Fixed query syntax for checking ties
     const tieCheckQuery = `
       WITH period_scores AS (
-        ${settings.rows[0].tiebreaker_weekly ? `
         SELECT 
           username,
-          date_trunc('week', date) as period_end,
+          date_trunc('week', date::date) as period_end,
           'week' as period_type,
-          SUM(points) as total_points
+          SUM(COALESCE(points, 0)) as total_points
         FROM rankings
-        WHERE date_trunc('week', date) = date_trunc('week', CURRENT_DATE - INTERVAL '1 day')
-        AND EXTRACT(DOW FROM CURRENT_DATE) = 0  -- Only run on Sundays
-        GROUP BY username, date_trunc('week', date)
-        ` : ''}
-        
-        ${settings.rows[0].tiebreaker_weekly && settings.rows[0].tiebreaker_monthly ? 'UNION ALL' : ''}
-        
-        ${settings.rows[0].tiebreaker_monthly ? `
+        WHERE ${settings.rows[0].tiebreaker_weekly ? `
+          date_trunc('week', date::date) = date_trunc('week', CURRENT_DATE - interval '1 day')
+          AND EXTRACT(DOW FROM CURRENT_DATE) = 0
+        ` : 'false'}
+        GROUP BY username, date_trunc('week', date::date)
+
+        UNION ALL
+
         SELECT 
           username,
-          date_trunc('month', date) as period_end,
+          date_trunc('month', date::date) as period_end,
           'month' as period_type,
-          SUM(points) as total_points
+          SUM(COALESCE(points, 0)) as total_points
         FROM rankings
-        WHERE date_trunc('month', date) = date_trunc('month', CURRENT_DATE - INTERVAL '1 day')
-        AND EXTRACT(DAY FROM CURRENT_DATE + INTERVAL '1 day') = 1  -- Only run on last day of month
-        GROUP BY username, date_trunc('month', date)
-        ` : ''}
+        WHERE ${settings.rows[0].tiebreaker_monthly ? `
+          date_trunc('month', date::date) = date_trunc('month', CURRENT_DATE - interval '1 day')
+          AND EXTRACT(DAY FROM CURRENT_DATE + interval '1 day') = 1
+        ` : 'false'}
+        GROUP BY username, date_trunc('month', date::date)
       ),
       max_points AS (
         SELECT period_type, period_end, MAX(total_points) as max_points
@@ -382,7 +382,7 @@ async function checkForTieBreakers() {
           ON ps.period_type = mp.period_type 
           AND ps.period_end = mp.period_end
           AND ps.total_points = mp.max_points
-        WHERE ps.period_end >= CURRENT_DATE - INTERVAL '7 days'
+        WHERE ps.period_end >= CURRENT_DATE - interval '7 days'
       )
       SELECT *
       FROM tied_users

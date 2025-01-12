@@ -308,8 +308,8 @@ def init_settings():
             tiebreaker_points=5,
             tiebreaker_expiry=24,
             auto_resolve_tiebreakers=False,
-            tiebreaker_weekly=True,
-            tiebreaker_monthly=True
+            tiebreaker_weekly=True,    # Add explicit defaults
+            tiebreaker_monthly=True    # Add explicit defaults
         )
         db.add(default_settings)
         db.commit()
@@ -1502,8 +1502,8 @@ def normalize_settings(settings_dict):
         "enable_streaks": False,
         "enable_tiebreakers": False,
         "auto_resolve_tiebreakers": False,
-        "tiebreaker_weekly": True,
-        "tiebreaker_monthly": True
+        "tiebreaker_weekly": True,  # Add default for weekly generation
+        "tiebreaker_monthly": True   # Add default for monthly generation
     }
     
     for field, default in bool_fields.items():
@@ -1544,6 +1544,10 @@ def manage_settings():
             
             registered_users = [user[0] for user in db.query(User.username).all()]
             core_users = settings_data.get("core_users", [])
+            
+            # Ensure tie breaker generation settings are present
+            settings_data.setdefault('tiebreaker_weekly', True)
+            settings_data.setdefault('tiebreaker_monthly', True)
             
             return render_template(
                 "settings.html",

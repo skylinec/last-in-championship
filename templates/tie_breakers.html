@@ -6,7 +6,7 @@
     <h1>Championship Tie Breakers</h1>
 
     {% for tie in tie_breakers %}
-    <div class="tie-breaker-card {% if tie.status == 'pending' %}pending{% elif tie.status == 'in_progress' %}in-progress{% else %}completed{% endif %}">
+    <div class="tie-breaker-card {{ tie.status }}">
         <div class="tie-header">
             <h3>{{ tie.period|title }} Tie - {{ tie.period_end|format_date }}</h3>
             <span class="points">{{ tie.points }} points</span>
@@ -46,7 +46,7 @@
             <div class="available-games">
                 <h4>Games</h4>
                 {% for game in tie.games %}
-                    {% if game.status == 'available' and current_user != game.player1 %}
+                    {% if game.status == 'pending' and current_user != game.player1 %}
                         <div class="game-entry">
                             <form method="POST" action="{{ url_for('join_game', game_id=game.id) }}" class="join-form">
                                 <button type="submit" class="btn game-link join">
@@ -177,7 +177,7 @@
     color: #000;
 }
 
-.tie-breaker-card.in-progress .status-badge {
+.tie-breaker-card.in_progress .status-badge {
     background: #4CAF50;
     color: white;
 }

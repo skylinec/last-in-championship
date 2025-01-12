@@ -28,46 +28,63 @@ CACHE_HITS = Counter('cache_hits_total', 'Cache hit count', ['function'])
 CACHE_MISSES = Counter('cache_misses_total', 'Cache miss count', ['function'])
 
 class CacheWithMetrics:
+    """Base cache decorator with metrics tracking"""
     def __init__(self, func):
-        self.func = lru_cache(maxsize=128)(func)
+        self.func = func
         self.name = func.__name__
+        self.cache = {}
+        self.hits = 0
+        self.misses = 0
 
     def __call__(self, *args, **kwargs):
-        result = self.func(*args, **kwargs)
-        if self.func.cache_info().hits > self.func.cache_info().misses:
+        key = self._make_key(args, kwargs)
+        
+        if key in self.cache:
+            self.hits += 1
             CACHE_HITS.labels(function=self.name).inc()
-        else:
-            CACHE_MISSES.labels(function=self.name).inc()
+            return self.cache[key]
+        
+        self.misses += 1
+        CACHE_MISSES.labels(function=self.name).inc()
+        result = self.func(*args, **kwargs)
+        self.cache[key] = result
         return result
-
-# Add after the existing CacheWithMetrics class
-def make_hashable(obj):
-    """Convert a dictionary into a hashable tuple for caching"""
-    if isinstance(obj, dict):
-        return tuple(sorted((k, make_hashable(v)) for k, v in obj.items()))
-    elif isinstance(obj, list):
-        return tuple(make_hashable(x) for x in obj)
-    elif isinstance(obj, set):
-        return tuple(sorted(make_hashable(x) for x in obj))
-    return obj
+    
+    def _make_key(self, args, kwargs):
+        """Default key maker - override in subclasses"""
+        return args + tuple(sorted(kwargs.items()))
+    
+    def cache_info(self):
+        """Return cache statistics"""
+        return {
+            'hits': self.hits,
+            'misses': self.misses,
+            'maxsize': None,
+            'currsize': len(self.cache)
+        }
+    
+    def cache_clear(self):
+        """Clear the cache"""
+        self.cache.clear()
+        self.hits = 0
+        self.misses = 0
 
 class HashableCacheWithMetrics(CacheWithMetrics):
     """Cache decorator that handles unhashable types"""
-    def __call__(self, *args, **kwargs):
+    def _make_key(self, args, kwargs):
+        """Make a hashable key from unhashable arguments"""
+        def make_hashable(obj):
+            if isinstance(obj, dict):
+                return tuple(sorted((k, make_hashable(v)) for k, v in obj.items()))
+            elif isinstance(obj, (list, tuple)):
+                return tuple(make_hashable(x) for x in obj)
+            elif isinstance(obj, set):
+                return tuple(sorted(make_hashable(x) for x in obj))
+            return obj
+            
         hashable_args = tuple(make_hashable(arg) for arg in args)
         hashable_kwargs = tuple(sorted((k, make_hashable(v)) for k, v in kwargs.items()))
-        cache_key = (hashable_args, hashable_kwargs)
-        
-        # Check if result is in cache
-        if cache_key in self.func.cache:
-            CACHE_HITS.labels(function=self.name).inc()
-            return self.func.cache[cache_key]
-        
-        # If not in cache, compute and store
-        CACHE_MISSES.labels(function=self.name).inc()
-        result = self.func(*args, **kwargs)
-        self.func.cache[cache_key] = result
-        return result
+        return (hashable_args, hashable_kwargs)
 
 # Configure logging
 logging.basicConfig(
@@ -329,7 +346,7 @@ def load_settings():
 # Add cache invalidation on settings update
 def save_settings(settings_data):
     """Update settings with cache invalidation"""
-    load_settings.func.cache_clear()  # Clear the cached settings
+    load_settings.cache_clear()  # Clear the cached settings
     db = SessionLocal()
     try:
         settings = db.query(Settings).first()
@@ -3338,8 +3355,8 @@ def health_check():
             "database": "healthy",
             "settings": "loaded" if settings else "missing",
             "cache_stats": {
-                "settings": load_settings.func.cache_info()._asdict(),
-                "scores": calculate_daily_score.func.cache_info()._asdict()
+                "settings": load_settings.cache_info(),
+                "scores": calculate_daily_score.cache_info()
             }
         }
         return jsonify({"status": "healthy", "metrics": metrics})

@@ -217,6 +217,10 @@ class Settings(Base):
     streaks_enabled = Column(Boolean, default=False)
     streak_bonus = Column(Float, default=0.5)
     monitoring_start_date = Column(Date, default=lambda: datetime.now().replace(month=1, day=1))
+    enable_tiebreakers = Column(Boolean, default=False)
+    tiebreaker_points = Column(Integer, default=5)
+    tiebreaker_expiry = Column(Integer, default(24))
+    auto_resolve_tiebreakers = Column(Boolean, default=False)
 
 class AuditLog(Base):
     __tablename__ = "audit_log"
@@ -297,7 +301,11 @@ def init_settings():
             enable_streaks=False,
             streak_multiplier=0.5,
             streaks_enabled=False,
-            streak_bonus=0.5
+            streak_bonus=0.5,
+            enable_tiebreakers=False,
+            tiebreaker_points=5,
+            tiebreaker_expiry=24,
+            auto_resolve_tiebreakers=False
         )
         db.add(default_settings)
         db.commit()
@@ -348,7 +356,11 @@ def load_settings():
             "streak_multiplier": settings.streak_multiplier,
             "streaks_enabled": settings.streaks_enabled,
             "streak_bonus": settings.streak_bonus,
-            "rules": settings.points.get('rules', [])  # Add rules to response
+            "rules": settings.points.get('rules', []),  # Add rules to response
+            "enable_tiebreakers": settings.enable_tiebreakers,
+            "tiebreaker_points": settings.tiebreaker_points,
+            "tiebreaker_expiry": settings.tiebreaker_expiry,
+            "auto_resolve_tiebreakers": settings.auto_resolve_tiebreakers,
         }
         return result
     finally:

@@ -333,7 +333,7 @@ async function checkForTieBreakers() {
       return;
     }
 
-    // Update query to explicitly set status as 'pending'
+    // Update query to explicitly set status as 'pending' (matching the database constraint)
     const tieCheckQuery = `
       WITH tied_rankings AS (
         SELECT 
@@ -360,6 +360,7 @@ async function checkForTieBreakers() {
         AND tb.points = tr.points
       )`;
 
+    // Initialize new tie breakers with correct status
     const ties = await client.query(tieCheckQuery);
     let tieBreakersCreated = 0;
 
@@ -368,7 +369,6 @@ async function checkForTieBreakers() {
       
       try {
         for (const tie of ties.rows) {
-          // Explicitly set status to 'pending' in the INSERT
           const result = await client.query(`
             INSERT INTO tie_breakers (
               period,
@@ -386,11 +386,9 @@ async function checkForTieBreakers() {
             tie.points
           ]);
           
-          // Only proceed if insert was successful
           if (result.rows[0]) {
             const tieBreakerId = result.rows[0].id;
             
-            // Insert participants
             await client.query(`
               INSERT INTO tie_breaker_participants (tie_breaker_id, username)
               SELECT $1, unnest($2::text[])

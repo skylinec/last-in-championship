@@ -3494,7 +3494,7 @@ def health_check():
 def tie_breakers():
     db = SessionLocal()
     try:
-        # Updated query to properly handle game statuses
+        # Fixed query to properly include games with correct fields
         tie_breakers = db.execute(text("""
             WITH tie_breakers_cte AS (
                 SELECT 
@@ -3516,8 +3516,10 @@ def tie_breakers():
                         'id', g.id,
                         'game_type', g.game_type,
                         'player1', g.player1,
-                        'player2', g.status,
-                        'game_state', g.game_state
+                        'player2', g.player2,
+                        'status', g.status,
+                        'game_state', g.game_state,
+                        'final_tiebreaker', g.final_tiebreaker
                     )) FILTER (WHERE g.id IS NOT NULL) as games
                 FROM tie_breakers t
                 LEFT JOIN tie_breaker_participants tp ON t.id = tp.tie_breaker_id

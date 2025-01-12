@@ -3516,8 +3516,7 @@ def tie_breakers():
                         'id', g.id,
                         'game_type', g.game_type,
                         'player1', g.player1,
-                        'player2', g.player2,
-                        'status', g.status,
+                        'player2', g.status,
                         'game_state', g.game_state
                     )) FILTER (WHERE g.id IS NOT NULL) as games
                 FROM tie_breakers t
@@ -3538,6 +3537,52 @@ def tie_breakers():
     finally:
         db.close()
 
+@app.route("/tie-breaker/<int:tie_id>/choose-game", methods=["POST"])
+@login_required
+def choose_game(tie_id):
+    # Renamed from /tie-breakers/ to /tie-breaker/ to fix routing issue
+    db = SessionLocal()
+    try:
+        game_choice = request.form.get('game_choice')
+        if game_choice not in ['tictactoe', 'connect4']:
+            return jsonify({"error": "Invalid game choice"}), 400
+
+        # Update participant's choice and ready status
+        db.execute(text("""
+            UPDATE tie_breaker_participants
+            SET game_choice = :choice, ready = true
+            WHERE tie_breaker_id = :tie_id
+            AND username = :username
+        """), {
+            "choice": game_choice,
+            "tie_id": tie_id,
+            "username": session['user']
+        })
+
+        # Check if all participants are ready
+        all_ready = db.execute(text("""
+            SELECT bool_and(ready) 
+            FROM tie_breaker_participants
+            WHERE tie_breaker_id = :tie_id
+        """), {"tie_id": tie_id}).scalar()
+
+        if all_ready:
+            # Create initial games
+            create_next_game(db, tie_id)
+            
+            # Update tie breaker status to in_progress only after games are created
+            db.execute(text("""
+                UPDATE tie_breakers
+                SET status = 'in_progress'
+                WHERE id = :tie_id
+                AND status = 'pending'
+            """), {"tie_id": tie_id})
+
+        db.commit()
+        return redirect(url_for('tie_breakers'))
+    finally:
+        db.close()
+
 def create_next_game(db, tie_id):
     """Create next available games between tied participants"""
     # Get all unplayed participant pairs
@@ -3548,9 +3593,10 @@ def create_next_game(db, tie_id):
             WHERE tie_breaker_id = :tie_id
         )
         SELECT 
-            p1.username as player1, 
+            p1.username as player1,
+            p1.game_choice as player1_choice, 
             p2.username as player2,
-            p1.game_choice as game_type
+            p2.game_choice as player2_choice
         FROM tie_breaker_participants p1
         CROSS JOIN tie_breaker_participants p2
         WHERE p1.tie_breaker_id = :tie_id
@@ -3564,40 +3610,42 @@ def create_next_game(db, tie_id):
         )
     """), {"tie_id": tie_id}).fetchall()
 
-    # Create games with initial state
+    # Create games with initial state - let each player be player1 once with their chosen game
     for pair in pairs:
-        initial_state = {
-            "board": [None] * (9 if pair.game_type == 'tictactoe' else 42),
-            "moves": [],
-            "current_player": pair.player1
-        }
-        
-        try:
-            db.execute(text("""
-                INSERT INTO tie_breaker_games (
-                    tie_breaker_id, 
-                    game_type,
-                    player1,
-                    status,
-                    game_state
-                ) VALUES (
-                    :tie_id,
-                    :game_type,
-                    :player1,
-                    'pending',
-                    :initial_state
-                )
-            """), {
-                "tie_id": tie_id,
-                "game_type": pair.game_type,
-                "player1": pair.player1,
-                "initial_state": json.dumps(initial_state)
-            })
-        except Exception as e:
-            app.logger.error(f"Error creating game: {str(e)}")
-            # Log the failed parameters for debugging
-            app.logger.error(f"Failed parameters: tie_id={tie_id}, game_type={pair.game_type}, player1={pair.player1}")
-            raise
+        # Create two games - one for each player's choice
+        for player, game_choice in [(pair.player1, pair.player1_choice),
+                                  (pair.player2, pair.player2_choice)]:
+            initial_state = {
+                "board": [None] * (9 if game_choice == 'tictactoe' else 42),
+                "moves": [],
+                "current_player": player
+            }
+            
+            try:
+                db.execute(text("""
+                    INSERT INTO tie_breaker_games (
+                        tie_breaker_id, 
+                        game_type,
+                        player1,
+                        status,
+                        game_state
+                    ) VALUES (
+                        :tie_id,
+                        :game_type,
+                        :player1,
+                        'pending',
+                        :initial_state
+                    )
+                """), {
+                    "tie_id": tie_id,
+                    "game_type": game_choice,
+                    "player1": player,
+                    "initial_state": json.dumps(initial_state)
+                })
+            except Exception as e:
+                app.logger.error(f"Error creating game: {str(e)}")
+                app.logger.error(f"Failed parameters: tie_id={tie_id}, game_type={game_choice}, player1={player}")
+                raise
 
 @app.route("/games/<int:game_id>/join", methods=["POST"])
 @login_required
@@ -3897,6 +3945,188 @@ def check_winner(game_state, game_type):
                     return board[idx]
     
     return None
+
+def determine_winner(db, tie_id):
+    """Determine the winner across all games for a tie breaker"""
+    winners = db.execute(text("""
+        SELECT player1 as player, COUNT(*) as wins
+        FROM tie_breaker_games
+        WHERE tie_breaker_id = :tie_id
+        AND winner = player1
+        AND NOT final_tiebreaker
+        GROUP BY player1
+        UNION ALL
+        SELECT player2 as player, COUNT(*) as wins
+        FROM tie_breaker_games
+        WHERE tie_breaker_id = :tie_id
+        AND winner = player2
+        AND NOT final_tiebreaker
+        GROUP BY player2
+        ORDER BY wins DESC
+    """), {"tie_id": tie_id}).fetchall()
+
+    if not winners:
+        return None
+
+    # If there's a clear winner (most wins)
+    if len(winners) == 1 or winners[0].wins > winners[1].wins:
+        return winners[0].player
+
+    # If there's a tie, create a final tie-breaker game
+    player1, player2 = winners[0].player, winners[1].player
+    game_types = ['tictactoe', 'connect4']
+    chosen_game = random.choice(game_types)
+
+    initial_state = {
+        "board": [None] * (9 if chosen_game == 'tictactoe' else 42),
+        "moves": [],
+        "current_player": player1
+    }
+
+    db.execute(text("""
+        INSERT INTO tie_breaker_games (
+            tie_breaker_id,
+            game_type,
+            player1,
+            player2,
+            status,
+            game_state,
+            final_tiebreaker
+        ) VALUES (
+            :tie_id,
+            :game_type,
+            :player1,
+            :player2,
+            'active',
+            :initial_state,
+            true
+        )
+    """), {
+        "tie_id": tie_id,
+        "game_type": chosen_game,
+        "player1": player1,
+        "player2": player2,
+        "initial_state": json.dumps(initial_state)
+    })
+
+    return None
+
+def check_tie_breaker_completion(db, tie_id):
+    """Check if a tie breaker is complete and determine the winner"""
+    # Check if all non-final games are complete
+    incomplete_games = db.execute(text("""
+        SELECT COUNT(*) 
+        FROM tie_breaker_games
+        WHERE tie_breaker_id = :tie_id
+        AND winner IS NULL
+        AND NOT final_tiebreaker
+    """), {"tie_id": tie_id}).scalar()
+
+    if incomplete_games == 0:
+        # Check if there's a final tie-breaker game in progress
+        final_game = db.execute(text("""
+            SELECT id, winner 
+            FROM tie_breaker_games
+            WHERE tie_breaker_id = :tie_id
+            AND final_tiebreaker = true
+        """), {"tie_id": tie_id}).fetchone()
+
+        if final_game and final_game.winner:
+            # Final game has a winner
+            winner = final_game.winner
+        elif not final_game:
+            # No final game yet, determine if needed
+            winner = determine_winner(db, tie_id)
+        else:
+            # Final game in progress
+            return False
+
+        if winner:
+            # Update tie breaker as completed with winner
+            db.execute(text("""
+                UPDATE tie_breakers
+                SET status = 'completed',
+                    resolved_at = NOW()
+                WHERE id = :tie_id
+            """), {"tie_id": tie_id})
+
+            # Update participant as winner
+            db.execute(text("""
+                UPDATE tie_breaker_participants
+                SET winner = (username = :winner)
+                WHERE tie_breaker_id = :tie_id
+            """), {
+                "tie_id": tie_id,
+                "winner": winner
+            })
+
+            return True
+
+    return False
+
+# Update make_move to use the new completion check
+@app.route("/games/<int:game_id>/move", methods=["POST"])
+@login_required
+def make_move(game_id):
+    db = SessionLocal()
+    try:
+        game = db.execute(text("""
+            SELECT * FROM tie_breaker_games WHERE id = :game_id
+        """), {"game_id": game_id}).fetchone()
+
+        if not game or session['user'] != game.current_player:
+            return jsonify({"error": "Invalid move"}), 400
+
+        move = request.json.get('move')
+        game_state = game.game_state
+        
+        if not is_valid_move(game_state, move, game.game_type):
+            return jsonify({"error": "Invalid move"}), 400
+
+        # Apply move
+        game_state = apply_move(game_state, move, session['user'], game.game_type)
+        winner = check_winner(game_state, game.game_type)
+
+        # Update game state
+        db.execute(text("""
+            UPDATE tie_breaker_games 
+            SET game_state = :state,
+                winner = :winner,
+                status = CASE WHEN :winner IS NOT NULL THEN 'completed' ELSE status END,
+                completed_at = CASE WHEN :winner IS NOT NULL THEN NOW() ELSE NULL END
+            WHERE id = :game_id
+        """), {
+            "state": json.dumps(game_state),
+            "winner": winner,
+            "game_id": game_id
+        })
+
+        if winner:
+            # Check if tie breaker is complete
+            is_complete = check_tie_breaker_completion(db, game.tie_breaker_id)
+            
+            if is_complete:
+                log_audit(
+                    "tie_breaker_resolved",
+                    session['user'],
+                    f"Tie breaker resolved with winner: {winner}",
+                    old_data={"tie_id": game.tie_breaker_id},
+                    new_data={"winner": winner}
+                )
+
+        db.commit()
+        return jsonify({
+            "status": "success",
+            "state": game_state,
+            "winner": winner
+        })
+
+    except Exception as e:
+        db.rollback()
+        app.logger.error(f"Error processing move: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+    finally:
+        db.close()
 
 # Add WebSocket support for real-time game updates
 from flask_socketio import SocketIO, emit, join_room, leave_room

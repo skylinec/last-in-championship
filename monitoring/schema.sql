@@ -124,6 +124,32 @@ CREATE TABLE IF NOT EXISTS tie_breaker_games (
     completed_at TIMESTAMP
 );
 
+-- Add final_tiebreaker column to tie_breaker_games
+ALTER TABLE tie_breaker_games
+ADD COLUMN IF NOT EXISTS final_tiebreaker BOOLEAN DEFAULT false;
+
+-- Add trigger to prevent multiple final tie-breaker games
+CREATE OR REPLACE FUNCTION check_final_tiebreaker()
+RETURNS TRIGGER AS $$
+BEGIN
+    IF NEW.final_tiebreaker = true AND EXISTS (
+        SELECT 1 FROM tie_breaker_games 
+        WHERE tie_breaker_id = NEW.tie_breaker_id 
+        AND final_tiebreaker = true 
+        AND id != NEW.id
+    ) THEN
+        RAISE EXCEPTION 'Only one final tie-breaker game allowed per tie breaker';
+    END IF;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_check_final_tiebreaker ON tie_breaker_games;
+CREATE TRIGGER trg_check_final_tiebreaker
+    BEFORE INSERT OR UPDATE ON tie_breaker_games
+    FOR EACH ROW
+    EXECUTE FUNCTION check_final_tiebreaker();
+
 -- Modify tie_breaker_games constraints
 ALTER TABLE tie_breaker_games 
 DROP CONSTRAINT IF EXISTS tie_breaker_games_status_check;

@@ -339,47 +339,53 @@ async function checkForTieBreakers() {
       await resolveExpiredTieBreakers(client, expiryHours);
     }
 
-    // Check both weekly and monthly ties
+    // Check both weekly and monthly ties with updated query
     const tieCheckQuery = `
       WITH period_scores AS (
         SELECT 
           username,
-          date_trunc('week', date::date) as period_end,
+          date_trunc('week', date) as period_end,
           'week' as period_type,
           SUM(points) as total_points
         FROM rankings
-        GROUP BY username, period_end
+        WHERE date >= CURRENT_DATE - INTERVAL '7 days'
+        GROUP BY username, date_trunc('week', date)
+        
         UNION ALL
+        
         SELECT 
           username,
-          date_trunc('month', date::date) as period_end,
+          date_trunc('month', date) as period_end,
           'month' as period_type,
           SUM(points) as total_points
         FROM rankings
-        GROUP BY username, period_end
+        WHERE date >= date_trunc('month', CURRENT_DATE)
+        GROUP BY username, date_trunc('month', date)
       ),
-      duplicates AS (
-        SELECT period_end, period_type, total_points, COUNT(*) as tied_users
+      max_points AS (
+        SELECT period_type, period_end, MAX(total_points) as max_points
         FROM period_scores
-        GROUP BY period_end, period_type, total_points
-        HAVING COUNT(*) > 1
+        GROUP BY period_type, period_end
+      ),
+      tied_users AS (
+        SELECT 
+          ps.*,
+          COUNT(*) OVER (PARTITION BY ps.period_type, ps.period_end, ps.total_points) as tied_count
+        FROM period_scores ps
+        JOIN max_points mp 
+          ON ps.period_type = mp.period_type 
+          AND ps.period_end = mp.period_end
+          AND ps.total_points = mp.max_points
+        WHERE ps.period_end >= CURRENT_DATE - INTERVAL '7 days'
       )
-      SELECT 
-        ps.username,
-        ps.period_end,
-        ps.period_type,
-        ps.total_points,
-        d.tied_users
-      FROM period_scores ps
-      JOIN duplicates d ON ps.period_end = d.period_end 
-        AND ps.period_type = d.period_type
-        AND ps.total_points = d.total_points
-      WHERE ps.period_end >= CURRENT_DATE - INTERVAL '7 days'
+      SELECT *
+      FROM tied_users
+      WHERE tied_count > 1
       AND NOT EXISTS (
         SELECT 1 FROM tie_breakers tb
-        WHERE tb.period = ps.period_type
-        AND tb.period_end = ps.period_end
-        AND tb.points = ps.total_points
+        WHERE tb.period = tied_users.period_type
+        AND tb.period_end::date = tied_users.period_end::date
+        AND tb.points = tied_users.total_points
       )`;
 
     const ties = await client.query(tieCheckQuery);
@@ -394,15 +400,14 @@ async function checkForTieBreakers() {
       `, [row.period_type, row.period_end, row.total_points]);
       
       // Add participants
-      const participantsQuery = `
+      await client.query(`
         INSERT INTO tie_breaker_participants (tie_breaker_id, username)
         SELECT $1, username
         FROM period_scores
         WHERE period_type = $2
         AND period_end = $3
         AND total_points = $4
-      `;
-      await client.query(participantsQuery, [
+      `, [
         result.rows[0].id,
         row.period_type,
         row.period_end,

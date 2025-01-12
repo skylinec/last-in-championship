@@ -110,3 +110,58 @@ BEGIN
         ADD COLUMN auto_resolve_tiebreakers BOOLEAN DEFAULT false;
     END IF;
 END $$;
+
+-- Create rankings materialized view
+CREATE MATERIALIZED VIEW IF NOT EXISTS rankings AS
+WITH daily_scores AS (
+    SELECT 
+        e.name as username,
+        e.date::date,
+        e.status,
+        e.time,
+        CASE 
+            WHEN e.status = 'in-office' THEN 
+                (SELECT points->>'in_office' FROM settings LIMIT 1)::numeric
+            WHEN e.status = 'remote' THEN 
+                (SELECT points->>'remote' FROM settings LIMIT 1)::numeric
+            ELSE 0
+        END as base_points,
+        ROW_NUMBER() OVER (PARTITION BY e.date ORDER BY e.time) as position,
+        COUNT(*) OVER (PARTITION BY e.date) as total_entries
+    FROM entries e
+    WHERE e.status IN ('in-office', 'remote')
+)
+SELECT 
+    username,
+    date,
+    base_points + (
+        CASE 
+            WHEN position = total_entries THEN 
+                position * (SELECT late_bonus FROM settings LIMIT 1)
+            ELSE 0
+        END
+    ) as points
+FROM daily_scores;
+
+-- Add index on the materialized view
+CREATE UNIQUE INDEX IF NOT EXISTS idx_rankings_user_date 
+ON rankings(username, date);
+
+-- Create refresh function
+CREATE OR REPLACE FUNCTION refresh_rankings()
+RETURNS TRIGGER AS $$
+BEGIN
+    REFRESH MATERIALIZED VIEW CONCURRENTLY rankings;
+    RETURN NULL;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Create trigger for rankings refresh
+DROP TRIGGER IF EXISTS trg_refresh_rankings ON entries;
+CREATE TRIGGER trg_refresh_rankings
+    AFTER INSERT OR UPDATE OR DELETE ON entries
+    FOR EACH STATEMENT
+    EXECUTE FUNCTION refresh_rankings();
+
+-- Initial refresh of the rankings view
+REFRESH MATERIALIZED VIEW rankings;

@@ -404,20 +404,24 @@ multiply points by 1.5</pre>
             <!-- Replace existing streak explanation with updated one -->
             {% if settings.enable_streaks %}
             <div class="example-box streak-explanation">
-                <h4>Streak System</h4>
-                <p>The streak system affects scores differently based on the mode:</p>
+                <h4>Streak System {% if settings.enable_tiebreakers %}& Tie Breakers{% endif %}</h4>
+                <p>The streak system and tie breakers affect scores differently based on the mode:</p>
                 
                 <div class="mode-specific">
                     <h5>Early Bird Mode</h5>
                     <ul>
-                        <li>Streaks subtract points (penalizes consistent earliness)</li>
-                        <li>Current multiplier: -{{ settings.streak_multiplier }} points per day in streak</li>
+                        <li>Streaks subtract {{ settings.streak_multiplier }} points per day (rewards consistent earliness)</li>
+                        {% if settings.enable_tiebreakers %}
+                        <li>Tie breaker wins add {{ settings.tiebreaker_points }} points (rewards winning early competitions)</li>
+                        {% endif %}
                     </ul>
                     
                     <h5>Last-In Mode</h5>
                     <ul>
-                        <li>Streaks add bonus points (rewards consistent lateness)</li>
-                        <li>Current multiplier: +{{ settings.streak_multiplier }} points per day in streak</li>
+                        <li>Streaks add {{ settings.streak_multiplier }} points per day (rewards consistent lateness)</li>
+                        {% if settings.enable_tiebreakers %}
+                        <li>Tie breaker wins remove {{ settings.tiebreaker_points }} points (penalizes winning late competitions)</li>
+                        {% endif %}
                     </ul>
                 </div>
                 

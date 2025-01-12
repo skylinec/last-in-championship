@@ -339,6 +339,19 @@ async function checkForTieBreakers() {
       await resolveExpiredTieBreakers(client, expiryHours);
     }
 
+    // Check daily for end of week/month tie breakers
+    const now = new Date();
+    const isLastDayOfMonth = now.getDate() === new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+    const isSunday = now.getDay() === 0;
+
+    if ((settings.rows[0].tiebreaker_weekly && isSunday) || 
+        (settings.rows[0].tiebreaker_monthly && isLastDayOfMonth)) {
+      await createPeriodTieBreakers(client, {
+        isWeekly: settings.rows[0].tiebreaker_weekly && isSunday,
+        isMonthly: settings.rows[0].tiebreaker_monthly && isLastDayOfMonth
+      });
+    }
+
     // Fixed query syntax for checking ties
     const tieCheckQuery = `
       WITH period_scores AS (
@@ -438,6 +451,31 @@ async function checkForTieBreakers() {
   } finally {
     client.release();
   }
+}
+
+async function createPeriodTieBreakers(client, { isWeekly, isMonthly }) {
+  const period = isWeekly ? 'week' : 'month';
+  const startDate = new Date();
+  
+  // Set date to start of period
+  if (isWeekly) {
+    startDate.setDate(startDate.getDate() - startDate.getDay()); // Start of week
+  } else {
+    startDate.setDate(1); // Start of month
+  }
+
+  await client.query(`
+    INSERT INTO tie_breakers (period, period_end, points, status)
+    SELECT $1, $2, total_points, 'pending'
+    FROM (
+      SELECT period_end, total_points, COUNT(*) as tied_count
+      FROM rankings
+      WHERE period = $1 AND period_end = $2
+      GROUP BY period_end, total_points
+      HAVING COUNT(*) > 1
+    ) ties
+    ON CONFLICT DO NOTHING
+  `, [period, startDate.toISOString()]);
 }
 
 async function resolveExpiredTieBreakers(client, expiryHours) {

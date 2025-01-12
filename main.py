@@ -907,7 +907,7 @@ def compare_values(val1, val2, operator):
 
 @HashableCacheWithMetrics
 def calculate_daily_score(entry, settings, position=None, total_entries=None, mode='last-in'):
-    """Calculate score for a single day's entry with all bonuses"""
+    """Calculate score for a single day's entry with proper streak handling"""
     # Get day-specific start time for late calculations
     entry_date = datetime.strptime(entry["date"], '%Y-%m-%d')
     weekday = entry_date.strftime('%A').lower()
@@ -974,26 +974,63 @@ def calculate_daily_score(entry, settings, position=None, total_entries=None, mo
         early_bird_bonus = (total_entries - position + 1) * settings["late_bonus"]
         last_in_bonus = position * settings["late_bonus"]
     
-    # Calculate streak bonus - modified to match the mode
+    # Calculate streak bonus only if the entry isn't in the future
     streak_bonus = 0
     if settings.get("enable_streaks", False):
-        streak = context['streak']  # Use the streak calculated for the specific date
-        if streak > 0:
-            multiplier = settings.get("streak_multiplier", 0.5)
-            # In last-in mode, streak adds points (rewards consistent lateness)
-            # In early-bird mode, streak subtracts points (penalizes consistent earliness)
-            streak_bonus = streak * multiplier if mode == 'last-in' else -streak * multiplier
-    
+        entry_date = datetime.strptime(entry["date"], '%Y-%m-%d').date()
+        current_date = datetime.now().date()
+        
+        if entry_date <= current_date:  # Only calculate streak for non-future dates
+            db = SessionLocal()
+            try:
+                # Calculate streak up to the entry date
+                streak = calculate_streak_for_date(entry["name"], entry_date, db)
+                if streak > 0:
+                    multiplier = settings.get("streak_multiplier", 0.5)
+                    # In last-in mode, streak adds points (rewards consistent lateness)
+                    # In early-bird mode, streak subtracts points (penalizes consistent earliness)
+                    streak_bonus = streak * multiplier if mode == 'last-in' else -streak * multiplier
+            finally:
+                db.close()
+
+    # Apply tie breaker wins if enabled
+    tie_breaker_points = 0
+    if settings.get("enable_tiebreakers", False):
+        db = SessionLocal()
+        try:
+            # Get tie breaker wins for this user on this date
+            wins = db.execute(text("""
+                SELECT COUNT(*) FROM tie_breakers t
+                JOIN tie_breaker_participants p ON t.id = p.tie_breaker_id
+                WHERE p.username = :username
+                AND t.period_end::date = :date
+                AND p.winner = true
+                AND t.status = 'completed'
+            """), {
+                "username": entry["name"],
+                "date": entry["date"]
+            }).scalar()
+            
+            if wins > 0:
+                base_points = settings.get("tiebreaker_points", 5) * wins
+                # In last-in mode, subtract points for winning (penalize)
+                # In early-bird mode, add points for winning (reward)
+                tie_breaker_points = -base_points if mode == 'last-in' else base_points
+        finally:
+            db.close()
+
     return {
-        "early_bird": context['current_points'] + early_bird_bonus - streak_bonus,  # Subtract for early bird
-        "last_in": context['current_points'] + last_in_bonus + streak_bonus,  # Add for last in
+        "early_bird": context['current_points'] + early_bird_bonus - streak_bonus + tie_breaker_points,
+        "last_in": context['current_points'] + last_in_bonus + streak_bonus - tie_breaker_points,
         "base": context['current_points'],
         "streak": streak_bonus,
         "position_bonus": last_in_bonus if mode == 'last-in' else early_bird_bonus,
+        "tie_breaker": tie_breaker_points,
         "breakdown": {
             "base_points": context['current_points'],
             "position_bonus": last_in_bonus if mode == 'last-in' else early_bird_bonus,
-            "streak_bonus": streak_bonus
+            "streak_bonus": streak_bonus,
+            "tie_breaker_points": tie_breaker_points
         }
     }
 

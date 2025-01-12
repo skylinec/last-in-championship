@@ -333,41 +333,42 @@ async function checkForTieBreakers() {
       return;
     }
 
-    // Modified query to use correct column names
+    // Modified query to handle dates correctly and match schema
     const tieCheckQuery = `
       WITH tied_rankings AS (
         SELECT 
           username,
-          period_end,
+          date,
           SUM(COALESCE(points, 0)) as total_points,
-          COUNT(*) OVER (PARTITION BY period_end, points) as tied_count
-        FROM rankings r
-        WHERE period_end >= CURRENT_DATE - INTERVAL '7 days'
-        GROUP BY username, period_end, points
+          COUNT(*) OVER (PARTITION BY date, points) as tied_count
+        FROM rankings
+        WHERE date >= CURRENT_DATE - INTERVAL '7 days'
+        GROUP BY username, date, points
         HAVING COUNT(*) > 1
       )
       SELECT 
         username,
-        period_end,
+        date,
         total_points,
         tied_count
       FROM tied_rankings tr
       WHERE NOT EXISTS (
         SELECT 1 
         FROM tie_breakers tb
-        WHERE tb.period_end = tr.period_end
+        WHERE tb.period = 'daily'
+        AND tb.period_start::date = tr.date
         AND tb.points = tr.total_points
       )`;
 
     const ties = await client.query(tieCheckQuery);
     let tieBreakersCreated = 0;
 
-    // Group ties by period_end and points for batch processing
+    // Group ties by date and points for batch processing
     const tieGroups = ties.rows.reduce((acc, row) => {
-      const key = `${row.period_end}_${row.total_points}`;
+      const key = `${row.date}_${row.total_points}`;
       if (!acc[key]) {
         acc[key] = {
-          period_end: row.period_end,
+          date: row.date,
           points: row.total_points,
           users: []
         };
@@ -382,12 +383,23 @@ async function checkForTieBreakers() {
       
       try {
         for (const [key, group] of Object.entries(tieGroups)) {
+          const date = new Date(group.date);
           // Insert tie breaker with period fields
           const result = await client.query(`
-            INSERT INTO tie_breakers (period, period_start, period_end, points, status)
-            VALUES ($1, $2, $3, $4, 'pending')
-            RETURNING id
-          `, ['daily', group.period_end, group.period_end, group.points]);
+            INSERT INTO tie_breakers (
+              period, 
+              period_start, 
+              period_end, 
+              points, 
+              status
+            ) VALUES (
+              'daily', 
+              $1::timestamp, 
+              $1::timestamp + INTERVAL '1 day', 
+              $2, 
+              'pending'
+            ) RETURNING id
+          `, [date, group.points]);
           
           const tieBreakerId = result.rows[0].id;
           

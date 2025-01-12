@@ -3566,81 +3566,94 @@ def create_next_game(db, tie_id):
 
     # Create games with initial state
     for pair in pairs:
-        db.execute(text("""
-            INSERT INTO tie_breaker_games (
-                tie_breaker_id, 
-                game_type,
-                player1,
-                status,
-                game_state
-            ) VALUES (
-                :tie_id,
-                :game_type,
-                :player1,
-                'available',
-                :initial_state
-            )
-        """), {
-            "tie_id": tie_id,
-            "game_type": pair.game_type,
-            "player1": pair.player1,
-            "initial_state": json.dumps({
-                "board": [None] * (9 if pair.game_type == 'tictactoe' else 42),
-                "current_player": pair.player1,
-                "moves": []
+        initial_state = {
+            "board": [None] * (9 if pair.game_type == 'tictactoe' else 42),
+            "moves": [],
+            "current_player": pair.player1
+        }
+        
+        try:
+            db.execute(text("""
+                INSERT INTO tie_breaker_games (
+                    tie_breaker_id, 
+                    game_type,
+                    player1,
+                    status,
+                    game_state
+                ) VALUES (
+                    :tie_id,
+                    :game_type,
+                    :player1,
+                    'pending',
+                    :initial_state
+                )
+            """), {
+                "tie_id": tie_id,
+                "game_type": pair.game_type,
+                "player1": pair.player1,
+                "initial_state": json.dumps(initial_state)
             })
-        })
+        except Exception as e:
+            app.logger.error(f"Error creating game: {str(e)}")
+            # Log the failed parameters for debugging
+            app.logger.error(f"Failed parameters: tie_id={tie_id}, game_type={pair.game_type}, player1={pair.player1}")
+            raise
 
-@app.route("/tie-breakers/<int:tie_id>/choose-game", methods=["POST"])
+@app.route("/games/<int:game_id>/join", methods=["POST"])
 @login_required
-def choose_game(tie_id):
+def join_game(game_id):
     db = SessionLocal()
     try:
-        game_choice = request.form.get('game_choice')
-        if game_choice not in ['tictactoe', 'connect4']:
-            return jsonify({"error": "Invalid game choice"}), 400
+        # First check if game exists and is available
+        game = db.execute(text("""
+            SELECT g.*, t.id as tie_id 
+            FROM tie_breaker_games g
+            JOIN tie_breakers t ON g.tie_breaker_id = t.id
+            WHERE g.id = :game_id
+            AND g.status = 'pending'
+            AND g.player2 IS NULL
+        """), {"game_id": game_id}).fetchone()
 
-        # Update participant's choice and ready status
-        db.execute(text("""
-            UPDATE tie_breaker_participants
-            SET game_choice = :choice, ready = true
-            WHERE tie_breaker_id = :tie_id
-            AND username = :username
+        if not game:
+            return jsonify({"error": "Game not available for joining"}), 400
+
+        # Check if user is eligible to join
+        is_eligible = db.execute(text("""
+            SELECT EXISTS (
+                SELECT 1 FROM tie_breaker_participants
+                WHERE tie_breaker_id = :tie_id
+                AND username = :username
+                AND username != :player1
+                AND ready = true
+            )
         """), {
-            "choice": game_choice,
-            "tie_id": tie_id,
-            "username": session['user']
+            "tie_id": game.tie_id,
+            "username": session['user'],
+            "player1": game.player1
+        }).scalar()
+
+        if not is_eligible:
+            return jsonify({"error": "Not eligible to join this game"}), 403
+
+        # Update game with player2 and activate it
+        db.execute(text("""
+            UPDATE tie_breaker_games 
+            SET player2 = :player2,
+                status = 'active'
+            WHERE id = :game_id
+            AND status = 'pending'
+            AND player2 IS NULL
+        """), {
+            "player2": session['user'],
+            "game_id": game_id
         })
 
-        # Check if all participants are ready
-        all_ready = db.execute(text("""
-            SELECT bool_and(ready) 
-            FROM tie_breaker_participants
-            WHERE tie_breaker_id = :tie_id
-        """), {"tie_id": tie_id}).scalar()
-
-        if all_ready:
-            # Create initial games
-            create_next_game(db, tie_id)
-            
-            # Update tie breaker status to in_progress only after games are created
-            db.execute(text("""
-                UPDATE tie_breakers
-                SET status = 'in_progress'
-                WHERE id = :tie_id
-                AND status = 'pending'
-            """), {"tie_id": tie_id})
-
-            log_audit(
-                "tie_breaker_started",
-                session['user'],
-                f"Tie breaker {tie_id} started - all participants ready",
-                old_data={"status": "pending"},
-                new_data={"status": "in_progress"}
-            )
-
         db.commit()
-        return redirect(url_for('tie_breakers'))
+        return redirect(url_for('play_game', game_id=game_id))
+    except Exception as e:
+        db.rollback()
+        app.logger.error(f"Error joining game: {str(e)}")
+        return jsonify({"error": "Failed to join game"}), 500
     finally:
         db.close()
 
@@ -3686,55 +3699,6 @@ def play_game(game_id):
             current_user=session['user'],
             can_play=can_play
         )
-    finally:
-        db.close()
-
-@app.route("/games/<int:game_id>/join", methods=["POST"])
-@login_required
-def join_game(game_id):
-    db = SessionLocal()
-    try:
-        game = db.execute(text("""
-            SELECT g.*, t.id as tie_id 
-            FROM tie_breaker_games g
-            JOIN tie_breakers t ON g.tie_breaker_id = t.id
-            WHERE g.id = :game_id
-        """), {"game_id": game_id}).fetchone()
-
-        if not game or game.status != 'available':
-            return jsonify({"error": "Game not available for joining"}), 400
-
-        # Check if user is eligible to join
-        is_eligible = db.execute(text("""
-            SELECT EXISTS (
-                SELECT 1 FROM tie_breaker_participants
-                WHERE tie_breaker_id = :tie_id
-                AND username = :username
-                AND username != :player1
-            )
-        """), {
-            "tie_id": game.tie_id,
-            "username": session['user'],
-            "player1": game.player1
-        }).scalar()
-
-        if not is_eligible:
-            return jsonify({"error": "Not eligible to join this game"}), 403
-
-        # Add player2 and activate game
-        db.execute(text("""
-            UPDATE tie_breaker_games 
-            SET player2 = :player2,
-                status = 'active'
-            WHERE id = :game_id
-            AND status = 'available'
-        """), {
-            "player2": session['user'],
-            "game_id": game_id
-        })
-
-        db.commit()
-        return redirect(url_for('play_game', game_id=game_id))
     finally:
         db.close()
 

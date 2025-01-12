@@ -116,8 +116,9 @@ CREATE TABLE IF NOT EXISTS tie_breaker_games (
     tie_breaker_id INTEGER REFERENCES tie_breakers(id) ON DELETE CASCADE,
     game_type VARCHAR(20) NOT NULL,
     player1 VARCHAR(50) NOT NULL,
-    player2 VARCHAR(50) NOT NULL,
-    game_state JSONB,
+    player2 VARCHAR(50), -- Remove NOT NULL constraint
+    status VARCHAR(20) DEFAULT 'pending' CHECK (status IN ('pending', 'available', 'active', 'completed')),
+    game_state JSONB DEFAULT '{"board":[], "moves":[], "current_player":null}'::jsonb,
     winner VARCHAR(50),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     completed_at TIMESTAMP

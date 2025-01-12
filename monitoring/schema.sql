@@ -83,6 +83,8 @@ BEGIN
     END IF;
 END $$;
 
+ALTER TABLE tie_breakers ADD COLUMN IF NOT EXISTS period_end TIMESTAMP;
+
 CREATE TABLE IF NOT EXISTS tie_breaker_participants (
     id SERIAL PRIMARY KEY,
     tie_breaker_id INTEGER REFERENCES tie_breakers(id),

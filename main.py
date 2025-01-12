@@ -267,6 +267,10 @@ def migrate_database():
             db.commit()
             print("Added core_users column to settings table")
         
+        columns_tie_breakers = [c['name'] for c in inspector.get_columns('tie_breakers')]
+        if 'period_end' not in columns_tie_breakers:
+            db.execute("ALTER TABLE tie_breakers ADD COLUMN period_end TIMESTAMP;")
+        
     except Exception as e:
         db.rollback()
         print(f"Migration error: {str(e)}")

@@ -111,6 +111,16 @@ CREATE TABLE IF NOT EXISTS tie_breaker_games (
     completed_at TIMESTAMP
 );
 
+ALTER TABLE tie_breaker_games 
+DROP CONSTRAINT IF EXISTS tie_breaker_games_status_check;
+
+ALTER TABLE tie_breaker_games 
+ADD CONSTRAINT tie_breaker_games_status_check 
+CHECK (status IN ('pending', 'available', 'active', 'completed'));
+
+ALTER TABLE tie_breaker_games
+ALTER COLUMN status SET DEFAULT 'pending';
+
 -- Drop existing indices
 DROP INDEX IF EXISTS idx_tiebreakers_date;
 DROP INDEX IF EXISTS idx_tiebreakers_type;

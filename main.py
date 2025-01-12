@@ -3590,29 +3590,40 @@ def play_game(game_id):
     db = SessionLocal()
     try:
         game = db.execute(text("""
-            SELECT g.*, t.period, t.period_end
+            SELECT g.*, t.period, t.period_end, t.status as tie_status,
+                   tp.username as participant
             FROM tie_breaker_games g
             JOIN tie_breakers t ON g.tie_breaker_id = t.id
+            JOIN tie_breaker_participants tp ON t.id = tp.tie_breaker_id
             WHERE g.id = :game_id
-        """), {"game_id": game_id}).fetchone()
+            AND tp.username = :username
+        """), {
+            "game_id": game_id,
+            "username": session['user']
+        }).fetchone()
 
         if not game:
-            return "Game not found", 404
+            return "Game not found or you don't have access", 404
 
-        # Only allow active games to be played
+        if game.tie_status != 'in_progress':
+            return "This tie breaker is no longer active", 400
+
+        # Determine if user can view/play the game
+        can_play = session['user'] in [game.player1, game.player2] if game.player2 else session['user'] == game.player1
+        is_participant = bool(game.participant)
+
+        if not (can_play or is_participant):
+            return "You don't have access to this game", 403
+
         if game.status == 'pending':
-            if session['user'] in [game.player1, game.player2]:
-                return "Waiting for other player to join", 202
             return "This game hasn't started yet", 400
-
-        if game.status == 'active' and session['user'] not in [game.player1, game.player2]:
-            return "You are not part of this game", 403
 
         template = f"games/{game.game_type}.html"
         return render_template(
             template,
             game=game,
-            current_user=session['user']
+            current_user=session['user'],
+            can_play=can_play
         )
     finally:
         db.close()
@@ -3912,7 +3923,7 @@ def create_next_game(db, tie_id):
     """), {"tie_id": tie_id}).fetchall()
 
     for pair in pairs:
-        # Create game in available state
+        # Create game in pending state first
         db.execute(text("""
             INSERT INTO tie_breaker_games (
                 tie_breaker_id, 
@@ -3925,7 +3936,7 @@ def create_next_game(db, tie_id):
                 :game_type,
                 :player1,
                 :initial_state,
-                'available'
+                'pending'
             )
         """), {
             "tie_id": tie_id,
@@ -3936,6 +3947,18 @@ def create_next_game(db, tie_id):
                 "current_player": pair.player1,
                 "moves": []
             })
+        })
+
+        # Then immediately update to available
+        db.execute(text("""
+            UPDATE tie_breaker_games 
+            SET status = 'available'
+            WHERE tie_breaker_id = :tie_id
+            AND player1 = :player1
+            AND status = 'pending'
+        """), {
+            "tie_id": tie_id,
+            "player1": pair.player1
         })
 
 if __name__ == "__main__":

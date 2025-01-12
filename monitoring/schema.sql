@@ -63,12 +63,14 @@ END $$;
 -- Add tie breaker tables
 CREATE TABLE IF NOT EXISTS tie_breakers (
     id SERIAL PRIMARY KEY,
-    period VARCHAR(10) NOT NULL, -- 'week' or 'month'
-    period_end TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    date DATE NOT NULL,
+    type VARCHAR(10) NOT NULL CHECK (type IN ('daily', 'weekly', 'monthly')),
     points DECIMAL NOT NULL,
-    status VARCHAR(20) DEFAULT 'pending', -- pending, in_progress, completed
+    status VARCHAR(20) DEFAULT 'pending' CHECK (status IN ('pending', 'in_progress', 'completed')),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    resolved_at TIMESTAMP
+    resolved_at TIMESTAMP,
+    period_start DATE,
+    period_end DATE
 );
 
 -- Ensure period_end column exists with correct type
@@ -92,9 +94,9 @@ END $$;
 
 CREATE TABLE IF NOT EXISTS tie_breaker_participants (
     id SERIAL PRIMARY KEY,
-    tie_breaker_id INTEGER REFERENCES tie_breakers(id),
+    tie_breaker_id INTEGER REFERENCES tie_breakers(id) ON DELETE CASCADE,
     username VARCHAR(50) NOT NULL,
-    game_choice VARCHAR(20), -- 'tictactoe' or 'connect4'
+    game_choice VARCHAR(20),
     ready BOOLEAN DEFAULT false,
     winner BOOLEAN,
     UNIQUE(tie_breaker_id, username)
@@ -102,7 +104,7 @@ CREATE TABLE IF NOT EXISTS tie_breaker_participants (
 
 CREATE TABLE IF NOT EXISTS tie_breaker_games (
     id SERIAL PRIMARY KEY,
-    tie_breaker_id INTEGER REFERENCES tie_breakers(id),
+    tie_breaker_id INTEGER REFERENCES tie_breakers(id) ON DELETE CASCADE,
     game_type VARCHAR(20) NOT NULL,
     player1 VARCHAR(50) NOT NULL,
     player2 VARCHAR(50) NOT NULL,
@@ -113,8 +115,14 @@ CREATE TABLE IF NOT EXISTS tie_breaker_games (
 );
 
 -- Add indices
-CREATE INDEX IF NOT EXISTS idx_tiebreakers_status ON tie_breakers(status);
-CREATE INDEX IF NOT EXISTS idx_tiebreakers_period_end ON tie_breakers(period_end);
+CREATE INDEX idx_tiebreakers_date ON tie_breakers(date);
+CREATE INDEX idx_tiebreakers_type ON tie_breakers(type);
+CREATE INDEX idx_tiebreakers_status ON tie_breakers(status);
+CREATE INDEX idx_tiebreakers_period ON tie_breakers(period_start, period_end);
+CREATE INDEX idx_tiebreaker_participants_username ON tie_breaker_participants(username);
+
+CREATE INDEX idx_tiebreaker_participants_tie_id ON tie_breaker_participants(tie_breaker_id);
+CREATE INDEX idx_tiebreaker_games_tie_id ON tie_breaker_games(tie_breaker_id);
 
 -- Add tie breaker settings columns if they don't exist
 DO $$
@@ -137,8 +145,10 @@ BEGIN
                   WHERE table_name = 'settings' 
                   AND column_name = 'tiebreaker_weekly') THEN
         ALTER TABLE settings 
-        ADD COLUMN tiebreaker_weekly BOOLEAN DEFAULT true,
-        ADD COLUMN tiebreaker_monthly BOOLEAN DEFAULT true;
+            DROP COLUMN IF EXISTS tiebreaker_weekly,
+            DROP COLUMN IF EXISTS tiebreaker_monthly;
+
+        ALTER TABLE settings ADD COLUMN IF NOT EXISTS tiebreaker_types JSONB DEFAULT '{"daily": true, "weekly": true, "monthly": true}'::jsonb;
     END IF;
 END $$;
 

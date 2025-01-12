@@ -323,8 +323,8 @@ async function checkForTieBreakers() {
   try {
     const startTime = Date.now();
 
-    // First check if tie breakers are enabled and get timing settings
-    const settings = await client.query('SELECT enable_tiebreakers, tiebreaker_expiry, auto_resolve_tiebreakers, tiebreaker_weekly, tiebreaker_monthly FROM settings LIMIT 1');
+    // Get settings
+    const settings = await client.query('SELECT enable_tiebreakers, tiebreaker_expiry, auto_resolve_tiebreakers FROM settings LIMIT 1');
     if (!settings.rows[0]?.enable_tiebreakers) {
       await logMonitoringEvent('tie_breaker_check', {
         duration: Date.now() - startTime,
@@ -333,114 +333,84 @@ async function checkForTieBreakers() {
       return;
     }
 
-    // Process expired tie breakers if auto-resolve is enabled
-    if (settings.rows[0].auto_resolve_tiebreakers) {
-      const expiryHours = settings.rows[0].tiebreaker_expiry || 24;
-      await resolveExpiredTieBreakers(client, expiryHours);
-    }
-
-    // Check daily for end of week/month tie breakers
-    const now = new Date();
-    const isLastDayOfMonth = now.getDate() === new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
-    const isSunday = now.getDay() === 0;
-
-    if ((settings.rows[0].tiebreaker_weekly && isSunday) || 
-        (settings.rows[0].tiebreaker_monthly && isLastDayOfMonth)) {
-      await createPeriodTieBreakers(client, {
-        isWeekly: settings.rows[0].tiebreaker_weekly && isSunday,
-        isMonthly: settings.rows[0].tiebreaker_monthly && isLastDayOfMonth
-      });
-    }
-
-    // Fixed query syntax for checking ties
+    // Modified query to properly handle dates
     const tieCheckQuery = `
-      WITH period_scores AS (
+      WITH tied_rankings AS (
         SELECT 
           username,
-          date_trunc('week', date::date) as period_end,
-          'week' as period_type,
-          SUM(COALESCE(points, 0)) as total_points
+          date::date as ranking_date,
+          SUM(COALESCE(points, 0)) as total_points,
+          COUNT(*) OVER (PARTITION BY date::date, points) as tied_count
         FROM rankings
-        WHERE ${settings.rows[0].tiebreaker_weekly ? `
-          date_trunc('week', date::date) = date_trunc('week', CURRENT_DATE - interval '1 day')
-          AND EXTRACT(DOW FROM CURRENT_DATE) = 0
-        ` : 'false'}
-        GROUP BY username, date_trunc('week', date::date)
-
-        UNION ALL
-
-        SELECT 
-          username,
-          date_trunc('month', date::date) as period_end,
-          'month' as period_type,
-          SUM(COALESCE(points, 0)) as total_points
-        FROM rankings
-        WHERE ${settings.rows[0].tiebreaker_monthly ? `
-          date_trunc('month', date::date) = date_trunc('month', CURRENT_DATE - interval '1 day')
-          AND EXTRACT(DAY FROM CURRENT_DATE + interval '1 day') = 1
-        ` : 'false'}
-        GROUP BY username, date_trunc('month', date::date)
-      ),
-      max_points AS (
-        SELECT period_type, period_end, MAX(total_points) as max_points
-        FROM period_scores
-        GROUP BY period_type, period_end
-      ),
-      tied_users AS (
-        SELECT 
-          ps.*,
-          COUNT(*) OVER (PARTITION BY ps.period_type, ps.period_end, ps.total_points) as tied_count
-        FROM period_scores ps
-        JOIN max_points mp 
-          ON ps.period_type = mp.period_type 
-          AND ps.period_end = mp.period_end
-          AND ps.total_points = mp.max_points
-        WHERE ps.period_end >= CURRENT_DATE - interval '7 days'
+        WHERE date >= CURRENT_DATE - INTERVAL '7 days'
+        GROUP BY username, date::date, points
+        HAVING COUNT(*) > 1
       )
-      SELECT *
-      FROM tied_users
-      WHERE tied_count > 1
-      AND NOT EXISTS (
-        SELECT 1 FROM tie_breakers tb
-        WHERE tb.period = tied_users.period_type
-        AND tb.period_end::date = tied_users.period_end::date
-        AND tb.points = tied_users.total_points
+      SELECT 
+        username,
+        ranking_date,
+        total_points,
+        tied_count
+      FROM tied_rankings tr
+      WHERE NOT EXISTS (
+        SELECT 1 
+        FROM tie_breakers tb
+        WHERE tb.date::date = tr.ranking_date
+        AND tb.points = tr.total_points
       )`;
 
     const ties = await client.query(tieCheckQuery);
     let tieBreakersCreated = 0;
 
-    // Create tie breakers for any new ties
-    for (const row of ties.rows) {
-      const result = await client.query(`
-        INSERT INTO tie_breakers (period, period_end, points, status)
-        VALUES ($1, $2, $3, 'pending')
-        RETURNING id
-      `, [row.period_type, row.period_end, row.total_points]);
+    // Group ties by date and points for batch processing
+    const tieGroups = ties.rows.reduce((acc, row) => {
+      const key = `${row.ranking_date}_${row.total_points}`;
+      if (!acc[key]) {
+        acc[key] = {
+          date: row.ranking_date,
+          points: row.total_points,
+          users: []
+        };
+      }
+      acc[key].users.push(row.username);
+      return acc;
+    }, {});
+
+    // Create tie breakers in transaction
+    if (Object.keys(tieGroups).length > 0) {
+      await client.query('BEGIN');
       
-      // Add participants
-      await client.query(`
-        INSERT INTO tie_breaker_participants (tie_breaker_id, username)
-        SELECT $1, username
-        FROM period_scores
-        WHERE period_type = $2
-        AND period_end = $3
-        AND total_points = $4
-      `, [
-        result.rows[0].id,
-        row.period_type,
-        row.period_end,
-        row.total_points
-      ]);
-      
-      tieBreakersCreated++;
+      try {
+        for (const [key, group] of Object.entries(tieGroups)) {
+          // Insert tie breaker
+          const result = await client.query(`
+            INSERT INTO tie_breakers (date, points, status)
+            VALUES ($1, $2, 'pending')
+            RETURNING id
+          `, [group.date, group.points]);
+          
+          const tieBreakerId = result.rows[0].id;
+          
+          // Insert participants
+          await client.query(`
+            INSERT INTO tie_breaker_participants (tie_breaker_id, username)
+            SELECT $1, unnest($2::text[])
+          `, [tieBreakerId, group.users]);
+          
+          tieBreakersCreated++;
+        }
+        
+        await client.query('COMMIT');
+      } catch (error) {
+        await client.query('ROLLBACK');
+        throw error;
+      }
     }
 
     await logMonitoringEvent('tie_breaker_check', {
       duration: Date.now() - startTime,
       ties_found: ties.rows.length,
-      tie_breakers_created: tieBreakersCreated,
-      check_date: new Date().toISOString()
+      tie_breakers_created: tieBreakersCreated
     });
 
   } catch (error) {
@@ -452,6 +422,8 @@ async function checkForTieBreakers() {
     client.release();
   }
 }
+
+// ...existing code...
 
 async function createPeriodTieBreakers(client, { isWeekly, isMonthly }) {
   const period = isWeekly ? 'week' : 'month';

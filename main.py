@@ -3569,8 +3569,14 @@ def choose_game(tie_id):
         """), {"tie_id": tie_id}).scalar()
 
         if all_ready:
-            # Start the first game
+            # Start the first game and update status
             create_next_game(db, tie_id)
+            # Update tie breaker status to in_progress
+            db.execute(text("""
+                UPDATE tie_breakers
+                SET status = 'in_progress'
+                WHERE id = :tie_id
+            """), {"tie_id": tie_id})
 
         db.commit()
         return redirect(url_for('tie_breakers'))

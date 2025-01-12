@@ -3319,7 +3319,7 @@ def start_metrics_updater():
     thread = Thread(target=update_loop, daemon=True)
     thread.start()
         
-if __name__ == "__main__":
+if __name__ "__main__":
     # Remove the start_http_server call as we're using WSGI middleware now
     start_metrics_updater()  # Start metrics updater
     debug_mode = os.getenv('FLASK_ENV') == 'development'
@@ -3634,34 +3634,31 @@ def create_next_game(db, tie_id):
     """), {"tie_id": tie_id}).fetchone()
 
     if players:
-        # Choose game type based on participants' preferences
+        # Create new game with only player1, waiting for player2 to join
         game_type = db.execute(text("""
             SELECT game_choice
             FROM tie_breaker_participants
             WHERE tie_breaker_id = :tie_id
-            AND username IN (:p1, :p2)
-            GROUP BY game_choice
-            ORDER BY COUNT(*) DESC
+            AND username = :p1
             LIMIT 1
         """), {
             "tie_id": tie_id,
-            "p1": players.player1,
-            "p2": players.player2
+            "p1": players.player1
         }).scalar()
 
-        # Create new game
+        # Create new game in pending state
         db.execute(text("""
             INSERT INTO tie_breaker_games (
-                tie_breaker_id, game_type, player1, player2, game_state
+                tie_breaker_id, game_type, player1, game_state, status
             ) VALUES (
-                :tie_id, :game_type, :p1, :p2, 
-                :initial_state
+                :tie_id, :game_type, :p1, 
+                :initial_state,
+                'pending'
             )
         """), {
             "tie_id": tie_id,
             "game_type": game_type,
             "p1": players.player1,
-            "p2": players.player2,
             "initial_state": json.dumps({
                 "board": [None] * (9 if game_type == 'tictactoe' else 42),
                 "current_player": players.player1,
@@ -3669,13 +3666,64 @@ def create_next_game(db, tie_id):
             })
         })
 
-        db.execute(text("""
-            UPDATE tie_breakers
-            SET status = 'in_progress'
-            WHERE id = :tie_id
-        """), {"tie_id": tie_id})
+@app.route("/games/<int:game_id>/join", methods=["POST"])
+@login_required
+def join_game(game_id):
+    db = SessionLocal()
+    try:
+        game = db.execute(text("""
+            SELECT * FROM tie_breaker_games WHERE id = :game_id
+        """), {"game_id": game_id}).fetchone()
 
-# ...existing code...
+        if not game or game.player2:
+            return jsonify({"error": "Cannot join this game"}), 400
+
+        # Add player2 and change status to active
+        db.execute(text("""
+            UPDATE tie_breaker_games 
+            SET player2 = :player2,
+                status = 'active'
+            WHERE id = :game_id
+            AND player2 IS NULL
+        """), {
+            "player2": session['user'],
+            "game_id": game_id
+        })
+
+        db.commit()
+        return redirect(url_for('play_game', game_id=game_id))
+    finally:
+        db.close()
+
+@app.route("/games/<int:game_id>")
+@login_required
+def play_game(game_id):
+    db = SessionLocal()
+    try:
+        game = db.execute(text("""
+            SELECT g.*, t.period, t.period_end
+            FROM tie_breaker_games g
+            JOIN tie_breakers t ON g.tie_breaker_id = t.id
+            WHERE g.id = :game_id
+        """), {"game_id": game_id}).fetchone()
+
+        if not game:
+            return "Game not found", 404
+
+        # Only allow active games to be played
+        if game.status != 'active':
+            if session['user'] in [game.player1, game.player2]:
+                return "Waiting for other player to join", 202
+            return "This game hasn't started yet", 400
+
+        template = f"games/{game.game_type}.html"
+        return render_template(
+            template,
+            game=game,
+            current_user=session['user']
+        )
+    finally:
+        db.close()
 
 @app.route("/games/<int:game_id>/move", methods=["POST"])
 @login_required

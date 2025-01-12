@@ -46,21 +46,25 @@
             {% if tie.current_game %}
             <div class="current-game">
                 <h4>Current Game</h4>
-                <p>{{ tie.current_game.player1 }} vs {{ tie.current_game.player2 }}</p>
-                {% if current_user in [tie.current_game.player1, tie.current_game.player2] %}
-                    <a href="{{ url_for('play_game', game_id=tie.current_game.id) }}" class="btn game-link">
-                        Play Your Game
-                    </a>
-                {% elif not tie.current_game.player2 %}
+                <p>{{ tie.current_game.player1 }}{% if tie.current_game.player2 %} vs {{ tie.current_game.player2 }}{% endif %}</p>
+                {% if not tie.current_game.player2 and current_user != tie.current_game.player1 %}
                     <form method="POST" action="{{ url_for('join_game', game_id=tie.current_game.id) }}" class="join-form">
                         <button type="submit" class="btn game-link join">
                             Join Game against {{ tie.current_game.player1 }}
                         </button>
                     </form>
-                {% else %}
+                {% elif tie.current_game.player2 and current_user in [tie.current_game.player1, tie.current_game.player2] %}
+                    <a href="{{ url_for('play_game', game_id=tie.current_game.id) }}" class="btn game-link">
+                        Play Your Game
+                    </a>
+                {% elif tie.current_game.player2 %}
                     <a href="{{ url_for('play_game', game_id=tie.current_game.id) }}" class="btn game-link spectate">
                         Watch Game
                     </a>
+                {% else %}
+                    <div class="pending-message">
+                        Waiting for another player to join...
+                    </div>
                 {% endif %}
             </div>
             {% endif %}
@@ -192,6 +196,16 @@
 
 .game-link.join:hover {
     background: #2d8d47;
+}
+
+.pending-message {
+    color: #666;
+    font-style: italic;
+    margin-top: 10px;
+    padding: 10px;
+    background: #f0f0f0;
+    border-radius: 4px;
+    text-align: center;
 }
 </style>
 {% endblock %}

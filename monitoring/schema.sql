@@ -152,6 +152,11 @@ BEGIN
     END IF;
 END $$;
 
+ALTER TABLE tie_breaker_games 
+ADD COLUMN IF NOT EXISTS status VARCHAR(20) 
+DEFAULT 'pending' 
+CHECK (status IN ('pending', 'active', 'completed'));
+
 -- Drop and recreate the rankings view with period support
 DROP MATERIALIZED VIEW IF EXISTS rankings;
 CREATE MATERIALIZED VIEW rankings AS

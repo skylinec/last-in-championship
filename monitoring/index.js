@@ -343,25 +343,27 @@ async function checkForTieBreakers() {
     const tieCheckQuery = `
       WITH period_scores AS (
         SELECT 
-          username,
-          date_trunc('week', date) as period_end,
-          'week' as period_type,
-          SUM(points) as total_points
+            username,
+            date_trunc('week', date) as period_end,
+            'week' as period_type,
+            SUM(points) as total_points
         FROM rankings
-        WHERE date >= CURRENT_DATE - INTERVAL '7 days'
+        WHERE date_trunc('week', date) = date_trunc('week', CURRENT_DATE - INTERVAL '1 day')
+        AND EXTRACT(DOW FROM CURRENT_DATE) = 0  -- Only run on Sundays
         GROUP BY username, date_trunc('week', date)
         
         UNION ALL
         
         SELECT 
-          username,
-          date_trunc('month', date) as period_end,
-          'month' as period_type,
-          SUM(points) as total_points
+            username,
+            date_trunc('month', date) as period_end,
+            'month' as period_type,
+            SUM(points) as total_points
         FROM rankings
-        WHERE date >= date_trunc('month', CURRENT_DATE)
+        WHERE date_trunc('month', date) = date_trunc('month', CURRENT_DATE - INTERVAL '1 day')
+        AND EXTRACT(DAY FROM CURRENT_DATE + INTERVAL '1 day') = 1  -- Only run on last day of month
         GROUP BY username, date_trunc('month', date)
-      ),
+      )
       max_points AS (
         SELECT period_type, period_end, MAX(total_points) as max_points
         FROM period_scores

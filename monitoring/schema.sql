@@ -111,6 +111,30 @@ CREATE TABLE IF NOT EXISTS tie_breaker_games (
     completed_at TIMESTAMP
 );
 
+-- Modify tie_breaker_games constraints
+ALTER TABLE tie_breaker_games 
+DROP CONSTRAINT IF EXISTS tie_breaker_games_status_check;
+
+ALTER TABLE tie_breaker_games 
+ADD CONSTRAINT tie_breaker_games_status_check 
+CHECK (status IN ('pending', 'available', 'active', 'completed'));
+
+-- Fix default status
+ALTER TABLE tie_breaker_games 
+ALTER COLUMN status SET DEFAULT 'pending',
+ALTER COLUMN game_state SET DEFAULT '{"board":[], "moves":[], "current_player":null}'::jsonb;
+
+-- Add cascade delete for cleanup
+ALTER TABLE tie_breaker_games
+DROP CONSTRAINT IF EXISTS tie_breaker_games_tie_breaker_id_fkey,
+ADD CONSTRAINT tie_breaker_games_tie_breaker_id_fkey
+FOREIGN KEY (tie_breaker_id) REFERENCES tie_breakers(id) ON DELETE CASCADE;
+
+ALTER TABLE tie_breaker_participants
+DROP CONSTRAINT IF EXISTS tie_breaker_participants_tie_breaker_id_fkey,
+ADD CONSTRAINT tie_breaker_participants_tie_breaker_id_fkey
+FOREIGN KEY (tie_breaker_id) REFERENCES tie_breakers(id) ON DELETE CASCADE;
+
 ALTER TABLE tie_breaker_games 
 DROP CONSTRAINT IF EXISTS tie_breaker_games_status_check;
 

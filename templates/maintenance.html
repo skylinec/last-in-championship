@@ -33,6 +33,24 @@
         </div>
     </div>
 
+    <div class="maintenance-section danger-zone">
+        <h2>Game Management</h2>
+        <div class="dangerous-action">
+            <div>
+                <h3>Reset Tie Breakers</h3>
+                <p>Clear all tie breakers and let them regenerate automatically</p>
+            </div>
+            <button onclick="showTieBreakerModal()" class="action-button warning">Reset Tie Breakers</button>
+        </div>
+        <div class="dangerous-action">
+            <div>
+                <h3>Reset Streaks</h3>
+                <p>Clear all streaks and let them recalculate automatically</p>
+            </div>
+            <button onclick="showStreakModal()" class="action-button warning">Reset Streaks</button>
+        </div>
+    </div>
+
     <div class="maintenance-section">
         <h2>Monitoring Logs</h2>
         <div class="log-viewer">
@@ -106,6 +124,38 @@
         <div class="modal-actions">
             <button onclick="clearDatabase()" class="action-button danger">Yes, Clear Everything</button>
             <button onclick="hideModal()" class="action-button">Cancel</button>
+        </div>
+    </div>
+</div>
+
+<!-- Add new modals -->
+<div id="tieBreakerModal" class="modal">
+    <div class="modal-content">
+        <h2>⚠️ Warning: Reset Tie Breakers</h2>
+        <p>This will:</p>
+        <ul>
+            <li>Delete all current tie breakers</li>
+            <li>Delete all in-progress games</li>
+            <li>Allow new tie breakers to generate automatically</li>
+        </ul>
+        <div class="modal-actions">
+            <button onclick="resetTieBreakers()" class="action-button warning">Reset Tie Breakers</button>
+            <button onclick="hideModal('tieBreakerModal')" class="action-button">Cancel</button>
+        </div>
+    </div>
+</div>
+
+<div id="streakModal" class="modal">
+    <div class="modal-content">
+        <h2>⚠️ Warning: Reset Streaks</h2>
+        <p>This will:</p>
+        <ul>
+            <li>Clear all current streak data</li>
+            <li>Allow streaks to recalculate automatically</li>
+        </ul>
+        <div class="modal-actions">
+            <button onclick="resetStreaks()" class="action-button warning">Reset Streaks</button>
+            <button onclick="hideModal('streakModal')" class="action-button">Cancel</button>
         </div>
     </div>
 </div>
@@ -442,8 +492,8 @@ function showClearDbModal() {
     document.getElementById('clearDbModal').style.display = 'block';
 }
 
-function hideModal() {
-    document.getElementById('clearDbModal').style.display = 'none';
+function hideModal(modalId) {
+    document.getElementById(modalId).style.display = 'none';
 }
 
 async function clearDatabase() {
@@ -638,6 +688,42 @@ function showLogDetails(row) {
 
 function hideLogModal() {
     document.getElementById('logModal').style.display = 'none';
+}
+
+function showTieBreakerModal() {
+    document.getElementById('tieBreakerModal').style.display = 'block';
+}
+
+function showStreakModal() {
+    document.getElementById('streakModal').style.display = 'block';
+}
+
+function resetTieBreakers() {
+    fetch('/maintenance/reset-tiebreakers', {
+        method: 'POST'
+    })
+    .then(response => response.json())
+    .then(data => {
+        showStatus(data.message, data.type || 'success');
+        hideModal('tieBreakerModal');
+    })
+    .catch(error => {
+        showStatus('Error resetting tie breakers: ' + error, 'error');
+    });
+}
+
+function resetStreaks() {
+    fetch('/maintenance/reset-streaks', {
+        method: 'POST'
+    })
+    .then(response => response.json())
+    .then(data => {
+        showStatus(data.message, data.type || 'success');
+        hideModal('streakModal');
+    })
+    .catch(error => {
+        showStatus('Error resetting streaks: ' + error, 'error');
+    });
 }
 </script>
 {% endblock %}

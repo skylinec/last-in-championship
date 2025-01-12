@@ -42,29 +42,31 @@
         {% endif %}
 
         <!-- Show available games for in-progress tie breakers -->
-        {% if tie.status == 'in_progress' and tie.available_games %}
+        {% if tie.status == 'in_progress' and tie.games %}
             <div class="available-games">
-                <h4>Available Games</h4>
-                {% for game in tie.available_games %}
-                    <div class="game-entry">
-                        {% if game.status == 'available' and current_user != game.player1 and current_user in tie.participants|map(attribute='username')|list %}
+                <h4>Games</h4>
+                {% for game in tie.games %}
+                    {% if game.status == 'available' and current_user != game.player1 %}
+                        <div class="game-entry">
                             <form method="POST" action="{{ url_for('join_game', game_id=game.id) }}" class="join-form">
                                 <button type="submit" class="btn game-link join">
                                     Join {{ game.game_type|title }} against {{ game.player1 }}
                                 </button>
                             </form>
-                        {% elif game.status == 'active' %}
+                        </div>
+                    {% elif game.status == 'active' %}
+                        <div class="game-entry">
                             {% if current_user in [game.player1, game.player2] %}
                                 <a href="{{ url_for('play_game', game_id=game.id) }}" class="btn game-link">
-                                    Play {{ game.game_type|title }}
+                                    Continue {{ game.game_type|title }} game
                                 </a>
                             {% else %}
                                 <a href="{{ url_for('play_game', game_id=game.id) }}" class="btn game-link spectate">
-                                    Watch {{ game.game_type|title }}
+                                    Watch {{ game.game_type|title }} game
                                 </a>
                             {% endif %}
-                        {% endif %}
-                    </div>
+                        </div>
+                    {% endif %}
                 {% endfor %}
             </div>
         {% endif %}

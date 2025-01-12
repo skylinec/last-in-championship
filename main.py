@@ -3494,7 +3494,7 @@ def health_check():
 def tie_breakers():
     db = SessionLocal()
     try:
-        # Updated query to include available games
+        # Updated query to properly show all game info
         tie_breakers = db.execute(text("""
             WITH tie_breakers_cte AS (
                 SELECT 
@@ -3506,31 +3506,36 @@ def tie_breakers():
                     t.status,
                     t.created_at,
                     t.resolved_at,
-                    jsonb_agg(jsonb_build_object(
+                    jsonb_agg(distinct jsonb_build_object(
                         'username', tp.username,
                         'game_choice', tp.game_choice,
                         'ready', tp.ready,
                         'winner', tp.winner
                     )) as participants,
-                    (
-                        SELECT jsonb_agg(jsonb_build_object(
-                            'id', g.id,
-                            'player1', g.player1,
-                            'player2', g.player2,
-                            'status', g.status
-                        ))
-                        FROM tie_breaker_games g
-                        WHERE g.tie_breaker_id = t.id
-                        AND (g.status = 'available' OR g.status = 'active')
-                    ) as available_games
+                    jsonb_agg(distinct jsonb_build_object(
+                        'id', g.id,
+                        'game_type', g.game_type,
+                        'player1', g.player1,
+                        'player2', g.status,
+                        'game_state', g.game_state
+                    )) FILTER (WHERE g.id IS NOT NULL) as games
                 FROM tie_breakers t
-                JOIN tie_breaker_participants tp ON t.id = tp.tie_breaker_id
+                LEFT JOIN tie_breaker_participants tp ON t.id = tp.tie_breaker_id
+                LEFT JOIN tie_breaker_games g ON t.id = g.tie_breaker_id
                 WHERE t.status != 'completed'
                 GROUP BY t.id
             )
             SELECT * FROM tie_breakers_cte
             ORDER BY created_at DESC
         """)).fetchall()
+
+        # Debug logging
+        app.logger.debug(f"Current user: {session['user']}")
+        for tie in tie_breakers:
+            app.logger.debug(f"Tie breaker {tie.id}:")
+            app.logger.debug(f"Status: {tie.status}")
+            app.logger.debug(f"Participants: {tie.participants}")
+            app.logger.debug(f"Games: {tie.games}")
         
         return render_template(
             "tie_breakers.html",
@@ -3923,7 +3928,7 @@ def create_next_game(db, tie_id):
     """), {"tie_id": tie_id}).fetchall()
 
     for pair in pairs:
-        # Create game in pending state first
+        # Create game with correct initial state
         db.execute(text("""
             INSERT INTO tie_breaker_games (
                 tie_breaker_id, 
@@ -3936,7 +3941,7 @@ def create_next_game(db, tie_id):
                 :game_type,
                 :player1,
                 :initial_state,
-                'pending'
+                'available'  -- Set directly to available since we have a player1
             )
         """), {
             "tie_id": tie_id,
@@ -3945,21 +3950,73 @@ def create_next_game(db, tie_id):
             "initial_state": json.dumps({
                 "board": [None] * (9 if pair.game_type == 'tictactoe' else 42),
                 "current_player": pair.player1,
-                "moves": []
+                "moves": [{
+                    "player": pair.player1,
+                    "timestamp": datetime.now().isoformat()
+                }]
             })
         })
 
-        # Then immediately update to available
-        db.execute(text("""
-            UPDATE tie_breaker_games 
-            SET status = 'available'
-            WHERE tie_breaker_id = :tie_id
-            AND player1 = :player1
-            AND status = 'pending'
-        """), {
-            "tie_id": tie_id,
-            "player1": pair.player1
+# ...existing code...
+
+# Add new maintenance routes
+@app.route("/maintenance/reset-tiebreakers", methods=["POST"])
+@login_required
+def reset_tiebreakers():
+    db = SessionLocal()
+    try:
+        # Log the action first
+        log_audit(
+            "reset_tiebreakers",
+            session['user'],
+            "Manual reset of tie breakers"
+        )
+        
+        # Delete all tie breakers (cascades to games and participants)
+        db.execute(text("DELETE FROM tie_breakers"))
+        db.commit()
+        
+        return jsonify({
+            "message": "Tie breakers reset successfully",
+            "type": "success"
         })
+    except Exception as e:
+        db.rollback()
+        return jsonify({
+            "message": f"Error resetting tie breakers: {str(e)}",
+            "type": "error"
+        }), 500
+    finally:
+        db.close()
+
+@app.route("/maintenance/reset-streaks", methods=["POST"])
+@login_required
+def reset_streaks():
+    db = SessionLocal()
+    try:
+        # Log the action first
+        log_audit(
+            "reset_streaks",
+            session['user'],
+            "Manual reset of streaks"
+        )
+        
+        # Delete all streak data
+        db.execute(text("DELETE FROM user_streaks"))
+        db.commit()
+        
+        return jsonify({
+            "message": "Streaks reset successfully",
+            "type": "success"
+        })
+    except Exception as e:
+        db.rollback()
+        return jsonify({
+            "message": f"Error resetting streaks: {str(e)}",
+            "type": "error"
+        }), 500
+    finally:
+        db.close()
 
 if __name__ == "__main__":
     # ...existing code...

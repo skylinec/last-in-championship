@@ -3494,7 +3494,7 @@ def health_check():
 def tie_breakers():
     db = SessionLocal()
     try:
-        # Updated query to use correct column names
+        # Updated query to include available games
         tie_breakers = db.execute(text("""
             WITH tie_breakers_cte AS (
                 SELECT 
@@ -3513,16 +3513,16 @@ def tie_breakers():
                         'winner', tp.winner
                     )) as participants,
                     (
-                        SELECT jsonb_build_object(
+                        SELECT jsonb_agg(jsonb_build_object(
                             'id', g.id,
                             'player1', g.player1,
-                            'player2', g.player2
-                        )
+                            'player2', g.player2,
+                            'status', g.status
+                        ))
                         FROM tie_breaker_games g
                         WHERE g.tie_breaker_id = t.id
-                        AND g.winner IS NULL
-                        LIMIT 1
-                    ) as current_game
+                        AND (g.status = 'available' OR g.status = 'active')
+                    ) as available_games
                 FROM tie_breakers t
                 JOIN tie_breaker_participants tp ON t.id = tp.tie_breaker_id
                 WHERE t.status != 'completed'
@@ -3623,19 +3623,39 @@ def join_game(game_id):
     db = SessionLocal()
     try:
         game = db.execute(text("""
-            SELECT * FROM tie_breaker_games WHERE id = :game_id
+            SELECT g.*, t.id as tie_id 
+            FROM tie_breaker_games g
+            JOIN tie_breakers t ON g.tie_breaker_id = t.id
+            WHERE g.id = :game_id
         """), {"game_id": game_id}).fetchone()
 
-        if not game or game.player2:
-            return jsonify({"error": "Cannot join this game"}), 400
+        if not game or game.status != 'available':
+            return jsonify({"error": "Game not available for joining"}), 400
 
-        # Add player2 and change status to active
+        # Check if user is eligible to join
+        is_eligible = db.execute(text("""
+            SELECT EXISTS (
+                SELECT 1 FROM tie_breaker_participants
+                WHERE tie_breaker_id = :tie_id
+                AND username = :username
+                AND username != :player1
+            )
+        """), {
+            "tie_id": game.tie_id,
+            "username": session['user'],
+            "player1": game.player1
+        }).scalar()
+
+        if not is_eligible:
+            return jsonify({"error": "Not eligible to join this game"}), 403
+
+        # Add player2 and activate game
         db.execute(text("""
             UPDATE tie_breaker_games 
             SET player2 = :player2,
                 status = 'active'
             WHERE id = :game_id
-            AND player2 IS NULL
+            AND status = 'available'
         """), {
             "player2": session['user'],
             "game_id": game_id
@@ -3865,6 +3885,58 @@ def notify_game_update(game_id, game_state, winner=None):
         'state': game_state,
         'winner': winner
     }, room=f'game_{game_id}')
+
+def create_next_game(db, tie_id):
+    """Create all possible pending games between tied participants"""
+    # Get all unplayed participant pairs
+    pairs = db.execute(text("""
+        WITH played_pairs AS (
+            SELECT player1, player2
+            FROM tie_breaker_games
+            WHERE tie_breaker_id = :tie_id
+        )
+        SELECT 
+            p1.username as player1, 
+            p2.username as player2,
+            p1.game_choice as game_type
+        FROM tie_breaker_participants p1
+        CROSS JOIN tie_breaker_participants p2
+        WHERE p1.tie_breaker_id = :tie_id
+        AND p2.tie_breaker_id = :tie_id
+        AND p1.username < p2.username
+        AND NOT EXISTS (
+            SELECT 1 FROM played_pairs pp
+            WHERE (pp.player1 = p1.username AND pp.player2 = p2.username)
+            OR (pp.player1 = p2.username AND pp.player2 = p1.username)
+        )
+    """), {"tie_id": tie_id}).fetchall()
+
+    for pair in pairs:
+        # Create game in available state
+        db.execute(text("""
+            INSERT INTO tie_breaker_games (
+                tie_breaker_id, 
+                game_type,
+                player1,
+                game_state,
+                status
+            ) VALUES (
+                :tie_id,
+                :game_type,
+                :player1,
+                :initial_state,
+                'available'
+            )
+        """), {
+            "tie_id": tie_id,
+            "game_type": pair.game_type,
+            "player1": pair.player1,
+            "initial_state": json.dumps({
+                "board": [None] * (9 if pair.game_type == 'tictactoe' else 42),
+                "current_player": pair.player1,
+                "moves": []
+            })
+        })
 
 if __name__ == "__main__":
     # ...existing code...

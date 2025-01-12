@@ -467,10 +467,20 @@ multiply points by 1.5</pre>
             <div class="example-box">
                 <h4>Tie Breaker System</h4>
                 {% if settings.enable_tiebreakers %}
+                <p>When players are tied for points at the end of a period:</p>
                 <ul>
-                    <li>Automatically detects tied scores in weekly and monthly rankings</li>
-                    <li>Players can compete in mini-games to break ties</li>
+                    <li>Players must choose their preferred game type (Tic-tac-toe or Connect 4)</li>
+                    <li>Games become available for tied players to join and play against each other</li>
+                    <li>Players can join and play games asynchronously at their convenience</li>
+                    <li>Multiple games can be in progress simultaneously</li>
+                    <li>Games become active when both players have joined</li>
                     <li>Winners receive {{ settings.tiebreaker_points|default(5) }} additional points</li>
+                    <li>Points are awarded differently based on championship mode:
+                        <ul>
+                            <li>Last-In Mode: Points are subtracted (penalizes winning late competitions)</li>
+                            <li>Early Bird Mode: Points are added (rewards winning early competitions)</li>
+                        </ul>
+                    </li>
                     <li>Tie breakers expire after {{ settings.tiebreaker_expiry|default(24) }} hours</li>
                     {% if settings.auto_resolve_tiebreakers %}
                     <li>Expired tie breakers are automatically resolved randomly</li>

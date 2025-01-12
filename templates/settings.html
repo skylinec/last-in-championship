@@ -1272,10 +1272,10 @@ document.addEventListener('DOMContentLoaded', function() {
 document.getElementById('settingsForm').addEventListener('submit', async (event) => {
     event.preventDefault();
     
-    // Collect form data
+    // Get all form data
     const formData = new FormData(event.target);
     
-    // Build settings object
+    // Build settings object with proper nesting
     const settings = {
         points: {
             in_office: parseInt(formData.get('points.in_office')),
@@ -1294,16 +1294,16 @@ document.getElementById('settingsForm').addEventListener('submit', async (event)
         streak_multiplier: parseFloat(document.getElementById('streak_multiplier').value),
         monitoring_start_date: formData.get('monitoring_start_date')
     };
-    
+
     // Collect daily shifts
     ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'].forEach(day => {
         settings.points.daily_shifts[day] = {
-            hours: parseFloat(formData.get(`points.daily_shifts.${day}.hours`)),
-            start: formData.get(`points.daily_shifts.${day}.start`)
+            hours: parseFloat(formData.get(`points.daily_shifts.${day}.hours`)) || 9,
+            start: formData.get(`points.daily_shifts.${day}.start`) || '09:00'
         };
     });
-    
-    // Collect remote days settings
+
+    // Collect remote days
     document.querySelectorAll('.user-row').forEach(row => {
         const user = row.dataset.user;
         const days = Array.from(row.querySelectorAll('input[type="checkbox"]:checked'))
@@ -1320,20 +1320,25 @@ document.getElementById('settingsForm').addEventListener('submit', async (event)
             },
             body: JSON.stringify(settings)
         });
-        
-        if (!response.ok) throw new Error('Failed to save settings');
-        
+
+        if (!response.ok) {
+            throw new Error(await response.text());
+        }
+
         const result = await response.json();
+        
+        // Show success toast
         showToast(result.message || 'Settings saved successfully', 'success');
         
-        // Wait for toast to be visible before reloading
+        // Reload after toast is shown
         setTimeout(() => window.location.reload(), 1500);
     } catch (error) {
+        console.error('Error saving settings:', error);
         showToast('Error saving settings: ' + error.message, 'error');
     }
 });
 
-// Add this toast function if not already present
+// Add helper functions for toast notifications
 function showToast(message, type = 'success') {
     const toast = document.createElement('div');
     toast.className = `toast ${type}`;
@@ -1367,6 +1372,7 @@ document.head.insertAdjacentHTML('beforeend', `
     </style>
 `);
 
+// ...rest of existing code...
 document.getElementById('enable_streaks').addEventListener('change', function() {
     const streakSettings = document.querySelector('.streak-settings');
     const streakExplanation = document.getElementById('streakExplanation');

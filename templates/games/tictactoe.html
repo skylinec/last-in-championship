@@ -186,21 +186,35 @@ document.addEventListener('DOMContentLoaded', function() {
             socket.close();
         }
 
-        socket = io({
+        const socketOptions = {
             path: '/socket.io',
-            transports: ['polling', 'websocket'],  // Start with polling first
+            transports: ['polling'],  // Start with only polling
             secure: window.location.protocol === 'https:',
             rejectUnauthorized: false,
             reconnection: true,
             reconnectionAttempts: 5,
             reconnectionDelay: 1000,
             reconnectionDelayMax: 5000,
-            timeout: 10000,
+            timeout: 20000,  // Increased timeout
             autoConnect: true,
             withCredentials: true,
-            forceBase64: true,  // Add this to handle encoding issues
-            rememberUpgrade: true,  // Remember successful transport upgrades
-        });
+            forceBase64: true,
+            rememberUpgrade: false,  // Disable upgrade to prevent websocket issues
+            upgrade: false,  // Prevent transport upgrade attempts
+            polling: {
+                extraHeaders: {
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            }
+        };
+
+        // Add origin if not localhost
+        if (!window.location.hostname.includes('localhost')) {
+            socketOptions.hostname = window.location.hostname;
+            socketOptions.port = window.location.port || (window.location.protocol === 'https:' ? '443' : '80');
+        }
+
+        socket = io(socketOptions);
 
         socket.on('connect_error', (error) => {
             console.error('Connection error:', error);

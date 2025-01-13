@@ -4292,68 +4292,100 @@ def create_next_game_after_draw(db, tie_breaker_id, game_type, player1, player2)
 def make_move(game_id):
     db = SessionLocal()
     try:
+        # Get request data
         data = request.get_json()
-        if not data:
-            return jsonify({"success": False, "message": "No data provided"}), 400
-            
-        move = data.get('move')
-        game_type = data.get('game_type')
-        
-        game = db.query(TieBreakerGame).filter(TieBreakerGame.id == game_id).first()
-        if not game or game.status != 'active':
-            return jsonify({"success": False, "message": "Invalid game"}), 400
-            
+        if not data or 'move' not in data:
+            return jsonify({"success": False, "message": "Invalid move data"}), 400
+
+        move = int(data.get('move'))  # Convert move to integer
+
+        # Get game with state
+        game = db.execute(text("""
+            SELECT g.*, t.status as tie_breaker_status 
+            FROM tie_breaker_games g
+            JOIN tie_breakers t ON g.tie_breaker_id = t.id
+            WHERE g.id = :game_id
+            FOR UPDATE
+        """), {"game_id": game_id}).fetchone()
+
+        if not game:
+            return jsonify({"success": False, "message": "Game not found"}), 404
+
+        # Validate game status
+        if game.status != 'active':
+            return jsonify({"success": False, "message": "Game is not active"}), 400
+
+        # Verify it's the player's turn
+        current_user = session.get('user')
+        if current_user != game.game_state.get('current_player'):
+            return jsonify({"success": False, "message": "Not your turn"}), 400
+
         # Validate move
-        game_state = game.game_state
-        if game_type == 'tictactoe':
-            if move < 0 or move > 8 or game_state['board'][move]:
-                return jsonify({"success": False, "message": "Invalid move"}), 400
-            game_state['board'][move] = game.current_player
-            
-        elif game_type == 'connect4':
-            if move < 0 or move > 6:
-                return jsonify({"success": False, "message": "Invalid column"}), 400
-            # Find first empty cell in column
-            col = move
-            for row in range(5, -1, -1):
-                index = row * 7 + col 
-                if not game_state['board'][index]:
-                    game_state['board'][index] = game.current_player
-                    break
-            else:
-                return jsonify({"success": False, "message": "Column full"}), 400
-                
-        # Update game state
-        game.game_state = game_state
-        
-        # Switch current player
-        game.current_player = game.player2 if game.current_player == game.player1 else game.player1
-        
+        if not is_valid_move(game.game_state, move):
+            return jsonify({"success": False, "message": "Invalid move"}), 400
+
+        # Apply move
+        try:
+            updated_state = apply_move(game.game_state, move, current_user)
+        except ValueError as e:
+            return jsonify({"success": False, "message": str(e)}), 400
+
         # Check for winner
-        winner = check_winner(game_state['board'], game_type)
+        winner = check_winner(updated_state, game.game_type)
+        
+        # Update game state in database
+        update_query = """
+            UPDATE tie_breaker_games 
+            SET game_state = :game_state,
+                status = CASE WHEN :winner IS NOT NULL THEN 'completed' ELSE status END,
+                winner = :winner,
+                completed_at = CASE WHEN :winner IS NOT NULL THEN NOW() ELSE completed_at END
+            WHERE id = :game_id
+        """
+        
+        db.execute(text(update_query), {
+            "game_id": game_id,
+            "game_state": json.dumps(updated_state),
+            "winner": winner if winner and winner != 'draw' else None
+        })
+
+        # Handle game completion
         if winner:
-            game.status = 'completed'
-            game.winner = winner
-            game.completed_at = datetime.now()
-        
+            # Check if it was a draw
+            if winner == 'draw':
+                # Create a new game with reversed players
+                create_next_game_after_draw(
+                    db, 
+                    game.tie_breaker_id,
+                    game.game_type,
+                    game.player1,
+                    game.player2
+                )
+            else:
+                # Check if tie breaker is complete
+                check_tie_breaker_completion(db, game.tie_breaker_id)
+
         db.commit()
-        
-        # Emit game update via WebSocket
-        socketio.emit('game_update', {
-            'state': game_state,
-            'current_player': game.current_player,
-            'winner': winner
-        }, room=f"game_{game_id}")
-        
-        return jsonify({"success": True})
-        
+
+        # Prepare response
+        response = {
+            "success": True,
+            "state": updated_state,
+            "winner": winner,
+            "gameStatus": 'completed' if winner else 'active'
+        }
+
+        # Notify other players via WebSocket
+        socketio.emit('game_update', response, room=f"game_{game_id}")
+
+        return jsonify(response)
+
     except Exception as e:
         db.rollback()
-        print(f"Error making move: {str(e)}")
-        return jsonify({"success": False, "message": str(e)}), 500
+        app.logger.error(f"Error making move: {str(e)}", exc_info=True)
+        return jsonify({"success": False, "message": "Server error"}), 500
     finally:
         db.close()
-
 
 def calculate_streak_for_date(username, target_date, db):
     """Calculate streak up to a specific date with proper day handling"""

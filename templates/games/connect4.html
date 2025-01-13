@@ -205,9 +205,13 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+    // Add can_play to window scope
+    window.can_play = {{ can_play|tojson }};
+    
     let socket = null;
     let reconnectAttempts = 0;
     const maxReconnectAttempts = 5;
+    const reconnectDelay = 1000;
     
     function connectSocket() {
         if (socket) {
@@ -216,16 +220,19 @@ document.addEventListener('DOMContentLoaded', function() {
 
         const socketOptions = {
             path: '/socket.io',
-            transports: ['polling', 'websocket'],
+            transports: ['websocket', 'polling'],
             secure: window.location.protocol === 'https:',
             rejectUnauthorized: false,
             reconnection: true,
             reconnectionAttempts: maxReconnectAttempts,
-            reconnectionDelay: 1000,
+            reconnectionDelay: reconnectDelay,
             reconnectionDelayMax: 5000,
             timeout: 60000,
             autoConnect: true,
-            withCredentials: true
+            withCredentials: true,
+            extraHeaders: {
+                "X-Game-ID": "{{ game.id }}"
+            }
         };
 
         socket = io(socketOptions);
@@ -239,11 +246,41 @@ document.addEventListener('DOMContentLoaded', function() {
         socket.on('connect_error', function(error) {
             console.error('Connection error:', error);
             reconnectAttempts++;
+            
+            // Fallback to polling if websocket fails
+            if (reconnectAttempts === 2 && socket.io.opts.transports[0] === 'websocket') {
+                console.log('Falling back to polling transport');
+                socket.io.opts.transports = ['polling', 'websocket'];
+                setTimeout(connectSocket, reconnectDelay);
+            }
+            
             if (reconnectAttempts >= maxReconnectAttempts) {
                 console.error('Max reconnection attempts reached');
                 alert('Connection lost. Please refresh the page.');
             }
         });
+
+        // Add ping/pong for connection monitoring
+        let lastPong = Date.now();
+        
+        setInterval(() => {
+            if (socket.connected) {
+                socket.emit('ping');
+            }
+        }, 25000);
+
+        socket.on('pong', () => {
+            lastPong = Date.now();
+        });
+
+        // Check for stale connection
+        setInterval(() => {
+            if (Date.now() - lastPong > 60000) {
+                console.log('Connection appears stale, reconnecting...');
+                socket.disconnect();
+                setTimeout(connectSocket, reconnectDelay);
+            }
+        }, 30000);
 
         socket.on('game_update', function(data) {
             // Update the board
@@ -307,18 +344,11 @@ document.addEventListener('DOMContentLoaded', function() {
     // Initialize connection
     connectSocket();
 
-    // Clean up on page unload
-    window.addEventListener('beforeunload', function() {
-        if (socket) {
-            socket.emit('leave_game', { game_id: {{ game.id }} });
-            socket.close();
-        }
-    });
-
-    // Add click handlers for columns
+    // Update click handlers for columns with proper can_play check
     document.querySelectorAll('.board-cell').forEach(cell => {
         cell.addEventListener('click', async function(e) {
-            if (!can_play) return;
+            // Check window.can_play instead of undefined can_play
+            if (!window.can_play) return;
             
             const col = parseInt(this.dataset.col);
             if (isNaN(col)) return;

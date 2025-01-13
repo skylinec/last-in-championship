@@ -327,12 +327,14 @@ document.addEventListener('DOMContentLoaded', function() {
                     },
                     body: JSON.stringify({
                         move: parseInt(this.dataset.pos),
-                        game_type: 'tictactoe'
+                        game_type: 'tictactoe',
+                        position: this.dataset.pos  // Add position for validation
                     })
                 });
 
                 if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
+                    const errorData = await response.json();
+                    throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
                 }
 
                 const result = await response.json();
@@ -340,8 +342,8 @@ document.addEventListener('DOMContentLoaded', function() {
                     alert(result.message || 'Invalid move');
                 }
             } catch (error) {
-                console.error('Error:', error);
-                alert('Failed to make move. Please try again.');
+                console.error('Error making move:', error);
+                alert(error.message || 'Failed to make move. Please try again.');
             }
         });
     });

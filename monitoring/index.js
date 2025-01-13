@@ -356,7 +356,7 @@ async function checkForTieBreakers() {
           r.username,
           r.points as points,  -- Changed from r.score to r.points
           COUNT(*) OVER (
-            PARTITION BY r.period, r.period_end::date, ROUND(r.points::numeric, 2)  -- Changed from r.score to r.points
+            PARTITION BY r.period, r.period_end::date, ROUND(r.points::numeric, 1)  -- Changed to 1 decimal
           ) as tied_count,
           COUNT(*) OVER (
             PARTITION BY r.period, r.period_end::date
@@ -371,18 +371,18 @@ async function checkForTieBreakers() {
           r.period_end::date = pb.period_end
       ),
       tied_groups AS (
-        -- Find groups of tied scores
+        -- Find groups of tied scores with 1 decimal precision
         SELECT 
           period,
           period_start,
           period_end,
-          ROUND(points::numeric, 2) as points,
+          ROUND(points::numeric, 1) as points,  -- Changed to 1 decimal
           array_agg(username) as usernames,
           COUNT(*) as tied_count,
           rank
         FROM period_scores
         WHERE tied_count > 1
-        GROUP BY period, period_start, period_end, ROUND(points::numeric, 2), rank
+        GROUP BY period, period_start, period_end, ROUND(points::numeric, 1), rank  -- Changed to 1 decimal
         HAVING COUNT(*) > 1
       )
       SELECT *
@@ -392,7 +392,7 @@ async function checkForTieBreakers() {
         FROM tie_breakers tb
         WHERE tb.period = t.period
         AND tb.period_end::date = t.period_end
-        AND ROUND(tb.points::numeric, 2) = t.points
+        AND ROUND(tb.points::numeric, 1) = t.points  -- Changed to 1 decimal
       )
       ORDER BY period_end DESC, rank ASC`;
 

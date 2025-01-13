@@ -67,10 +67,10 @@ DROP TABLE IF EXISTS tie_breakers CASCADE;
 
 CREATE TABLE tie_breakers (
     id SERIAL PRIMARY KEY,
-    period VARCHAR(10) NOT NULL CHECK (period IN ('weekly', 'monthly')),
+    period VARCHAR(10) NOT NULL CHECK (period IN ('weekly', 'monthly')), -- Add daily mode
     period_start TIMESTAMP NOT NULL,
-    period_end TIMESTAMP NOT NULL,
-    points DECIMAL(10,2) NOT NULL,  -- Add points column with proper precision
+    period_end TIMESTAMP NOT NULL, 
+    points DECIMAL(10,2) NOT NULL,
     mode VARCHAR(20) NOT NULL CHECK (mode IN ('early-bird', 'last-in')),
     status VARCHAR(20) DEFAULT 'pending' CHECK (status IN ('pending', 'in_progress', 'completed')),
     points_applied BOOLEAN DEFAULT false,
@@ -99,7 +99,7 @@ DROP CONSTRAINT IF EXISTS tie_breakers_period_check;
 
 ALTER TABLE tie_breakers 
 ADD CONSTRAINT tie_breakers_period_check 
-CHECK (period IN ('weekly', 'monthly'));
+CHECK (period IN ('daily', 'weekly', 'monthly'));
 
 -- Update tie breakers table constraints
 ALTER TABLE tie_breakers 
@@ -236,12 +236,14 @@ DO $$
 BEGIN
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
                   WHERE table_name = 'settings' 
-                  AND column_name = 'tiebreaker_weekly') THEN
+                  AND column_name = 'tiebreaker_types') THEN
         ALTER TABLE settings 
             DROP COLUMN IF EXISTS tiebreaker_weekly,
             DROP COLUMN IF EXISTS tiebreaker_monthly;
 
-        ALTER TABLE settings ADD COLUMN IF NOT EXISTS tiebreaker_types JSONB DEFAULT '{"daily": true, "weekly": true, "monthly": true}'::jsonb;
+        ALTER TABLE settings 
+        ADD COLUMN IF NOT EXISTS tiebreaker_types JSONB 
+        DEFAULT '{"daily": true, "weekly": true, "monthly": true}'::jsonb;
     END IF;
 END $$;
 

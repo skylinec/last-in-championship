@@ -205,201 +205,143 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    // Initialize Socket.IO with explicit configuration
-    const socket = io({
-        transports: ['websocket'],
-        upgrade: false,
-        reconnection: true,
-        reconnectionAttempts: 5,
-        reconnectionDelay: 1000,
-        reconnectionDelayMax: 5000,
-        timeout: 20000,
-        autoConnect: true,
-        forceNew: true
-    });
+    let socket = null;
+    let retryCount = 0;
+    const maxRetries = 3;
+    const retryDelay = 1000;
 
-    // Add better error handling and reconnection logic
-    socket.on('connect_error', (error) => {
-        console.error('Connection error:', error);
-        // Try to reconnect with polling if websocket fails
-        socket.io.opts.transports = ['polling', 'websocket'];
-    });
-
-    socket.on('connect', () => {
-        console.log('Connected to server');
-        socket.emit('join_game', { game_id: {{ game.id }} });
-    });
-
-    socket.on('connect_timeout', () => {
-        console.error('Connection timeout');
-    });
-
-    socket.on('error', (error) => {
-        console.error('Socket error:', error);
-    });
-
-    socket.on('disconnect', (reason) => {
-        console.log('Disconnected:', reason);
-        if (reason === 'io server disconnect') {
-            socket.connect(); // Reconnect if server disconnected
+    function connectSocket() {
+        // Clear any existing socket
+        if (socket) {
+            socket.close();
         }
-    });
 
-    socket.on('joined', (data) => {
-        console.log('Successfully joined game:', data.game_id);
-    });
+        socket = io({
+            path: '/socket.io',
+            transports: ['websocket', 'polling'],
+            reconnection: true,
+            reconnectionAttempts: 5,
+            reconnectionDelay: 1000,
+            reconnectionDelayMax: 5000,
+            autoConnect: true
+        });
 
-    socket.on('disconnect', () => {
-        console.log('Disconnected from game server');
-    });
+        socket.on('connect', function() {
+            console.log('Connected to server');
+            socket.emit('join_game', { game_id: {{ game.id }} });
+            retryCount = 0; // Reset retry count on successful connection
+        });
 
-    socket.on('error', (error) => {
-        console.error('Socket error:', error);
-    });
+        socket.on('connect_error', function(error) {
+            console.error('Connection error:', error);
+            retryCount++;
+            if (retryCount <= maxRetries) {
+                setTimeout(connectSocket, retryDelay * retryCount);
+            }
+        });
 
-    socket.on('game_update', function(data) {
-        // Update the board
-        const cells = document.querySelectorAll('.board-cell');
-        data.state.board.forEach((value, index) => {
-            const cell = cells[index];
-            if (cell) {
-                cell.dataset.value = value || '';
-                const disc = cell.querySelector('.disc');
-                if (disc) {
-                    if (value === "{{ game.player1 }}") {
-                        disc.style.backgroundColor = '#ff4444';  // Red for player 1
-                    } else if (value === "{{ game.player2 }}") {
-                        disc.style.backgroundColor = '#ffeb3b';  // Yellow for player 2
-                    } else {
-                        disc.style.backgroundColor = '';
+        socket.on('game_update', function(data) {
+            // Update the board
+            const cells = document.querySelectorAll('.board-cell');
+            data.state.board.forEach((value, index) => {
+                const cell = cells[index];
+                if (cell) {
+                    cell.dataset.value = value || '';
+                    const disc = cell.querySelector('.disc');
+                    if (disc) {
+                        if (value === "{{ game.player1 }}") {
+                            disc.style.backgroundColor = '#ff4444';  // Red for player 1
+                        } else if (value === "{{ game.player2 }}") {
+                            disc.style.backgroundColor = '#ffeb3b';  // Yellow for player 2
+                        } else {
+                            disc.style.backgroundColor = '';
+                        }
                     }
                 }
-            }
-        });
+            });
 
-        // Update player states
-        document.querySelectorAll('.player').forEach(playerDiv => {
-            playerDiv.classList.remove('active');
-            if (playerDiv.textContent.includes(data.current_player)) {
-                playerDiv.classList.add('active');
-            }
-        });
-
-        // Update turn indicator
-        const turnDiv = document.querySelector('.game-status .turn');
-        if (turnDiv) {
-            turnDiv.textContent = `Current Turn: ${data.current_player}`;
-        }
-
-        // Handle game completion
-        if (data.winner) {
-            if (data.winner === 'draw') {
-                alert("Game ended in a draw! A new game will start with reversed player order.");
-                if (data.next_game) {
-                    window.location.href = `/games/${data.next_game}`;
-                } else {
-                    window.location.reload();
-                }
-            } else {
-                alert(`${data.winner} wins!`);
-                window.location.reload();
-            }
-        }
-    });
-
-    // Clean up on page unload
-    window.addEventListener('beforeunload', function() {
-        socket.emit('leave_game', { game_id: {{ game.id }} });
-        socket.disconnect();
-    });
-
-    // Add click handlers to columns instead of cells
-    const columns = Array.from(Array(7).keys());
-    columns.forEach(col => {
-        const cells = document.querySelectorAll(`.board-cell[data-col="${col}"]`);
-        cells.forEach(cell => {
-            cell.addEventListener('click', function(e) {
-                e.preventDefault();
-                if (isValidMove(col)) {
-                    makeMove(col);
+            // Update player states
+            document.querySelectorAll('.player').forEach(playerDiv => {
+                playerDiv.classList.remove('active');
+                if (playerDiv.textContent.includes(data.current_player)) {
+                    playerDiv.classList.add('active');
                 }
             });
-        });
-    });
-});
 
-function isValidMove(col) {
-    // Check if column has empty spaces
-    const cells = document.querySelectorAll(`.board-cell[data-col="${col}"]`);
-    return Array.from(cells).some(cell => !cell.dataset.value);
-}
-
-async function makeMove(pos) {
-    if (!pos && pos !== 0) return;
-
-    try {
-        const response = await fetch(`/games/{{ game.id }}/move`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-Requested-With': 'XMLHttpRequest'
-            },
-            body: JSON.stringify({ 
-                move: parseInt(pos),
-                game_type: 'connect4'
-            }),
-            credentials: 'same-origin'
-        });
-
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-        }
-
-        const data = await response.json();
-        handleMoveResponse(data);
-        
-    } catch (error) {
-        console.error('Move error:', error);
-        alert('Error making move. Please try again.');
-    }
-}
-
-function handleMoveResponse(data) {
-    if (data.success) {
-        if (data.winner === 'draw') {
-            alert("Game ended in a draw! A new game will start with reversed player order.");
-            if (data.next_game) {
-                window.location.href = `/games/${data.next_game}`;
-            } else {
-                window.location.reload();
+            // Handle winner or draw
+            if (data.winner) {
+                setTimeout(() => {
+                    if (data.winner === 'draw') {
+                        alert("Game ended in a draw! A new game will start with reversed player order.");
+                        if (data.next_game) {
+                            window.location.href = `/games/${data.next_game}`;
+                        } else {
+                            window.location.reload();
+                        }
+                    } else {
+                        alert(`${data.winner} wins!`);
+                        window.location.reload();
+                    }
+                }, 100);
             }
-        } else if (data.winner) {
-            alert(`${data.winner} wins!`);
-            window.location.reload();
-        }
-    } else {
-        alert(data.message || 'Invalid move');
-    }
-}
+        });
 
-// Preview move on hover
-document.querySelectorAll('.board-cell').forEach(cell => {
-    cell.addEventListener('mouseenter', function() {
-        if ({{ can_play|tojson }} && '{{ game.status }}' === 'active') {
-            const col = this.dataset.col;
-            if (isValidMove(col)) {
-                document.querySelectorAll(`.board-cell[data-col="${col}"]`).forEach(c => {
-                    c.style.backgroundColor = 'rgba(0,0,0,0.1)';
+        socket.on('error', function(error) {
+            console.error('Socket error:', error);
+        });
+
+        socket.on('disconnect', function(reason) {
+            console.log('Disconnected:', reason);
+            if (reason === 'io server disconnect') {
+                setTimeout(connectSocket, retryDelay);
+            }
+        });
+    }
+
+    // Initialize WebSocket connection
+    connectSocket();
+
+    // Add click handlers for columns
+    document.querySelectorAll('.board-cell').forEach(cell => {
+        cell.addEventListener('click', async function(e) {
+            if (!can_play) return;
+            
+            const col = parseInt(this.dataset.col);
+            if (isNaN(col)) return;
+
+            try {
+                const response = await fetch(`/games/{{ game.id }}/move`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        move: col,
+                        game_type: 'connect4'
+                    })
                 });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                const result = await response.json();
+                if (!result.success) {
+                    alert(result.message || 'Invalid move');
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('Failed to make move. Please try again.');
             }
-        }
+        });
     });
 
-    cell.addEventListener('mouseleave', function() {
-        const col = this.dataset.col;
-        document.querySelectorAll(`.board-cell[data-col="${col}"]`).forEach(c => {
-            c.style.backgroundColor = '';
-        });
+    // Cleanup on page unload
+    window.addEventListener('beforeunload', function() {
+        if (socket) {
+            socket.emit('leave_game', { game_id: {{ game.id }} });
+            socket.close();
+        }
     });
 });
 </script>

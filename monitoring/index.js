@@ -334,10 +334,11 @@ async function checkForTieBreakers() {
 
     const tieCheckQuery = `
       WITH period_bounds AS (
-        SELECT period, period_start, period_end
+        -- Get completed periods that match the materialized view
+        SELECT period, period_start::date, period_end::date
         FROM rankings r
         WHERE period IN ('weekly', 'monthly')
-          AND period_end < CURRENT_DATE
+          AND period_end::date < CURRENT_DATE
           GROUP BY period, period_start, period_end
       ),
       early_bird_scores AS (
@@ -351,11 +352,11 @@ async function checkForTieBreakers() {
         FROM rankings r
         INNER JOIN period_bounds pb ON 
           r.period = pb.period AND 
-          r.period_end::date = pb.period_end
+          r.period_end::date = pb.period_end::date
         WHERE EXISTS (
           SELECT 1 FROM entries e 
           WHERE e.name = r.username 
-          AND e.date BETWEEN r.period_start AND r.period_end
+          AND e.date::date BETWEEN r.period_start::date AND r.period_end::date
           AND e.status IN ('in-office', 'remote')
         )
       ),
@@ -370,11 +371,11 @@ async function checkForTieBreakers() {
         FROM rankings r
         INNER JOIN period_bounds pb ON 
           r.period = pb.period AND 
-          r.period_end::date = pb.period_end
+          r.period_end::date = pb.period_end::date
         WHERE EXISTS (
           SELECT 1 FROM entries e 
           WHERE e.name = r.username 
-          AND e.date BETWEEN r.period_start AND r.period_end
+          AND e.date::date BETWEEN r.period_start::date AND r.period_end::date
           AND e.status IN ('in-office', 'remote')
         )
       ),

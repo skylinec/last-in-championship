@@ -459,9 +459,10 @@ async function checkForTieBreakers() {
       ORDER BY period_end DESC, points DESC;
     `;
 
-    // First version uses core_users parameter
-    const ties = await client.query(tieCheckQuery, {
-      core_users: coreUsersList
+    // OR if using named parameters:
+    const ties = await client.query({
+      text: tieCheckQuery,
+      values: [coreUsersList]
     });
 
     console.log("Checking for tie breakers...");

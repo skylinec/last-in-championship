@@ -394,12 +394,6 @@ CREATE TRIGGER trg_refresh_rankings
 REFRESH MATERIALIZED VIEW rankings;
 
 -- Create Mattermost DB
-DO $$
-BEGIN
-    IF NOT EXISTS (SELECT FROM pg_database WHERE datname = 'mattermost') THEN
-        CREATE DATABASE mattermost
-        WITH
-        ENCODING = 'UTF8'
-        CONNECTION LIMIT = -1;
-    END IF;
-END $$;
+\echo 'Creating Mattermost database if it does not exist'
+SELECT 'CREATE DATABASE mattermost WITH ENCODING = ''UTF8'' CONNECTION LIMIT = -1'
+WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'mattermost')\gexec

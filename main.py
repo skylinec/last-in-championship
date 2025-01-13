@@ -3389,11 +3389,11 @@ if __name__ == "__main__":
     start_metrics_updater()  # Start metrics updater
     debug_mode = os.getenv('FLASK_ENV') == 'development'
     
-    app.run(
-        host=os.getenv('FLASK_HOST', '0.0.0.0'),
-        port=int(os.getenv('FLASK_PORT', '9000')),
-        debug=debug_mode
-    )
+    # app.run(
+    #     host=os.getenv('FLASK_HOST', '0.0.0.0'),
+    #     port=int(os.getenv('FLASK_PORT', '9000')),
+    #     debug=debug_mode
+    # )
 
 @app.errorhandler(404)
 def not_found_error(error):
@@ -4460,6 +4460,7 @@ def calculate_streak_for_date(username, target_date, db):
 # Add WebSocket support for real-time game updates
 from flask_socketio import SocketIO, emit, join_room, leave_room
 from flask_cors import CORS
+import eventlet
 
 # After app creation, before route definitions:
 CORS(app, resources={
@@ -4468,10 +4469,13 @@ CORS(app, resources={
             "https://lic.mattdh.me",
             "http://localhost:9000",
             "http://127.0.0.1:9000"
-        ]
+        ],
+        "methods": ["GET", "POST", "OPTIONS"],
+        "allow_headers": ["Content-Type"]
     }
 })
 
+# Initialize Socket.IO with optimized settings
 socketio = SocketIO(
     app,
     cors_allowed_origins=[
@@ -4479,15 +4483,20 @@ socketio = SocketIO(
         "http://localhost:9000",
         "http://127.0.0.1:9000"
     ],
-    ping_timeout=60,
-    ping_interval=25
+    async_mode='eventlet',
+    ping_timeout=5,
+    ping_interval=2,
+    max_http_buffer_size=10e6,
+    manage_session=False,
+    logger=True,
+    engineio_logger=True
 )
 
-@socketio.on('join_game')
-def on_join_game(data):
-    """Join game room for real-time updates"""
-    game_id = data['game_id']
-    join_room(f'game_{game_id}')
+# Error handler
+@socketio.on_error()
+def error_handler(e):
+    app.logger.error(f'SocketIO error: {str(e)}')
+    emit('error', {'message': 'Server error occurred'})
 
 @socketio.on('leave_game')
 def on_leave_game(data):
@@ -4565,10 +4574,13 @@ def reset_streaks():
 
 if __name__ == "__main__":
     # ...existing code...
-    socketio.run(app,
-        host=os.getenv('FLASK_HOST', '0.0.0.0'),
-        port=int(os.getenv('FLASK_PORT', '9000')),
-        debug=debug_mode
+    socketio.run(
+        app,
+        host='0.0.0.0',
+        port=9000,
+        debug=True,
+        use_reloader=True,
+        log_output=True
     )
 
 @app.route("/games/<int:game_id>/reset", methods=["POST"])

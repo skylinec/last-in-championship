@@ -17,3 +17,4 @@ spacy==3.7.2
 SQLAlchemy==1.4.23
 textblob==0.17.1
 Werkzeug==2.2.2
+eventlet==0.33.3

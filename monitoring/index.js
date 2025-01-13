@@ -333,9 +333,7 @@ async function checkForTieBreakers() {
       return;
     }
 
-    const autoResolve = settings.rows[0]?.auto_resolve_tiebreakers;
-    
-    // Modified query with explicit type casting
+    // Modified query with proper tie detection
     const tieCheckQuery = `
       WITH period_entries AS (
         SELECT DISTINCT
@@ -346,26 +344,28 @@ async function checkForTieBreakers() {
           END as week_start,
           date_trunc('month', e.date::date)::date as month_start
         FROM entries e
-        WHERE e.status IN ('in-office', 'remote')  -- Only count actual attendance
+        WHERE e.status IN ('in-office', 'remote')
         AND e.date::date >= CASE 
           WHEN $1 = true THEN (CURRENT_DATE - INTERVAL '7 days')::date
           ELSE (SELECT monitoring_start_date FROM settings LIMIT 1)::date
         END
       ),
-      tied_rankings AS (
+      user_scores AS (
         SELECT 
-          period,
-          period_start::date,
-          period_end::date,
-          points,
-          array_agg(username) as usernames,
-          COUNT(*) as tied_count,
-          SUM(CASE WHEN EXISTS (
+          r.period,
+          r.period_start::date,
+          r.period_end::date,
+          r.username,
+          r.points,
+          COUNT(*) OVER (
+            PARTITION BY r.period, r.period_start::date, r.period_end::date, r.points
+          ) as tied_count,
+          EXISTS (
             SELECT 1 FROM entries e 
             WHERE e.name = r.username 
             AND e.date::date BETWEEN r.period_start AND r.period_end
             AND e.status IN ('in-office', 'remote')
-          ) THEN 1 ELSE 0 END) as users_with_attendance
+          ) as has_attendance
         FROM rankings r
         WHERE EXISTS (
           SELECT 1 FROM period_entries pe
@@ -374,14 +374,21 @@ async function checkForTieBreakers() {
         )
         AND period IN ('weekly', 'monthly')
         AND period_end::date < CURRENT_DATE
+      ),
+      tied_rankings AS (
+        SELECT 
+          period,
+          period_start,
+          period_end,
+          points,
+          array_agg(username) as usernames,
+          COUNT(*) as tied_count,
+          SUM(CASE WHEN has_attendance THEN 1 ELSE 0 END) as users_with_attendance
+        FROM user_scores
+        WHERE tied_count > 1  -- Only include actual ties
         GROUP BY period, period_start, period_end, points
         HAVING COUNT(*) > 1 
-        AND SUM(CASE WHEN EXISTS (
-          SELECT 1 FROM entries e 
-          WHERE e.name = r.username 
-          AND e.date::date BETWEEN r.period_start AND r.period_end
-          AND e.status IN ('in-office', 'remote')
-        ) THEN 1 ELSE 0 END) > 1  -- Ensure at least 2 users have attendance
+        AND SUM(CASE WHEN has_attendance THEN 1 ELSE 0 END) > 1  -- At least 2 users must have attendance
       )
       SELECT *
       FROM tied_rankings tr
@@ -391,10 +398,22 @@ async function checkForTieBreakers() {
         WHERE tb.period = tr.period
         AND tb.period_end::date = tr.period_end
         AND tb.points = tr.points
+      )
+      AND NOT EXISTS (  -- Don't create ties for future periods
+        SELECT 1
+        WHERE tr.period_end >= CURRENT_DATE
       )`;
 
     // Initialize new tie breakers
-    const ties = await client.query(tieCheckQuery, [autoResolve]);
+    const ties = await client.query(tieCheckQuery, [settings.rows[0].auto_resolve_tiebreakers]);
+    
+    // Add debug logging
+    console.log(`Found ${ties.rows.length} potential tie breakers`);
+    ties.rows.forEach(tie => {
+      console.log(`Period: ${tie.period}, End: ${tie.period_end}, Points: ${tie.points}, Users: ${tie.usernames.join(', ')}`);
+    });
+
+    // Rest of the function remains the same...
     let tieBreakersCreated = 0;
 
     if (ties.rows.length > 0) {

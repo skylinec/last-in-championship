@@ -4293,14 +4293,22 @@ def create_next_game_after_draw(db, tie_breaker_id, game_type, player1, player2)
 def make_move(game_id):
     db = SessionLocal()
     try:
-        # Get request data
-        data = request.get_json()
-        if not data or 'move' not in data:
-            return jsonify({"success": False, "message": "Invalid move data"}), 400
+        # Get request data with better error handling
+        try:
+            data = request.get_json()
+            if not data or 'move' not in data:
+                return jsonify({
+                    "success": False,
+                    "message": "Missing move data"
+                }), 400
+            move = int(data.get('move'))
+        except (ValueError, TypeError) as e:
+            return jsonify({
+                "success": False,
+                "message": f"Invalid move data: {str(e)}"
+            }), 400
 
-        move = int(data.get('move'))  # Convert move to integer
-
-        # Get game with state
+        # Get game with explicit locking and validation
         game = db.execute(text("""
             SELECT g.*, t.status as tie_breaker_status 
             FROM tie_breaker_games g
@@ -4310,68 +4318,88 @@ def make_move(game_id):
         """), {"game_id": game_id}).fetchone()
 
         if not game:
-            return jsonify({"success": False, "message": "Game not found"}), 404
+            return jsonify({
+                "success": False,
+                "message": "Game not found"
+            }), 404
+
+        # Ensure game state is valid JSON
+        try:
+            game_state = game.game_state
+            if not isinstance(game_state, dict):
+                return jsonify({
+                    "success": False,
+                    "message": "Invalid game state"
+                }), 400
+        except Exception as e:
+            return jsonify({
+                "success": False,
+                "message": f"Error parsing game state: {str(e)}"
+            }), 400
 
         # Validate game status
         if game.status != 'active':
-            return jsonify({"success": False, "message": "Game is not active"}), 400
+            return jsonify({
+                "success": False,
+                "message": f"Game is not active (status: {game.status})"
+            }), 400
 
         # Verify it's the player's turn
         current_user = session.get('user')
-        if current_user != game.game_state.get('current_player'):
-            return jsonify({"success": False, "message": "Not your turn"}), 400
+        if current_user != game_state.get('current_player'):
+            return jsonify({
+                "success": False,
+                "message": "Not your turn"
+            }), 400
 
         # Validate move
-        if not is_valid_move(game.game_state, move):
-            return jsonify({"success": False, "message": "Invalid move"}), 400
+        board = game_state.get('board', [])
+        if not is_valid_move({"board": board, "game_type": game.game_type}, move):
+            return jsonify({
+                "success": False,
+                "message": "Invalid move position"
+            }), 400
 
         # Apply move
         try:
-            updated_state = apply_move(game.game_state, move, current_user)
+            updated_state = apply_move(game_state, move, current_user)
         except ValueError as e:
-            return jsonify({"success": False, "message": str(e)}), 400
+            return jsonify({
+                "success": False,
+                "message": str(e)
+            }), 400
 
         # Check for winner
         winner = check_winner(updated_state, game.game_type)
         
-        # Update game state in database
-        update_query = """
+        # Update game state
+        db.execute(text("""
             UPDATE tie_breaker_games 
             SET game_state = :game_state,
                 status = CASE WHEN :winner IS NOT NULL THEN 'completed' ELSE status END,
                 winner = :winner,
                 completed_at = CASE WHEN :winner IS NOT NULL THEN NOW() ELSE completed_at END
             WHERE id = :game_id
-        """
-        
-        db.execute(text(update_query), {
+        """), {
             "game_id": game_id,
             "game_state": json.dumps(updated_state),
             "winner": winner if winner and winner != 'draw' else None
         })
 
         # Handle game completion
-        try:
-            # Handle game completion
-            if winner:
-                if winner == 'draw':
-                    create_next_game_after_draw(
-                        db, 
-                        game.tie_breaker_id,
-                        game.game_type,
-                        game.player1,
-                        game.player2
-                    )
-                else:
-                    check_tie_breaker_completion(db, game.tie_breaker_id)
+        if winner:
+            if winner == 'draw':
+                create_next_game_after_draw(
+                    db, 
+                    game.tie_breaker_id,
+                    game.game_type,
+                    game.player1,
+                    game.player2
+                )
+            else:
+                check_tie_breaker_completion(db, game.tie_breaker_id)
 
-            db.commit()
-        except Exception as e:
-            db.rollback()
-            app.logger.error(f"Error making move: {str(e)}", exc_info=True)
-            app.logger.error(f"Game state: {game.game_state}")  # Add this
-            app.logger.error(f"Move data: {request.json}")      # Add this
-            return jsonify({"success": False, "message": str(e)}), 500  # Return actual error
+        db.commit()
 
         # Prepare response
         response = {
@@ -4381,7 +4409,7 @@ def make_move(game_id):
             "gameStatus": 'completed' if winner else 'active'
         }
 
-        # Notify other players via WebSocket
+        # Notify other players
         socketio.emit('game_update', response, room=f"game_{game_id}")
 
         return jsonify(response)
@@ -4389,7 +4417,10 @@ def make_move(game_id):
     except Exception as e:
         db.rollback()
         app.logger.error(f"Error making move: {str(e)}", exc_info=True)
-        return jsonify({"success": False, "message": "Server error"}), 500
+        return jsonify({
+            "success": False,
+            "message": f"Server error: {str(e)}"
+        }), 500
     finally:
         db.close()
 

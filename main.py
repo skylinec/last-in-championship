@@ -3570,6 +3570,52 @@ def tie_breakers():
 
 # ...existing code...
 
+@app.route("/tie-breaker/<int:tie_id>/choose-game", methods=["POST"])
+@login_required
+def choose_game(tie_id):
+    # Renamed from /tie-breakers/ to /tie-breaker/ to fix routing issue
+    db = SessionLocal()
+    try:
+        game_choice = request.form.get('game_choice')
+        if game_choice not in ['tictactoe', 'connect4']:
+            return jsonify({"error": "Invalid game choice"}), 400
+
+        # Update participant's choice and ready status
+        db.execute(text("""
+            UPDATE tie_breaker_participants
+            SET game_choice = :choice, ready = true
+            WHERE tie_breaker_id = :tie_id
+            AND username = :username
+        """), {
+            "choice": game_choice,
+            "tie_id": tie_id,
+            "username": session['user']
+        })
+
+        # Check if all participants are ready
+        all_ready = db.execute(text("""
+            SELECT bool_and(ready) 
+            FROM tie_breaker_participants
+            WHERE tie_breaker_id = :tie_id
+        """), {"tie_id": tie_id}).scalar()
+
+        if all_ready:
+            # Create initial games
+            create_next_game(db, tie_id)
+            
+            # Update tie breaker status to in_progress only after games are created
+            db.execute(text("""
+                UPDATE tie_breakers
+                SET status = 'in_progress'
+                WHERE id = :tie_id
+                AND status = 'pending'
+            """), {"tie_id": tie_id})
+
+        db.commit()
+        return redirect(url_for('tie_breakers'))
+    finally:
+        db.close()
+
 def create_next_game(db, tie_id):
     """Create next available games between tied participants with deduplication"""
     # Get all unplayed participant pairs and their game choices

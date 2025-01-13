@@ -485,13 +485,20 @@ multiply points by 1.5</pre>
                     {% if settings.auto_resolve_tiebreakers %}
                     <li>Expired tie breakers are automatically resolved randomly</li>
                     {% else %}
-                    <li>Expired tie breakers remain unresolved</li>
+                    <li>When Auto-Resolve is disabled:
+                        <ul>
+                            <li>Tie breakers will appear for all previous periods since monitoring start date</li>
+                            <li>Games can still be played after expiry until completed</li>
+                            <li>Winners must be determined through gameplay</li>
+                        </ul>
+                    </li>
                     {% endif %}
                 </ul>
                 {% else %}
                 <p>Tie breaker system is currently disabled</p>
                 {% endif %}
             </div>
+
         </div>
 
         <div class="example-box">

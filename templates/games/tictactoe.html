@@ -24,12 +24,14 @@
         </div>
     </div>
     <div class="board">
-        {% for row in game.board|batch(3) %}
+        {% for row in range(3) %}
             <div class="board-row">
-                {% for cell in row %}
+                {% for col in range(3) %}
+                    {% set index = row * 3 + col %}
                     <div class="board-cell {% if not can_play %}view-only{% endif %}" 
-                         data-pos="{{ loop.index0 + (loop.parent.index0 * 3) }}">
-                        {{ cell or '' }}
+                         data-pos="{{ index }}"
+                         data-value="{{ game.game_state.board[index] or '' }}">
+                        {{ game.game_state.board[index] or '' }}
                     </div>
                 {% endfor %}
             </div>

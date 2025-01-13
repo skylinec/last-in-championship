@@ -314,6 +314,11 @@ DROP INDEX IF EXISTS idx_rankings_user_date;
 CREATE UNIQUE INDEX idx_rankings_composite ON rankings(username, date, period);
 CREATE INDEX idx_rankings_period ON rankings(period, period_end);
 
+-- Add new indices for historical tie breaker queries
+CREATE INDEX IF NOT EXISTS idx_rankings_period_points ON rankings(period, points);
+CREATE INDEX IF NOT EXISTS idx_rankings_period_end ON rankings(period_end);
+CREATE INDEX IF NOT EXISTS idx_tie_breakers_composite ON tie_breakers(period, period_end, points, status);
+
 -- Create refresh function
 CREATE OR REPLACE FUNCTION refresh_rankings()
 RETURNS TRIGGER AS $$

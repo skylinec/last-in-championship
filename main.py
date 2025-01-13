@@ -4163,3 +4163,9 @@ if __name__ == "__main__":
         port=int(os.getenv('FLASK_PORT', '9000')),
         debug=debug_mode
     )
+
+@app.route("/games/<int:game_id>/reset", methods=["POST"])
+@login_required
+def reset_game(game_id):
+    # ...existing code...
+    pass

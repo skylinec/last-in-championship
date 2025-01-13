@@ -323,7 +323,7 @@ async function checkForTieBreakers() {
   try {
     const startTime = Date.now();
 
-    // Get settings
+    // Get settings first
     const settings = await client.query('SELECT enable_tiebreakers, tiebreaker_expiry, auto_resolve_tiebreakers FROM settings LIMIT 1');
     if (!settings.rows[0]?.enable_tiebreakers) {
       await logMonitoringEvent('tie_breaker_check', {
@@ -333,9 +333,25 @@ async function checkForTieBreakers() {
       return;
     }
 
-    // Update query to explicitly set status as 'pending' (matching the database constraint)
+    const autoResolve = settings.rows[0]?.auto_resolve_tiebreakers;
+    
+    // Modified query to handle historical periods when auto-resolve is disabled
     const tieCheckQuery = `
-      WITH tied_rankings AS (
+      WITH period_entries AS (
+        SELECT DISTINCT
+          e.date,
+          CASE 
+            WHEN extract(dow from e.date::date) = 0 THEN e.date::date - interval '6 days'
+            ELSE e.date::date - (extract(dow from e.date::date) - 1 || ' days')::interval
+          END as week_start,
+          date_trunc('month', e.date::date)::date as month_start
+        FROM entries e
+        WHERE e.date >= CASE 
+          WHEN $1 = true THEN CURRENT_DATE - INTERVAL '7 days'
+          ELSE (SELECT monitoring_start_date FROM settings LIMIT 1)
+        END
+      ),
+      tied_rankings AS (
         SELECT 
           period,
           period_start,
@@ -343,10 +359,14 @@ async function checkForTieBreakers() {
           points,
           array_agg(username) as usernames,
           COUNT(*) as tied_count
-        FROM rankings
-        WHERE period IN ('weekly', 'monthly')
+        FROM rankings r
+        WHERE EXISTS (
+          SELECT 1 FROM period_entries pe
+          WHERE (r.period = 'weekly' AND r.period_start = pe.week_start)
+          OR (r.period = 'monthly' AND r.period_start = pe.month_start)
+        )
+        AND period IN ('weekly', 'monthly')
         AND period_end < CURRENT_DATE
-        AND period_end >= CURRENT_DATE - INTERVAL '7 days'
         GROUP BY period, period_start, period_end, points
         HAVING COUNT(*) > 1
       )
@@ -360,8 +380,8 @@ async function checkForTieBreakers() {
         AND tb.points = tr.points
       )`;
 
-    // Initialize new tie breakers with correct status
-    const ties = await client.query(tieCheckQuery);
+    // Initialize new tie breakers
+    const ties = await client.query(tieCheckQuery, [autoResolve]);
     let tieBreakersCreated = 0;
 
     if (ties.rows.length > 0) {

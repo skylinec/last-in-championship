@@ -23,8 +23,6 @@ import time
 from functools import lru_cache
 from prometheus_client import Counter
 
-from flask_wtf.csrf import CSRFProtect
-
 # Add new metrics
 CACHE_HITS = Counter('cache_hits_total', 'Cache hit count', ['function'])
 CACHE_MISSES = Counter('cache_misses_total', 'Cache miss count', ['function'])
@@ -97,7 +95,6 @@ logger = logging.getLogger(__name__)
 
 # Create Flask app first, before any route definitions
 app = Flask(__name__)
-csrf = CSRFProtect(app)
 app.secret_key = os.getenv('SECRET_KEY', 'dev-secret-key')  # Default for development
 
 # Set up the metrics middleware properly
@@ -523,7 +520,7 @@ def log_audit(action, user, details, old_data=None, new_data=None):
             app.logger.info("No changes detected, skipping audit log")
         
         # Increment audit action counter
-        AUDIT_ACTIONS.labels(action=action).inc()
+        # AUDIT_ACTIONS.labels(action=action).inc()
         
     except Exception as e:
         db.rollback()
@@ -3497,7 +3494,7 @@ def health_check():
 def tie_breakers():
     db = SessionLocal()
     try:
-        # Modified query to properly fetch all games for all participants
+        # Modified query to show all tie breakers and order by status and creation date
         tie_breakers = db.execute(text("""
             WITH tie_breakers_cte AS (
                 SELECT 
@@ -3527,13 +3524,23 @@ def tie_breakers():
                 FROM tie_breakers t
                 LEFT JOIN tie_breaker_participants tp ON t.id = tp.tie_breaker_id
                 LEFT JOIN tie_breaker_games g ON t.id = g.tie_breaker_id
-                WHERE t.status != 'completed'
                 GROUP BY t.id, t.period, t.period_start, t.period_end, t.points, 
                          t.status, t.created_at, t.resolved_at
             )
             SELECT * FROM tie_breakers_cte
-            ORDER BY created_at DESC
+            ORDER BY 
+                CASE status 
+                    WHEN 'in_progress' THEN 1
+                    WHEN 'pending' THEN 2
+                    WHEN 'completed' THEN 3
+                    ELSE 4
+                END,
+                created_at DESC,
+                period_end DESC
         """)).fetchall()
+
+        # Rest of the function remains the same...
+        # ...existing code...
 
         # Add debug logging
         app.logger.debug("Processing tie breakers...")
@@ -4079,8 +4086,6 @@ def play_game(game_id):
         # Check if user can play (is one of the players)
         current_user = session.get('user')
         can_play = current_user in [game.player1, game.player2]
-        
-        csrf_token = csrf._get_token()
 
         # Route to correct game template based on game type
         template_name = f"games/{game.game_type}.html"
@@ -4088,7 +4093,6 @@ def play_game(game_id):
             template_name,
             game=game,
             can_play=can_play,
-            csrf_token=csrf_token
         )
 
     except Exception as e:
@@ -4176,5 +4180,3 @@ def join_game(game_id):
         return redirect(url_for('tie_breakers'))
     finally:
         db.close()
-
-# ...existing code...

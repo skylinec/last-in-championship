@@ -193,7 +193,6 @@ function makeMove(col) {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
-            'X-CSRF-Token': '{{ csrf_token }}'  // Add CSRF protection
         },
         body: JSON.stringify({ 
             move: parseInt(col),

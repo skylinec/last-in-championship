@@ -150,8 +150,7 @@ function makeMove(pos) {
     fetch(`/games/{{ game.id }}/move`, {
         method: 'POST',
         headers: {
-            'Content-Type': 'application/json',
-            'X-CSRF-Token': '{{ csrf_token }}'
+            'Content-Type': 'application/json'
         },
         body: JSON.stringify({ 
             move: parseInt(pos),

@@ -4128,7 +4128,7 @@ def reset_game(game_id):
 @app.route('/games/<game_id>/join', methods=['POST'])
 @login_required
 def join_game(game_id):
-    db = engine
+    db = SessionLocal()
     try:
         # Get game with transaction
         game = db.execute(text("""

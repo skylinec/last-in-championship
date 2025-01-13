@@ -23,6 +23,8 @@ import time
 from functools import lru_cache
 from prometheus_client import Counter
 
+from flask_wtf.csrf import CSRFProtect
+
 # Add new metrics
 CACHE_HITS = Counter('cache_hits_total', 'Cache hit count', ['function'])
 CACHE_MISSES = Counter('cache_misses_total', 'Cache miss count', ['function'])
@@ -95,6 +97,7 @@ logger = logging.getLogger(__name__)
 
 # Create Flask app first, before any route definitions
 app = Flask(__name__)
+csrf = CSRFProtect(app)
 app.secret_key = os.getenv('SECRET_KEY', 'dev-secret-key')  # Default for development
 
 # Set up the metrics middleware properly
@@ -2552,13 +2555,13 @@ def build_dynamic_query(db, params):
         date = parse_date_reference(params["date_range"])
         if "week" in params["date_range"]:
             start_date = date - timedelta(days=date.weekday())
-            end_date = start_date + timedelta(days(6))
+            end_date = start_date + timedelta(days=6)
             query = query.filter(Entry.date.between(start_date.isoformat(), end_date.isoformat()))
         elif "month" in params["date_range"]:
             start_date = date.replace(day=1)
             if "last" in params["date_range"]:
-                start_date = (start_date - timedelta(days(1)).replace(day=1))
-            next_month = (start_date.replace(day=28) + timedelta(days(4)).replace(day=1))
+                start_date = (start_date - timedelta(days=1).replace(day=1))
+            next_month = (start_date.replace(day=28) + timedelta(days=4).replace(day=1))
             query = query.filter(Entry.date.between(start_date.isoformat(), (next_month - timedelta(days=1)).isoformat()))
         else:
             query = query.filter(Entry.date == date.isoformat())
@@ -4136,6 +4139,125 @@ def join_game(game_id):
         )
 
         db.execute('COMMIT')
+        return redirect(url_for('play_game', game_id=game_id))
+
+    except Exception as e:
+        db.execute('ROLLBACK')
+        app.logger.error(f"Error joining game: {str(e)}")
+        return redirect(url_for('tie_breakers'))
+    finally:
+        db.close()
+
+# ...existing code...
+
+@app.route('/games/<int:game_id>')
+@login_required
+def play_game(game_id):
+    db = SessionLocal()
+    try:
+        # Get game details with proper type info
+        game = db.execute(text("""
+            SELECT g.*, tb.status as tie_breaker_status
+            FROM tie_breaker_games g
+            JOIN tie_breakers tb ON g.tie_breaker_id = tb.id
+            WHERE g.id = :game_id
+        """), {"game_id": game_id}).fetchone()
+
+        if not game:
+            return redirect(url_for('tie_breakers'))
+
+        # Check if user can play (is one of the players)
+        current_user = session.get('user')
+        can_play = current_user in [game.player1, game.player2]
+        
+        csrf_token = csrf._get_token()
+
+        # Route to correct game template based on game type
+        template_name = f"games/{game.game_type}.html"
+        return render_template(
+            template_name,
+            game=game,
+            can_play=can_play,
+            csrf_token=csrf_token
+        )
+
+    except Exception as e:
+        app.logger.error(f"Error loading game: {str(e)}")
+        return redirect(url_for('tie_breakers'))
+    finally:
+        db.close()
+
+@app.route('/games/<int:game_id>/join', methods=['POST'])
+@login_required
+def join_game(game_id):
+    db = SessionLocal()
+    try:
+        # Start transaction
+        db.execute('BEGIN')
+
+        # First verify the game exists and can be joined
+        game = db.execute(text("""
+            SELECT g.*, tb.status as tie_breaker_status
+            FROM tie_breaker_games g
+            JOIN tie_breakers tb ON g.tie_breaker_id = tb.id
+            WHERE g.id = :game_id
+            FOR UPDATE NOWAIT
+        """), {"game_id": game_id}).fetchone()
+
+        if not game:
+            db.execute('ROLLBACK')
+            return redirect(url_for('tie_breakers'))
+
+        # Check game state
+        if game.player2 or game.status != 'pending' or game.tie_breaker_status != 'in_progress':
+            db.execute('ROLLBACK')
+            return redirect(url_for('tie_breakers'))
+
+        current_user = session.get('user')
+        if not current_user or current_user == game.player1:
+            db.execute('ROLLBACK')
+            return redirect(url_for('tie_breakers'))
+
+        # Update game state
+        game_state = json.loads(game.game_state) if game.game_state else {}
+        game_state.update({
+            'board': [None] * (9 if game.game_type == 'tictactoe' else 42),
+            'moves': [],
+            'current_player': game.player1,
+            'player1': game.player1,
+            'player2': current_user
+        })
+
+        # Update game with proper return values
+        result = db.execute(text("""
+            UPDATE tie_breaker_games 
+            SET player2 = :player2,
+                status = 'active',
+                game_state = :game_state
+            WHERE id = :game_id
+            AND player2 IS NULL
+            AND status = 'pending'
+            RETURNING id, game_type
+        """), {
+            "player2": current_user,
+            "game_state": json.dumps(game_state),
+            "game_id": game_id
+        })
+
+        if not result.rowcount:
+            db.execute('ROLLBACK')
+            return redirect(url_for('tie_breakers'))
+
+        # Log the action
+        log_audit(
+            "join_game",
+            current_user,
+            f"Joined game {game_id} against {game.player1}",
+            new_data={"game_id": game_id, "player1": game.player1, "player2": current_user}
+        )
+
+        db.execute('COMMIT')
+        # Use url_for to generate the correct game URL
         return redirect(url_for('play_game', game_id=game_id))
 
     except Exception as e:

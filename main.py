@@ -4747,15 +4747,16 @@ def seed_test_data():
         settings = db.query(Settings).first()
         core_users = settings.core_users[:2] if settings else ["TestUser1", "TestUser2"]
 
+        created_ties = []
+
         # Create test tie breakers
         # Last week tie breaker
         last_week = datetime.now() - timedelta(days=7)
-        week_start = last_week - timedelta(days=last_week.weekday())
-        week_end = week_start + timedelta(days=6)
+        week_end = last_week + timedelta(days=(6 - last_week.weekday()))  # Move to Sunday
         
-        # Create a weekly tie breaker
         tie_id = create_test_tie_breaker(db, 'weekly', week_end, 10.0, 'last-in', core_users)
         if tie_id:
+            created_ties.append(tie_id)
             # Create some test games
             create_test_games(db, tie_id, core_users)
 
@@ -4763,17 +4764,21 @@ def seed_test_data():
         month_end = datetime.now().replace(day=1) - timedelta(days=1)  # End of last month
         tie_id = create_test_tie_breaker(db, 'monthly', month_end, 15.0, 'early-bird', core_users)
         if tie_id:
+            created_ties.append(tie_id)
             create_test_games(db, tie_id, core_users)
 
         db.commit()
         
+        app.logger.info(f"Created test tie breakers with IDs: {created_ties}")
+        
         return jsonify({
-            "message": "Test data seeded successfully",
+            "message": f"Created {len(created_ties)} test tie breakers",
             "type": "success"
         })
 
     except Exception as e:
         db.rollback()
+        app.logger.error(f"Error seeding test data: {str(e)}")
         return jsonify({
             "message": f"Error seeding test data: {str(e)}",
             "type": "error"
@@ -4826,55 +4831,72 @@ def remove_test_data():
 
 def create_test_tie_breaker(db, period, period_end, points, mode, users):
     """Helper function to create a test tie breaker"""
-    period_start = period_end - timedelta(days=6 if period == 'weekly' else 30)
-    
-    result = db.execute(text("""
-        INSERT INTO tie_breakers (
-            period,
-            period_start,
-            period_end,
-            points,
-            mode,
-            status
-        ) VALUES (
-            :period,
-            :period_start,
-            :period_end,
-            :points,
-            :mode,
-            'in_progress'
-        ) RETURNING id
-    """), {
-        "period": period,
-        "period_start": period_start,
-        "period_end": period_end,
-        "points": points,
-        "mode": mode
-    })
-
-    tie_id = result.fetchone()[0]
-
-    # Add participants
-    for user in users:
-        db.execute(text("""
-            INSERT INTO tie_breaker_participants (
-                tie_breaker_id, 
-                username,
-                game_choice,
-                ready
+    try:
+        app.logger.info(f"Creating test tie breaker: period={period}, end={period_end}, mode={mode}")
+        
+        # Ensure period_end is a datetime
+        if isinstance(period_end, str):
+            period_end = datetime.strptime(period_end, '%Y-%m-%d')
+        
+        # Calculate period start (7 days for weekly, 30 for monthly)
+        days_back = 7 if period == 'weekly' else 30
+        period_start = period_end - timedelta(days=days_back)
+        
+        app.logger.info(f"Period start: {period_start}, Period end: {period_end}")
+        
+        result = db.execute(text("""
+            INSERT INTO tie_breakers (
+                period,
+                period_start,
+                period_end,
+                points,
+                mode,
+                status
             ) VALUES (
-                :tie_id,
-                :username,
-                :game_choice,
-                true
-            )
+                :period,
+                :period_start,
+                :period_end,
+                :points,
+                :mode,
+                'in_progress'
+            ) RETURNING id
         """), {
-            "tie_id": tie_id,
-            "username": user,
-            "game_choice": random.choice(['tictactoe', 'connect4'])
+            "period": period,
+            "period_start": period_start,
+            "period_end": period_end,
+            "points": points,
+            "mode": mode
         })
 
-    return tie_id
+        tie_id = result.fetchone()[0]
+        app.logger.info(f"Created tie breaker with ID: {tie_id}")
+
+        # Add participants
+        for user in users:
+            db.execute(text("""
+                INSERT INTO tie_breaker_participants (
+                    tie_breaker_id, 
+                    username,
+                    game_choice,
+                    ready
+                ) VALUES (
+                    :tie_id,
+                    :username,
+                    :game_choice,
+                    true
+                )
+            """), {
+                "tie_id": tie_id,
+                "username": user,
+                "game_choice": random.choice(['tictactoe', 'connect4'])
+            })
+            app.logger.info(f"Added participant {user} to tie breaker {tie_id}")
+
+        return tie_id
+
+    except Exception as e:
+        app.logger.error(f"Error creating test tie breaker: {str(e)}")
+        raise
 
 def create_test_games(db, tie_id, users):
     """Helper function to create test games for a tie breaker"""

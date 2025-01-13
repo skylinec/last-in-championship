@@ -64,6 +64,7 @@
                 <p>Remove all test tie breakers and related data</p>
                 <button onclick="removeTestData()" class="action-button warning">Remove Test Data</button>
             </div>
+            <div id="seedStatus" class="status-message"></div>
         </div>
     </div>
 
@@ -800,33 +801,49 @@ function resetStreaks() {
     });
 }
 
-function seedTestData() {
-    if (confirm('Are you sure you want to seed test tie breakers?')) {
-        fetch('/maintenance/seed-test-data', {
+async function seedTestData() {
+    const statusDiv = document.getElementById('seedStatus');
+    statusDiv.textContent = 'Creating test tie breakers...';
+    statusDiv.style.display = 'block';
+    
+    try {
+        const response = await fetch('/maintenance/seed-test-data', {
             method: 'POST'
-        })
-        .then(response => response.json())
-        .then(data => {
-            showStatus(data.message, data.type || 'success');
-        })
-        .catch(error => {
-            showStatus('Error seeding test data: ' + error, 'error');
         });
+        const data = await response.json();
+        
+        statusDiv.textContent = data.message;
+        statusDiv.className = `status-message ${data.type}`;
+        
+        if (data.type === 'success') {
+            setTimeout(() => window.location.href = '/tie-breakers', 1500);
+        }
+    } catch (error) {
+        statusDiv.textContent = 'Error creating test data';
+        statusDiv.className = 'status-message error';
     }
 }
 
-function removeTestData() {
-    if (confirm('Are you sure you want to remove all test tie breakers?')) {
-        fetch('/maintenance/remove-test-data', {
+async function removeTestData() {
+    const statusDiv = document.getElementById('seedStatus');
+    statusDiv.textContent = 'Removing test data...';
+    statusDiv.style.display = 'block';
+    
+    try {
+        const response = await fetch('/maintenance/remove-test-data', {
             method: 'POST'
-        })
-        .then(response => response.json())
-        .then(data => {
-            showStatus(data.message, data.type || 'success');
-        })
-        .catch(error => {
-            showStatus('Error removing test data: ' + error, 'error');
         });
+        const data = await response.json();
+        
+        statusDiv.textContent = data.message;
+        statusDiv.className = `status-message ${data.type}`;
+        
+        if (data.type === 'success') {
+            setTimeout(() => window.location.href = '/tie-breakers', 1500);
+        }
+    } catch (error) {
+        statusDiv.textContent = 'Error removing test data';
+        statusDiv.className = 'status-message error';
     }
 }
 </script>

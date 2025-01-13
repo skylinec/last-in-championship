@@ -205,17 +205,45 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+    // Initialize Socket.IO with explicit configuration
     const socket = io({
         transports: ['websocket'],
         upgrade: false,
         reconnection: true,
+        reconnectionAttempts: 5,
         reconnectionDelay: 1000,
-        reconnectionDelayMax: 5000
+        reconnectionDelayMax: 5000,
+        timeout: 10000,
+        autoConnect: true
     });
 
+    // Add connection event handlers
     socket.on('connect', () => {
-        console.log('Connected to game server');
+        console.log('Connected to server');
         socket.emit('join_game', { game_id: {{ game.id }} });
+    });
+
+    socket.on('connect_error', (error) => {
+        console.error('Connection error:', error);
+    });
+
+    socket.on('connect_timeout', () => {
+        console.error('Connection timeout');
+    });
+
+    socket.on('error', (error) => {
+        console.error('Socket error:', error);
+    });
+
+    socket.on('disconnect', (reason) => {
+        console.log('Disconnected:', reason);
+        if (reason === 'io server disconnect') {
+            socket.connect(); // Reconnect if server disconnected
+        }
+    });
+
+    socket.on('joined', (data) => {
+        console.log('Successfully joined game:', data.game_id);
     });
 
     socket.on('disconnect', () => {

@@ -4478,25 +4478,35 @@ CORS(app, resources={
 # Initialize Socket.IO with optimized settings
 socketio = SocketIO(
     app,
-    cors_allowed_origins=[
-        "https://lic.mattdh.me",
-        "http://localhost:9000",
-        "http://127.0.0.1:9000"
-    ],
-    async_mode='eventlet',
-    ping_timeout=5,
-    ping_interval=2,
-    max_http_buffer_size=10e6,
-    manage_session=False,
+    cors_allowed_origins="*",  # Be more permissive with origins
+    async_mode='threading',    # Change from eventlet to threading
     logger=True,
-    engineio_logger=True
+    engineio_logger=True,
+    ping_timeout=10,
+    ping_interval=5,
+    always_connect=True,
+    transports=['websocket', 'polling']  # Allow both WebSocket and polling
 )
 
-# Error handler
-@socketio.on_error()
-def error_handler(e):
-    app.logger.error(f'SocketIO error: {str(e)}')
-    emit('error', {'message': 'Server error occurred'})
+@socketio.on('connect')
+def handle_connect():
+    app.logger.info(f"Client connected: {request.sid}")
+
+@socketio.on('disconnect')
+def handle_disconnect():
+    app.logger.info(f"Client disconnected: {request.sid}")
+
+@socketio.on('join_game')
+def on_join_game(data):
+    """Join game room with error handling"""
+    try:
+        game_id = data.get('game_id')
+        if game_id:
+            join_room(f'game_{game_id}')
+            app.logger.info(f"Player {request.sid} joined game {game_id}")
+            emit('joined', {'game_id': game_id}, room=f'game_{game_id}')
+    except Exception as e:
+        app.logger.error(f"Error joining game: {str(e)}")
 
 @socketio.on('leave_game')
 def on_leave_game(data):

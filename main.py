@@ -4461,24 +4461,61 @@ socketio = SocketIO(
     app,
     async_mode='gevent',
     cors_allowed_origins="*", 
-    ping_timeout=20,
+    ping_timeout=60,  # Increased from 20
     ping_interval=25,
     logger=True,
     engineio_logger=True,
-    path='socket.io'  # Specify explicit path
+    path='/socket.io',  # Explicit path
+    always_connect=True,  # Ensure consistent connections
+    manage_session=False,  # Let Flask handle sessions
+    upgrade_logger=True,  # Log upgrade attempts
+    max_http_buffer_size=1000000,  # Increased buffer size
+    # Add transport options
+    transports=['polling', 'websocket'],
+    transport_options={
+        'polling': {
+            'timeout': 60  # Match ping timeout
+        }
+    }
 )
 
 @socketio.on('connect')
 def on_connect():
-    app.logger.info(f"Client connected from {request.origin}")
-    if request.origin not in socketio.cors_allowed_origins:
-        app.logger.warning(f"Rejected connection from {request.origin}")
+    """Handle client connection with better error handling"""
+    try:
+        app.logger.info(f"Client connecting from {request.origin}")
+        if not session.get('user'):
+            app.logger.warning("Unauthenticated connection attempt")
+            return False
+        
+        # Store session info
+        session['socket_id'] = request.sid
+        return True
+    except Exception as e:
+        app.logger.error(f"Connection error: {str(e)}")
         return False
-    return True
+
+@socketio.on('error')
+def on_error(error):
+    """Handle Socket.IO errors"""
+    app.logger.error(f"SocketIO error: {str(error)}")
+
+@socketio.on('connect_error')
+def handle_connect_error(error):
+    """Handle connection errors"""
+    app.logger.error(f"Connection error: {str(error)}")
+    # Attempt to reconnect via polling if websocket fails
+    return {'transports': ['polling']}
 
 @socketio.on('disconnect')
-def handle_disconnect():
-    print("Client disconnected")
+def on_disconnect():
+    """Handle client disconnection"""
+    try:
+        if 'socket_id' in session:
+            app.logger.info(f"Client {session['socket_id']} disconnected")
+            session.pop('socket_id', None)
+    except Exception as e:
+        app.logger.error(f"Disconnect error: {str(e)}")
 
 @socketio.on('join_game')
 def handle_join_game(data):

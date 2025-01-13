@@ -176,59 +176,43 @@
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     let socket = null;
-    let retryCount = 0;
-    const maxRetries = 3;
-    const retryDelay = 1000;
-
+    let reconnectAttempts = 0;
+    const maxReconnectAttempts = 5;
+    
     function connectSocket() {
-        // Clear any existing socket
         if (socket) {
             socket.close();
         }
 
         const socketOptions = {
             path: '/socket.io',
-            transports: ['polling'],  // Start with only polling
+            transports: ['polling', 'websocket'],
             secure: window.location.protocol === 'https:',
             rejectUnauthorized: false,
             reconnection: true,
-            reconnectionAttempts: 5,
+            reconnectionAttempts: maxReconnectAttempts,
             reconnectionDelay: 1000,
             reconnectionDelayMax: 5000,
-            timeout: 20000,  // Increased timeout
+            timeout: 60000,
             autoConnect: true,
-            withCredentials: true,
-            forceBase64: true,
-            rememberUpgrade: false,  // Disable upgrade to prevent websocket issues
-            upgrade: false,  // Prevent transport upgrade attempts
-            polling: {
-                extraHeaders: {
-                    'X-Requested-With': 'XMLHttpRequest'
-                }
-            }
+            withCredentials: true
         };
-
-        // Add origin if not localhost
-        if (!window.location.hostname.includes('localhost')) {
-            socketOptions.hostname = window.location.hostname;
-            socketOptions.port = window.location.port || (window.location.protocol === 'https:' ? '443' : '80');
-        }
 
         socket = io(socketOptions);
 
-        socket.on('connect_error', (error) => {
-            console.error('Connection error:', error);
-            if (retryCount < maxRetries) {
-                retryCount++;
-                console.log(`Retry attempt ${retryCount}`);
-                setTimeout(connectSocket, retryDelay * retryCount);
-            }
-        });
-
         socket.on('connect', function() {
             console.log('Connected to server');
+            reconnectAttempts = 0;
             socket.emit('join_game', { game_id: {{ game.id }} });
-            retryCount = 0; // Reset retry count on successful connection
+        });
+
+        socket.on('connect_error', function(error) {
+            console.error('Connection error:', error);
+            reconnectAttempts++;
+            if (reconnectAttempts >= maxReconnectAttempts) {
+                console.error('Max reconnection attempts reached');
+                alert('Connection lost. Please refresh the page.');
+            }
         });
 
         socket.on('game_update', function(data) {
@@ -268,20 +252,29 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
 
-        socket.on('error', function(error) {
-            console.error('Socket error:', error);
-        });
-
         socket.on('disconnect', function(reason) {
             console.log('Disconnected:', reason);
             if (reason === 'io server disconnect') {
-                setTimeout(connectSocket, retryDelay);
+                // Server disconnected us, attempt to reconnect
+                setTimeout(connectSocket, 1000);
             }
+        });
+
+        socket.on('error', function(error) {
+            console.error('Socket error:', error);
         });
     }
 
-    // Initialize WebSocket connection
+    // Initialize connection
     connectSocket();
+
+    // Clean up on page unload
+    window.addEventListener('beforeunload', function() {
+        if (socket) {
+            socket.emit('leave_game', { game_id: {{ game.id }} });
+            socket.close();
+        }
+    });
 
     // Add click handlers for cells
     document.querySelectorAll('.board-cell').forEach(cell => {

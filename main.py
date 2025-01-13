@@ -25,10 +25,8 @@ from functools import lru_cache
 from prometheus_client import Counter
 
 from flask_socketio import SocketIO, emit, join_room, leave_room
-from flask_cors import CORS
-import eventlet
-
-eventlet.monkey_patch()
+from gevent import monkey
+monkey.patch_all()
 
 # Add new metrics
 CACHE_HITS = Counter('cache_hits_total', 'Cache hit count', ['function'])
@@ -4439,14 +4437,12 @@ CORS(app, resources={
 # Initialize Socket.IO with optimized settings
 socketio = SocketIO(
     app,
-    cors_allowed_origins="*",  # Be more permissive with origins
-    async_mode='eventlet',    # Change from threading to eventlet
+    async_mode='gevent',
+    cors_allowed_origins="*",
     logger=True,
     engineio_logger=True,
     ping_timeout=20,
-    ping_interval=25,
-    cookie=None,             # Disable session cookie
-    manage_session=False     # Don't manage sessions
+    ping_interval=25
 )
 
 @socketio.on('connect')
@@ -4467,6 +4463,16 @@ def handle_join_game(data):
 def handle_leave_game(data):
     game_id = data['game_id']
     leave_room(f"game_{game_id}")
+    
+# Add error handling for WebSocket events
+@socketio.on_error_default
+def default_error_handler(e):
+    print(f"SocketIO error: {str(e)}")
+    return {"error": str(e)}
+
+@socketio.on('connect_error')
+def handle_connect_error(error):
+    print(f"Connection error: {str(error)}")
 
 def notify_game_update(game_id, game_state, winner=None):
     """Notify players of game state changes"""

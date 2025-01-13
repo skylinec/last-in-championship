@@ -2106,12 +2106,17 @@ def maintenance():
         total_logs = db.scalar(text("SELECT COUNT(*) FROM monitoring_logs"))
         total_pages = (total_logs + per_page - 1) // per_page
         
+        # Get core users for test data selection
+        settings = db.query(Settings).first()
+        core_users = settings.core_users if settings else []
+        
         return render_template(
             "maintenance.html",
             monitoring_logs=monitoring_logs,
             current_page=page,
             total_pages=total_pages,
-            per_page=per_page
+            per_page=per_page,
+            core_users=core_users  # Pass core users to template
         )
     finally:
         db.close()

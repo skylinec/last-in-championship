@@ -334,72 +334,66 @@ async function checkForTieBreakers() {
 
     const tieCheckQuery = `
       WITH period_bounds AS (
-        -- Get completed periods that match the materialized view
-        SELECT period, period_start::date, period_end::date
+        -- Get last completed week and month
+        SELECT period, period_end::date
         FROM rankings r
         WHERE period IN ('weekly', 'monthly')
-          AND period_end::date < CURRENT_DATE
-          GROUP BY period, period_start, period_end
+        AND period_end < CURRENT_DATE
+        GROUP BY period, period_end
       ),
-      early_bird_scores AS (
+      scores AS (
+        -- Get scores for completed periods only
         SELECT 
           r.period,
           r.period_start::date,
           r.period_end::date,
           r.username,
-          r.early_bird_points_rounded as points,
-          'early-bird' as mode
+          -- Get both early bird and last-in scores
+          ROUND(COALESCE(r.points, 0)::numeric, 1) as points,
+          ROUND(COALESCE(r.early_bird_points, 0)::numeric, 1) as early_bird_points,
+          ROUND(COALESCE(r.last_in_points, 0)::numeric, 1) as last_in_points
         FROM rankings r
         INNER JOIN period_bounds pb ON 
           r.period = pb.period AND 
-          r.period_end::date = pb.period_end::date
+          r.period_end::date = pb.period_end
         WHERE EXISTS (
           SELECT 1 FROM entries e 
           WHERE e.name = r.username 
-          AND e.date::date BETWEEN r.period_start::date AND r.period_end::date
+          AND e.date::date BETWEEN r.period_start AND r.period_end
           AND e.status IN ('in-office', 'remote')
         )
       ),
-      last_in_scores AS (
-        SELECT 
-          r.period,
-          r.period_start::date,
-          r.period_end::date,
-          r.username,
-          r.last_in_points_rounded as points,
-          'last-in' as mode
-        FROM rankings r
-        INNER JOIN period_bounds pb ON 
-          r.period = pb.period AND 
-          r.period_end::date = pb.period_end::date
-        WHERE EXISTS (
-          SELECT 1 FROM entries e 
-          WHERE e.name = r.username 
-          AND e.date::date BETWEEN r.period_start::date AND r.period_end::date
-          AND e.status IN ('in-office', 'remote')
-        )
-      ),
-      combined_scores AS (
-        SELECT * FROM early_bird_scores
-        UNION ALL
-        SELECT * FROM last_in_scores
-      ),
-      tied_groups AS (
-        -- Find groups of tied scores
+      early_bird_ties AS (
         SELECT 
           period,
           period_start,
           period_end,
-          points,
-          mode,
-          array_agg(username) as usernames,
-          COUNT(*) as tied_count
-        FROM combined_scores
-        GROUP BY period, period_start, period_end, points, mode
-        HAVING COUNT(*) > 1
+          early_bird_points as points,
+          'early-bird' as mode,
+          array_agg(username) as usernames
+        FROM scores 
+        GROUP BY period, period_start, period_end, early_bird_points
+        HAVING COUNT(*) > 1 AND early_bird_points > 0
+      ),
+      last_in_ties AS (
+        SELECT 
+          period,
+          period_start,
+          period_end,
+          last_in_points as points,
+          'last-in' as mode,
+          array_agg(username) as usernames
+        FROM scores
+        GROUP BY period, period_start, period_end, last_in_points
+        HAVING COUNT(*) > 1 AND last_in_points > 0
+      ),
+      all_ties AS (
+        SELECT * FROM early_bird_ties
+        UNION ALL
+        SELECT * FROM last_in_ties
       )
-      SELECT *
-      FROM tied_groups t
+      SELECT t.*
+      FROM all_ties t
       WHERE NOT EXISTS (
         SELECT 1 
         FROM tie_breakers tb
@@ -410,25 +404,20 @@ async function checkForTieBreakers() {
       )
       ORDER BY period_end DESC, points DESC`;
 
-    // Add debug logging
     console.log("Checking for tie breakers...");
     const ties = await client.query(tieCheckQuery);
     console.log(`Found ${ties.rows.length} potential tie breakers`);
     
-    // Log each potential tie for debugging
+    // Debug logging for each tie found
     ties.rows.forEach(tie => {
-      console.log(`Found tie for ${tie.period} ending ${tie.period_end}:
+      console.log(`Found ${tie.mode} tie for ${tie.period} ending ${tie.period_end}:
         Points: ${tie.points}
-        Users: ${tie.usernames.join(', ')}
-        Rank: ${tie.rank}`);
+        Users: ${tie.usernames.join(', ')}`);
     });
 
-    // Rest of the function remains the same...
     let tieBreakersCreated = 0;
-
     if (ties.rows.length > 0) {
       await client.query('BEGIN');
-      
       try {
         for (const tie of ties.rows) {
           const result = await client.query(`
@@ -452,16 +441,13 @@ async function checkForTieBreakers() {
           
           if (result.rows[0]) {
             const tieBreakerId = result.rows[0].id;
-            
             await client.query(`
               INSERT INTO tie_breaker_participants (tie_breaker_id, username)
               SELECT $1, unnest($2::text[])
             `, [tieBreakerId, tie.usernames]);
-            
             tieBreakersCreated++;
           }
         }
-        
         await client.query('COMMIT');
       } catch (error) {
         await client.query('ROLLBACK');

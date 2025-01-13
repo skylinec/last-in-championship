@@ -4106,77 +4106,47 @@ def play_game(game_id):
 def join_game(game_id):
     db = SessionLocal()
     try:
-        # Start transaction
-        db.execute('BEGIN')
-
-        # First verify the game exists and can be joined
-        game = db.execute(text("""
-            SELECT g.*, tb.status as tie_breaker_status
-            FROM tie_breaker_games g
-            JOIN tie_breakers tb ON g.tie_breaker_id = tb.id
-            WHERE g.id = :game_id
-            FOR UPDATE NOWAIT
-        """), {"game_id": game_id}).fetchone()
-
-        if not game:
-            db.execute('ROLLBACK')
-            return redirect(url_for('tie_breakers'))
-
-        # Check game state
-        if game.player2 or game.status != 'pending' or game.tie_breaker_status != 'in_progress':
-            db.execute('ROLLBACK')
+        # Get game with transaction lock
+        game = db.query(TieBreaker).filter_by(id=game_id).with_for_update().first()
+        
+        if not game or game.player2 or game.status != 'pending':
+            app.logger.warning(f"Cannot join game {game_id}: Invalid game state")
             return redirect(url_for('tie_breakers'))
 
         current_user = session.get('user')
         if not current_user or current_user == game.player1:
-            db.execute('ROLLBACK')
+            app.logger.warning(f"Cannot join game {game_id}: Invalid user")
             return redirect(url_for('tie_breakers'))
 
         # Update game state
-        game_state = json.loads(game.game_state) if game.game_state else {}
+        game_state = game.game_state or {}
         game_state.update({
             'board': [None] * (9 if game.game_type == 'tictactoe' else 42),
             'moves': [],
-            'current_player': game.player1,
-            'player1': game.player1,
-            'player2': current_user
+            'current_player': game.player1
         })
 
-        # Update game with proper return values
-        result = db.execute(text("""
-            UPDATE tie_breaker_games 
-            SET player2 = :player2,
-                status = 'active',
-                game_state = :game_state
-            WHERE id = :game_id
-            AND player2 IS NULL
-            AND status = 'pending'
-            RETURNING id, game_type
-        """), {
-            "player2": current_user,
-            "game_state": json.dumps(game_state),
-            "game_id": game_id
-        })
-
-        if not result.rowcount:
-            db.execute('ROLLBACK')
-            return redirect(url_for('tie_breakers'))
+        # Update game
+        game.player2 = current_user
+        game.status = 'active'
+        game.game_state = game_state
 
         # Log the action
         log_audit(
             "join_game",
             current_user,
-            f"Joined game {game_id} against {game.player1}",
-            new_data={"game_id": game_id, "player1": game.player1, "player2": current_user}
+            f"Joined game {game_id}",
+            new_data={"game_id": game_id, "game_type": game.game_type}
         )
 
-        db.execute('COMMIT')
-        # Use url_for to generate the correct game URL
+        db.commit()
         return redirect(url_for('play_game', game_id=game_id))
 
     except Exception as e:
-        db.execute('ROLLBACK')
+        db.rollback()
         app.logger.error(f"Error joining game: {str(e)}")
         return redirect(url_for('tie_breakers'))
     finally:
         db.close()
+
+# ...existing code...

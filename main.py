@@ -3355,7 +3355,7 @@ def start_metrics_updater():
     thread = Thread(target=update_loop, daemon=True)
     thread.start()
 
-if __name__ == "__main__":
+if __name__ "__main__":
     # Remove the start_http_server call as we're using WSGI middleware now
     start_metrics_updater()  # Start metrics updater
     debug_mode = os.getenv('FLASK_ENV') == 'development'
@@ -4150,30 +4150,54 @@ def play_game(game_id):
 def join_game(game_id):
     db = SessionLocal()
     try:
-        # Get game with transaction lock
-        game = db.query(TieBreakerGame).filter_by(id=game_id).with_for_update().first()
-        
-        if not game or game.player2 or game.status != 'pending':
-            app.logger.warning(f"Cannot join game {game_id}: Invalid game state")
-            return redirect(url_for('tie_breakers'))
+        # Get game with proper locking
+        game = db.execute(text("""
+            SELECT g.*, t.status as tie_breaker_status 
+            FROM tie_breaker_games g
+            JOIN tie_breakers t ON g.tie_breaker_id = t.id 
+            WHERE g.id = :game_id
+            FOR UPDATE
+        """), {"game_id": game_id}).fetchone()
+
+        if not game:
+            app.logger.warning(f"Cannot join game {game_id}: Game not found")
+            return jsonify({"error": "Game not found"}), 404
 
         current_user = session.get('user')
         if not current_user or current_user == game.player1:
             app.logger.warning(f"Cannot join game {game_id}: Invalid user")
-            return redirect(url_for('tie_breakers'))
+            return jsonify({"error": "Invalid user"}), 400
 
-        # Update game state
-        game_state = game.game_state or {}
-        game_state.update({
-            'board': [None] * (9 if game.game_type == 'tictactoe' else 42),
+        if game.status != 'pending':
+            app.logger.warning(f"Cannot join game {game_id}: Game not in pending state")
+            return jsonify({"error": "Game already started"}), 400
+
+        if game.tie_breaker_status != 'in_progress':
+            app.logger.warning(f"Cannot join game {game_id}: Tie breaker not in progress")
+            return jsonify({"error": "Tie breaker not active"}), 400
+
+        # Initialize game state
+        board_size = 9 if game.game_type == 'tictactoe' else 42
+        game_state = {
+            'board': [None] * board_size,
             'moves': [],
-            'current_player': game.player1
-        })
+            'current_player': game.player1,
+            'player1': game.player1,
+            'player2': current_user
+        }
 
         # Update game
-        game.player2 = current_user
-        game.status = 'active'
-        game.game_state = game_state
+        db.execute(text("""
+            UPDATE tie_breaker_games 
+            SET player2 = :player2,
+                status = 'active',
+                game_state = :game_state
+            WHERE id = :game_id
+        """), {
+            "player2": current_user,
+            "game_state": json.dumps(game_state),
+            "game_id": game_id
+        })
 
         # Log the action
         log_audit(
@@ -4184,12 +4208,14 @@ def join_game(game_id):
         )
 
         db.commit()
+
+        # Redirect to game page
         return redirect(url_for('play_game', game_id=game_id))
 
     except Exception as e:
         db.rollback()
         app.logger.error(f"Error joining game: {str(e)}")
-        return redirect(url_for('tie_breakers'))
+        return jsonify({"error": "Server error"}), 500
     finally:
         db.close()
 

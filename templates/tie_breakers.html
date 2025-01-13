@@ -108,6 +108,7 @@
                                                 Join {{ game.game_type|title }} against {{ game.player1 }}
                                             </button>
                                         </form>
+                                        <div class="error-message" style="display: none; color: red; margin-top: 10px;"></div>
                                     </div>
                                 {% endif %}
                             {% elif game.status == 'active' %}
@@ -356,7 +357,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // Filter functionality
     function applyFilters() {
         const periodFilter = document.getElementById('periodFilter').value;
-        const statusFilter = document.getElementQueryId('statusFilter').value;
+        const statusFilter = document.getElementById('statusFilter').value;
         
         document.querySelectorAll('.tie-breaker-card').forEach(card => {
             const periodMatch = periodFilter === 'all' || card.dataset.period === periodFilter;
@@ -378,6 +379,37 @@ document.addEventListener('DOMContentLoaded', function() {
             });
         });
     }
+
+    document.querySelectorAll('.join-form').forEach(form => {
+        form.addEventListener('submit', async function(e) {
+            e.preventDefault();
+            const errorDiv = this.nextElementSibling;
+            try {
+                const response = await fetch(this.action, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                if (response.redirected) {
+                    window.location.href = response.url;
+                    return;
+                }
+                
+                const data = await response.json();
+                if (!response.ok) {
+                    errorDiv.textContent = data.error || 'Error joining game';
+                    errorDiv.style.display = 'block';
+                } else {
+                    window.location.reload();
+                }
+            } catch (error) {
+                errorDiv.textContent = 'Error connecting to server';
+                errorDiv.style.display = 'block';
+            }
+        });
+    });
 });
 </script>
 {% endblock %}

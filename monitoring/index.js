@@ -332,6 +332,10 @@ async function checkForTieBreakers() {
       return;
     }
 
+    // Get core users for validation
+    const coreUsers = await client.query('SELECT core_users FROM settings LIMIT 1');
+    const coreUsersList = coreUsers.rows[0]?.core_users || [];
+
     const tieCheckQuery = `
       WITH period_bounds AS (
         SELECT DISTINCT
@@ -341,6 +345,44 @@ async function checkForTieBreakers() {
         FROM rankings r
         WHERE period IN ('weekly', 'monthly')
           AND period_end::date < CURRENT_DATE
+      ),
+      working_days AS (
+        SELECT pb.period, pb.period_start, pb.period_end,
+          array_agg(DISTINCT d.date) as required_dates
+        FROM period_bounds pb
+        CROSS JOIN LATERAL (
+          SELECT date::date
+          FROM generate_series(pb.period_start, pb.period_end, '1 day'::interval) date
+          WHERE EXTRACT(DOW FROM date) BETWEEN 1 AND 5
+        ) d
+        GROUP BY pb.period, pb.period_start, pb.period_end
+      ),
+      core_user_attendance AS (
+        SELECT 
+          pb.period,
+          pb.period_start,
+          pb.period_end,
+          e.name,
+          COUNT(DISTINCT e.date) as days_present
+        FROM period_bounds pb
+        CROSS JOIN (SELECT UNNEST(:core_users) as name) cu
+        LEFT JOIN entries e ON 
+          e.date::date BETWEEN pb.period_start AND pb.period_end
+          AND e.name = cu.name
+          AND e.status IN ('in-office', 'remote')
+        GROUP BY pb.period, pb.period_start, pb.period_end, e.name
+      ),
+      valid_periods AS (
+        SELECT 
+          ca.period,
+          ca.period_start,
+          ca.period_end
+        FROM core_user_attendance ca
+        JOIN working_days wd ON 
+          ca.period = wd.period 
+          AND ca.period_start = wd.period_start
+        GROUP BY ca.period, ca.period_start, ca.period_end
+        HAVING bool_and(ca.days_present >= array_length(wd.required_dates, 1))
       ),
       scored_users AS (
         -- Use the correct point columns based on mode
@@ -362,51 +404,64 @@ async function checkForTieBreakers() {
           AND e.status IN ('in-office', 'remote')
         )
       ),
-      early_bird_ties AS (
+      potential_ties AS (
         SELECT 
-          period,
-          period_start,
-          period_end,
-          early_bird_score as points,
+          s.period,
+          s.period_start,
+          s.period_end,
+          s.early_bird_score as points,
           'early-bird' as mode,
-          array_agg(username) as usernames,
-          COUNT(*) as tied_count
-        FROM scored_users
-        WHERE early_bird_score > 0
-        GROUP BY period, period_start, period_end, early_bird_score
+          array_agg(s.username) as usernames,
+          COUNT(*) as tied_count,
+          au.active_user_count
+        FROM scored_users s
+        JOIN active_users au ON 
+          s.period = au.period AND 
+          s.period_end::date = au.period_end::date
+        WHERE s.early_bird_score > 0
+        GROUP BY s.period, s.period_start, s.period_end, s.early_bird_score, au.active_user_count
         HAVING COUNT(*) > 1
-      ),
-      last_in_ties AS (
-        SELECT 
-          period,
-          period_start,
-          period_end,
-          last_in_score as points,
-          'last-in' as mode,
-          array_agg(username) as usernames,
-          COUNT(*) as tied_count
-        FROM scored_users
-        WHERE last_in_score > 0
-        GROUP BY period, period_start, period_end, last_in_score
-        HAVING COUNT(*) > 1
-      ),
-      all_ties AS (
-        SELECT * FROM early_bird_ties
+
         UNION ALL
-        SELECT * FROM last_in_ties
+
+        SELECT 
+          s.period,
+          s.period_start,
+          s.period_end,
+          s.last_in_score as points,
+          'last-in' as mode,
+          array_agg(s.username) as usernames,
+          COUNT(*) as tied_count,
+          au.active_user_count
+        FROM scored_users s
+        JOIN active_users au ON 
+          s.period = au.period AND 
+          s.period_end::date = au.period_end::date
+        WHERE s.last_in_score > 0
+        GROUP BY s.period, s.period_start, s.period_end, s.last_in_score, au.active_user_count
+        HAVING COUNT(*) > 1
       )
-      SELECT *
-      FROM all_ties t
-      WHERE NOT EXISTS (
+      SELECT * FROM potential_ties t
+      WHERE EXISTS (
+        SELECT 1 FROM valid_periods vp
+        WHERE t.period = vp.period
+        AND t.period_end::date = vp.period_end
+      )
+      AND NOT EXISTS (
         SELECT 1 
         FROM tie_breakers tb
         WHERE tb.period = t.period
         AND tb.period_end::date = t.period_end
         AND tb.mode = t.mode
         AND ROUND(tb.points::numeric, 1) = t.points
+        AND tb.status = 'completed'
       )
       ORDER BY period_end DESC, points DESC;
     `;
+
+    const ties = await client.query(tieCheckQuery, {
+      core_users: coreUsersList
+    });
 
     console.log("Checking for tie breakers...");
     const ties = await client.query(tieCheckQuery);

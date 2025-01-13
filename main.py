@@ -2493,7 +2493,7 @@ def parse_date_reference(text):
     elif "today" in text:
         return today
     elif "tomorrow" in text:
-        return today + timedelta(days=1)
+        return today + timedelta(days(1))
     elif "last week" in text:
         return today - timedelta(weeks=1)
     elif "next week" in text:
@@ -3265,7 +3265,7 @@ def calculate_streak_for_date(name, target_date, db):
             elif days_between > 1:
                 # Check if gap only includes weekend days
                 weekend_only = all(
-                    (last_date - timedelta(days=d)).weekday() >= 5
+                    (last_date - timedelta(days(d))).weekday() >= 5
                     for d in range(1, days_between)
                 )
                 if not weekend_only:
@@ -3538,15 +3538,17 @@ def decimal_to_float(obj):
 def tie_breakers():
     db = SessionLocal()
     try:
-        mode = request.args.get('mode', 'last-in')  # Get current mode
-        tie_breakers = db.execute(text("""
+        mode = request.args.get('mode', 'last-in')
+        show_completed = request.args.get('show_completed', 'true').lower() == 'true'
+
+        base_query = """
             WITH tie_breakers_cte AS (
                 SELECT 
                     t.id,
                     t.period,
                     t.period_start,
                     t.period_end,
-                    t.points::float as points,  -- Convert Decimal to float
+                    t.points::float as points,
                     t.mode,
                     t.status,
                     t.created_at,
@@ -3569,8 +3571,9 @@ def tie_breakers():
                 FROM tie_breakers t
                 LEFT JOIN tie_breaker_participants tp ON t.id = tp.tie_breaker_id
                 LEFT JOIN tie_breaker_games g ON t.id = g.tie_breaker_id
-                GROUP BY t.id, t.period, t.period_start, t.period_end, t.points, t.mode,
-                         t.status, t.created_at, t.resolved_at
+                WHERE t.mode = :mode
+                GROUP BY t.id, t.period, t.period_start, t.period_end, t.points,
+                         t.mode, t.status, t.created_at, t.resolved_at
             )
             SELECT * FROM tie_breakers_cte
             ORDER BY 
@@ -3582,33 +3585,28 @@ def tie_breakers():
                 END,
                 created_at DESC,
                 period_end DESC
-        """)).fetchall()
+        """
 
-        app.logger.debug("Processing tie breakers...")
+        tie_breakers = db.execute(text(base_query), {
+            "mode": mode
+        }).fetchall()
 
         formatted_tie_breakers = []
         for tb in tie_breakers:
-            tie_breaker_dict = dict(tb)
-            
-            # Handle JSON serialization of all fields
+            if not show_completed and tb.status == 'completed':
+                continue
+
             tie_breaker_dict = {
                 k: decimal_to_float(v) if isinstance(v, Decimal) else v
-                for k, v in tie_breaker_dict.items()
+                for k, v in dict(tb).items()
             }
             
-            # Debug log the processed data
-            app.logger.debug(f"Processing tie breaker: {tie_breaker_dict['id']}")
-            
-            # Ensure proper JSON parsing of nested structures
-            if tie_breaker_dict['games'] is None:
-                tie_breaker_dict['games'] = []
-            elif isinstance(tie_breaker_dict['games'], str):
-                tie_breaker_dict['games'] = json.loads(tie_breaker_dict['games'])
-            
-            if tie_breaker_dict['participants'] is None:
-                tie_breaker_dict['participants'] = []
-            elif isinstance(tie_breaker_dict['participants'], str):
-                tie_breaker_dict['participants'] = json.loads(tie_breaker_dict['participants'])
+            # Parse JSON fields
+            for field in ['games', 'participants']:
+                if tie_breaker_dict[field] is None:
+                    tie_breaker_dict[field] = []
+                elif isinstance(tie_breaker_dict[field], str):
+                    tie_breaker_dict[field] = json.loads(tie_breaker_dict[field])
             
             formatted_tie_breakers.append(tie_breaker_dict)
 
@@ -3616,7 +3614,8 @@ def tie_breakers():
             "tie_breakers.html",
             tie_breakers=formatted_tie_breakers,
             current_user=session['user'],
-            mode=mode  # Pass current mode to template
+            mode=mode,
+            show_completed=show_completed
         )
         
     except Exception as e:
@@ -3677,14 +3676,42 @@ def choose_game(tie_id):
         db.close()
 
 def create_next_game(db, tie_id):
-    """Create next available games between tied participants with deduplication"""
-    # Get all unplayed participant pairs and their game choices
+    """Create next available games between tied participants with strict validation"""
+    # Get tie breaker details first
+    tie_breaker = db.execute(text("""
+        SELECT 
+            t.id,
+            t.status,
+            t.period_end,
+            t.points,
+            t.mode,
+            array_agg(p.username) as participants
+        FROM tie_breakers t
+        JOIN tie_breaker_participants p ON t.id = p.tie_breaker_id
+        WHERE t.id = :tie_id
+        GROUP BY t.id
+    """), {"tie_id": tie_id}).fetchone()
+
+    if not tie_breaker or tie_breaker.status != 'in_progress':
+        return
+
+    # Validate number of participants
+    if len(tie_breaker.participants) < 2:
+        app.logger.warning(f"Not enough participants for tie breaker {tie_id}")
+        return
+
+    # Get existing games to prevent duplicates
+    existing_games = db.execute(text("""
+        SELECT player1, player2, game_type, status
+        FROM tie_breaker_games
+        WHERE tie_breaker_id = :tie_id
+    """), {"tie_id": tie_id}).fetchall()
+
+    existing_pairs = {(g.player1, g.player2) for g in existing_games}
+    existing_pairs.update({(g.player2, g.player1) for g in existing_games})
+
+    # Get remaining pairs
     pairs = db.execute(text("""
-        WITH played_pairs AS (
-            SELECT player1, player2
-            FROM tie_breaker_games
-            WHERE tie_breaker_id = :tie_id
-        )
         SELECT 
             p1.username as player1,
             p1.game_choice as player1_choice, 
@@ -3697,63 +3724,106 @@ def create_next_game(db, tie_id):
         AND p1.username < p2.username
         AND p1.ready = true AND p2.ready = true
         AND NOT EXISTS (
-            SELECT 1 FROM played_pairs pp
-            WHERE (pp.player1 = p1.username AND pp.player2 = p2.username)
-            OR (pp.player1 = p2.username AND pp.player2 = p1.username)
+            SELECT 1 FROM tie_breaker_games g
+            WHERE g.tie_breaker_id = :tie_id
+            AND ((g.player1 = p1.username AND g.player2 = p2.username)
+                OR (g.player1 = p2.username AND g.player2 = p1.username))
         )
     """), {"tie_id": tie_id}).fetchall()
 
-    # Create games with initial state
     for pair in pairs:
-        # Determine which games to create
-        games_to_create = []
-        if pair.player1_choice == pair.player2_choice:
-            # If both chose the same game, create only one instance
-            games_to_create.append((pair.player1, pair.player1_choice, pair.player2))
-        else:
-            # If different games, create one for each player's choice
-            games_to_create.extend([
-                (pair.player1, pair.player1_choice, pair.player2),
-                (pair.player2, pair.player2_choice, pair.player1)
-            ])
+        # Enforce two-player limit and game type validation
+        if (pair.player1, pair.player2) not in existing_pairs:
+            game_choices = [pair.player1_choice, pair.player2_choice]
+            if not all(choice in ['tictactoe', 'connect4'] for choice in game_choices if choice):
+                continue
 
-        for player1, game_choice, player2 in games_to_create:
-            initial_state = {
-                "board": [None] * (9 if game_choice == 'tictactoe' else 42),
-                "moves": [],
-                "current_player": player1,
-                "player1": player1,
-                "player2": player2
-            }
-            
-            try:
+            games_to_create = []
+            if pair.player1_choice == pair.player2_choice:
+                games_to_create.append((pair.player1, pair.player1_choice, pair.player2))
+            else:
+                games_to_create.extend([
+                    (pair.player1, pair.player1_choice, pair.player2),
+                    (pair.player2, pair.player2_choice, pair.player1)
+                ])
+
+            for player1, game_type, player2 in games_to_create:
+                create_game(db, tie_id, game_type, player1, player2)
+
+def check_tie_breaker_completion(db, tie_id):
+    """Check if a tie breaker is complete and trigger regeneration if needed"""
+    try:
+        # Get tie breaker details
+        tie_breaker = db.execute(text("""
+            SELECT 
+                t.*,
+                array_agg(DISTINCT g.winner) FILTER (WHERE g.winner IS NOT NULL) as winners,
+                bool_and(g.status = 'completed') as all_games_completed
+            FROM tie_breakers t
+            LEFT JOIN tie_breaker_games g ON t.id = g.tie_breaker_id AND NOT g.final_tiebreaker
+            WHERE t.id = :tie_id
+            GROUP BY t.id
+        """), {"tie_id": tie_id}).fetchone()
+
+        if not tie_breaker or tie_breaker.status == 'completed':
+            return
+
+        # Check if all games are complete
+        if tie_breaker.all_games_completed:
+            winner = determine_winner(db, tie_id)
+            if winner:
+                # Mark tie breaker as completed
                 db.execute(text("""
-                    INSERT INTO tie_breaker_games (
-                        tie_breaker_id, 
-                        game_type,
-                        player1,
-                        player2,
-                        status,
-                        game_state
-                    ) VALUES (
-                        :tie_id,
-                        :game_type,
-                        :player1,
-                        :player2,
-                        'pending',
-                        :initial_state
-                    )
-                """), {
-                    "tie_id": tie_id,
-                    "game_type": game_choice,
-                    "player1": player1,
-                    "player2": player2,
-                    "initial_state": json.dumps(initial_state)
-                })
-            except Exception as e:
-                app.logger.error(f"Error creating game: {str(e)}")
-                app.logger.error(f"Failed parameters: tie_id={tie_id}, game_type={game_choice}, player1={player1}")
-                raise
+                    UPDATE tie_breakers
+                    SET status = 'completed',
+                        resolved_at = NOW()
+                    WHERE id = :tie_id
+                """), {"tie_id": tie_id})
+
+                # Trigger regeneration of tie breakers
+                regenerate_tie_breakers(db, tie_breaker.period_end, tie_breaker.mode)
+                db.commit()
+
+    except Exception as e:
+        db.rollback()
+        app.logger.error(f"Error checking tie breaker completion: {str(e)}")
+
+def regenerate_tie_breakers(db, period_end, mode):
+    """Regenerate tie breakers after a tie is resolved"""
+    try:
+        # Get rankings for the period
+        rankings = db.execute(text("""
+            SELECT 
+                username,
+                CASE :mode
+                    WHEN 'early-bird' THEN early_bird_points_rounded
+                    ELSE last_in_points_rounded
+                END as points
+            FROM rankings
+            WHERE period_end::date = :period_end::date
+            AND username IN (SELECT UNNEST(core_users) FROM settings LIMIT 1)
+        """), {
+            "period_end": period_end,
+            "mode": mode
+        }).fetchall()
+
+        # Group by points to find new ties
+        point_groups = {}
+        for rank in rankings:
+            points = round(float(rank.points), 1)
+            if points > 0:
+                if points not in point_groups:
+                    point_groups[points] = []
+                point_groups[points].append(rank.username)
+
+        # Create new tie breakers for groups with multiple users
+        for points, users in point_groups.items():
+            if len(users) > 1:
+                create_tie_breaker(db, period_end, points, mode, users)
+
+    except Exception as e:
+        app.logger.error(f"Error regenerating tie breakers: {str(e)}")
+        raise
 
 # Update the determine_winner function to use correct status
 def determine_winner(db, tie_id):
@@ -3826,12 +3896,12 @@ def check_tie_breaker_completion(db, tie_id):
     """Check if a tie breaker is complete and determine the winner"""
     # Get the tie breaker period end date first
     tie_breaker = db.execute(text("""
-        SELECT period_end, points 
+        SELECT period_end, points, mode, points_applied
         FROM tie_breakers 
         WHERE id = :tie_id
     """), {"tie_id": tie_id}).fetchone()
     
-    if not tie_breaker:
+    if not tie_breaker or tie_breaker.points_applied:
         return False
 
     # Check if all non-final games are complete
@@ -3863,11 +3933,12 @@ def check_tie_breaker_completion(db, tie_id):
             return False
 
         if winner:
-            # Update tie breaker as completed with winner and store resolution date
+            # Update tie breaker as completed and mark points as applied
             db.execute(text("""
                 UPDATE tie_breakers
                 SET status = 'completed',
-                    resolved_at = NOW()
+                    resolved_at = NOW(),
+                    points_applied = true
                 WHERE id = :tie_id
             """), {"tie_id": tie_id})
 
@@ -3881,7 +3952,7 @@ def check_tie_breaker_completion(db, tie_id):
                 "winner": winner
             })
 
-            # Log the resolution with the period_end date
+            # Log the resolution with period details
             log_audit(
                 "tie_breaker_resolved",
                 winner,
@@ -3890,13 +3961,94 @@ def check_tie_breaker_completion(db, tie_id):
                 new_data={
                     "winner": winner,
                     "points": tie_breaker.points,
-                    "period_end": tie_breaker.period_end
+                    "period_end": tie_breaker.period_end,
+                    "mode": tie_breaker.mode
                 }
             )
 
             return True
 
     return False
+
+# Update the tie breaker detection query in checkForTieBreakers function
+def checkForTieBreakers(client):
+    # ...existing code...
+    tieCheckQuery = """
+        WITH period_bounds AS (
+            SELECT DISTINCT
+                r.period,
+                r.period_start::date,
+                r.period_end::date
+            FROM rankings r
+            WHERE period IN ('weekly', 'monthly')
+                AND period_end::date < CURRENT_DATE
+        ),
+        scored_users AS (
+            -- Use the correct point columns based on mode
+            SELECT
+                r.period,
+                r.period_start::date,
+                r.period_end::date,
+                r.username,
+                ROUND(r.early_bird_points_rounded, 1) as early_bird_score,
+                ROUND(r.last_in_points_rounded, 1) as last_in_score
+            FROM rankings r
+            INNER JOIN period_bounds pb ON 
+                r.period = pb.period AND 
+                r.period_end::date = pb.period_end::date
+            WHERE EXISTS (
+                SELECT 1 FROM entries e 
+                WHERE e.name = r.username 
+                AND e.date::date BETWEEN r.period_start::date AND r.period_end::date
+                AND e.status IN ('in-office', 'remote')
+            )
+        ),
+        potential_ties AS (
+            -- Early bird ties
+            SELECT 
+                period,
+                period_start,
+                period_end,
+                early_bird_score as points,
+                'early-bird' as mode,
+                array_agg(username) as usernames,
+                COUNT(*) as tied_count
+            FROM scored_users
+            WHERE early_bird_score > 0
+            GROUP BY period, period_start, period_end, early_bird_score
+            HAVING COUNT(*) > 1
+            
+            UNION ALL
+            
+            -- Last in ties
+            SELECT 
+                period,
+                period_start,
+                period_end,
+                last_in_score as points,
+                'last-in' as mode,
+                array_agg(username) as usernames,
+                COUNT(*) as tied_count
+            FROM scored_users
+            WHERE last_in_score > 0
+            GROUP BY period, period_start, period_end, last_in_score
+            HAVING COUNT(*) > 1
+        )
+        SELECT * FROM potential_ties t
+        WHERE NOT EXISTS (
+            SELECT 1 
+            FROM tie_breakers tb
+            WHERE tb.period = t.period
+            AND tb.period_end::date = t.period_end
+            AND tb.mode = t.mode
+            AND ROUND(tb.points::numeric, 1) = t.points
+            AND (tb.status = 'completed' AND tb.points_applied = true)
+        )
+        ORDER BY period_end DESC, points DESC
+    """
+    # ...rest of existing code...
+
+# ...existing code...
 
 def is_valid_move(game_state, move):
     """Check if move is valid for the current game state"""
@@ -4393,3 +4545,184 @@ def join_game(game_id):
         db.close()
 
 # ...existing code...
+
+# ...existing code...
+
+def get_working_days_for_period(db, start_date, end_date):
+    """Get all working days in a period accounting for user-specific schedules"""
+    try:
+        # Get settings for working days
+        settings = db.query(Settings).first()
+        working_days_config = settings.points.get('working_days', {})
+        core_users = settings.core_users
+
+        # Generate all dates in period
+        period_days = []
+        current = start_date
+        while current <= end_date:
+            # For each user, check if it's their working day
+            day_map = {
+                0: 'sun', 1: 'mon', 2: 'tue', 3: 'wed', 
+                4: 'thu', 5: 'fri', 6: 'sat'
+            }
+            day_name = day_map[current.weekday()]
+            
+            for user in core_users:
+                user_working_days = working_days_config.get(user, ['mon','tue','wed','thu','fri'])
+                if day_name in user_working_days:
+                    period_days.append(current)
+                    break  # If it's a working day for any core user, include it
+            
+            current += timedelta(days=1)
+        
+        return period_days
+    except Exception as e:
+        app.logger.error(f"Error getting working days: {str(e)}")
+        return []
+
+def validate_core_user_attendance(db, period_start, period_end, core_users):
+    """Validate that all core users have entries for their working days"""
+    working_days = get_working_days_for_period(db, period_start, period_end)
+    
+    # Get all attendance records for the period
+    attendance = db.execute(text("""
+        SELECT DISTINCT name, date::date
+        FROM entries
+        WHERE date::date BETWEEN :start AND :end
+        AND name = ANY(:core_users)
+        AND status IN ('in-office', 'remote')
+    """), {
+        "start": period_start,
+        "end": period_end,
+        "core_users": core_users
+    }).fetchall()
+
+    # Create attendance map for quick lookup
+    attendance_map = defaultdict(set)
+    for record in attendance:
+        attendance_map[record.name].add(record.date)
+
+    # Check each user's attendance
+    for user in core_users:
+        user_working_days = set(working_days)
+        user_attendance = attendance_map.get(user, set())
+        if not user_working_days.issubset(user_attendance):
+            return False
+
+    return True
+
+def create_game(db, tie_id, game_type, player1, player2):
+    """Create a new game for a tie breaker"""
+    try:
+        # Initialize game state based on type
+        board_size = 9 if game_type == 'tictactoe' else 42
+        initial_state = {
+            'board': [None] * board_size,
+            'moves': [],
+            'current_player': player1,
+            'player1': player1,
+            'player2': player2,
+            'game_type': game_type
+        }
+
+        # Insert new game
+        db.execute(text("""
+            INSERT INTO tie_breaker_games (
+                tie_breaker_id,
+                game_type,
+                player1,
+                player2,
+                status,
+                game_state
+            ) VALUES (
+                :tie_id,
+                :game_type,
+                :player1,
+                :player2,
+                'pending',
+                :game_state
+            )
+        """), {
+            "tie_id": tie_id,
+            "game_type": game_type,
+            "player1": player1,
+            "player2": player2,
+            "game_state": json.dumps(initial_state)
+        })
+
+    except Exception as e:
+        app.logger.error(f"Error creating game: {str(e)}")
+        raise
+
+def create_tie_breaker(db, period_end, points, mode, users):
+    """Create a new tie breaker with validation"""
+    try:
+        # Calculate period start based on period type
+        period_type = 'weekly' if isinstance(period_end, datetime) and period_end.weekday() == 6 else 'monthly'
+        period_start = period_end - timedelta(days=6 if period_type == 'weekly' else 30)
+
+        # Validate core user attendance
+        settings = db.query(Settings).first()
+        if not validate_core_user_attendance(db, period_start, period_end, settings.core_users):
+            app.logger.info(f"Skipping tie breaker creation - incomplete core user attendance")
+            return None
+
+        # Check for existing unresolved tie breaker
+        existing = db.execute(text("""
+            SELECT id FROM tie_breakers
+            WHERE period_end::date = :period_end::date
+            AND mode = :mode
+            AND points = :points
+            AND status != 'completed'
+        """), {
+            "period_end": period_end,
+            "mode": mode,
+            "points": points
+        }).fetchone()
+
+        if existing:
+            app.logger.info(f"Skipping tie breaker creation - unresolved tie breaker exists")
+            return None
+
+        # Create new tie breaker
+        result = db.execute(text("""
+            INSERT INTO tie_breakers (
+                period,
+                period_start,
+                period_end,
+                points,
+                mode,
+                status
+            ) VALUES (
+                :period,
+                :period_start,
+                :period_end,
+                :points,
+                :mode,
+                'pending'
+            ) RETURNING id
+        """), {
+            "period": period_type,
+            "period_start": period_start,
+            "period_end": period_end,
+            "points": points,
+            "mode": mode
+        })
+
+        tie_id = result.fetchone()[0]
+
+        # Add participants
+        for user in users:
+            db.execute(text("""
+                INSERT INTO tie_breaker_participants (tie_breaker_id, username)
+                VALUES (:tie_id, :username)
+            """), {
+                "tie_id": tie_id,
+                "username": user
+            })
+
+        return tie_id
+
+    except Exception as e:
+        app.logger.error(f"Error creating tie breaker: {str(e)}")
+        raise

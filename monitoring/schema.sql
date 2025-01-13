@@ -111,6 +111,14 @@ CHECK (status IN ('pending', 'in_progress', 'completed'));
 ALTER TABLE tie_breakers 
 ALTER COLUMN status SET DEFAULT 'pending';
 
+-- Add points_applied column to tie_breakers table
+ALTER TABLE tie_breakers 
+ADD COLUMN IF NOT EXISTS points_applied BOOLEAN DEFAULT false;
+
+-- Add index for tie breaker points tracking
+CREATE INDEX IF NOT EXISTS idx_tie_breakers_points_tracking 
+ON tie_breakers(period_end, points_applied, status);
+
 CREATE TABLE IF NOT EXISTS tie_breaker_participants (
     id SERIAL PRIMARY KEY,
     tie_breaker_id INTEGER REFERENCES tie_breakers(id) ON DELETE CASCADE,
@@ -391,7 +399,6 @@ BEGIN
     IF NOT EXISTS (SELECT FROM pg_database WHERE datname = 'mattermost') THEN
         CREATE DATABASE mattermost
         WITH
-        OWNER = user  -- Replace 'user' with the appropriate owner if different
         ENCODING = 'UTF8'
         CONNECTION LIMIT = -1;
     END IF;

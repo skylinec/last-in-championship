@@ -6,16 +6,48 @@
     <h1>Championship Tie Breakers</h1>
 
     <div class="info-box">
+        <p>Showing tie breakers for: <strong>{{ mode|replace('-', ' ')|title }} Mode</strong></p>
         <p>Tie breakers are generated automatically when:</p>
         <ul>
             <li>A week or month has completed</li>
             <li>Two or more players have exactly the same score</li>
-            <li>The tied score occurs in either Early Bird or Last-In mode</li>
+            <li>The tied score occurs in the current scoring mode</li>
         </ul>
     </div>
 
-    {% for tie in tie_breakers %}
-    <div class="tie-breaker-card {{ tie.status }} {{ tie.mode }}">
+    <!-- Add filter controls -->
+    <div class="filter-controls">
+        <select id="periodFilter">
+            <option value="all">All Periods</option>
+            <option value="weekly">Weekly Only</option>
+            <option value="monthly">Monthly Only</option>
+        </select>
+        <select id="statusFilter">
+            <option value="all">All Statuses</option>
+            <option value="pending">Pending</option>
+            <option value="in_progress">In Progress</option>
+            <option value="completed">Completed</option>
+        </select>
+        <!-- Debug switch for admins -->
+        {% if current_user in ["Matt", "Nathan"] %}
+        <div class="debug-controls">
+            <label>
+                <input type="checkbox" id="showDebug"> Show Debug Info
+            </label>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Only show tie breakers that match the current mode -->
+    {% for tie in tie_breakers if tie.mode == mode %}
+    <div class="tie-breaker-card {{ tie.status }} {{ tie.mode }}" data-period="{{ tie.period }}" data-status="{{ tie.status }}">
+        <!-- Add debug information -->
+        {% if current_user in ["Matt", "Nathan"] %}
+        <div class="debug-info" style="display: none;">
+            <pre>{{ tie|tojson(indent=2) }}</pre>
+        </div>
+        {% endif %}
+
         <div class="tie-header">
             <h3>
                 {{ tie.period|title }} Tie - {{ tie.period_end|format_date }}
@@ -103,7 +135,13 @@
     </div>
     {% else %}
     <div class="no-tiebreakers">
-        <p>No tie breakers available. Tie breakers will appear here when two or more players have the same score at the end of a week or month in either Early Bird or Last-In mode.</p>
+        <p>No tie breakers available for {{ mode|replace('-', ' ')|title }} mode.</p>
+        {% if current_user in ["Matt", "Nathan"] %}
+        <div class="debug-info" style="display: none;">
+            <h4>All Available Tie Breakers:</h4>
+            <pre>{{ tie_breakers|tojson(indent=2) }}</pre>
+        </div>
+        {% endif %}
     </div>
     {% endfor %}
 </div>
@@ -273,5 +311,73 @@
     background: #FF9800;
     color: white;
 }
+
+.filter-controls {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 20px;
+    background: white;
+    padding: 15px;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.filter-controls select {
+    padding: 8px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    min-width: 150px;
+}
+
+.debug-controls {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+}
+
+.debug-info {
+    background: #f8f9fa;
+    padding: 10px;
+    margin: 10px 0;
+    border-radius: 4px;
+    font-family: monospace;
+    font-size: 0.9em;
+    overflow-x: auto;
+}
+
+.debug-info pre {
+    margin: 0;
+    white-space: pre-wrap;
+}
 </style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Filter functionality
+    function applyFilters() {
+        const periodFilter = document.getElementById('periodFilter').value;
+        const statusFilter = document.getElementQueryId('statusFilter').value;
+        
+        document.querySelectorAll('.tie-breaker-card').forEach(card => {
+            const periodMatch = periodFilter === 'all' || card.dataset.period === periodFilter;
+            const statusMatch = statusFilter === 'all' || card.dataset.status === statusFilter;
+            card.style.display = periodMatch && statusMatch ? 'block' : 'none';
+        });
+    }
+
+    // Add event listeners to filters
+    document.getElementById('periodFilter').addEventListener('change', applyFilters);
+    document.getElementById('statusFilter').addEventListener('change', applyFilters);
+
+    // Debug toggle functionality
+    const debugToggle = document.getElementById('showDebug');
+    if (debugToggle) {
+        debugToggle.addEventListener('change', function() {
+            document.querySelectorAll('.debug-info').forEach(info => {
+                info.style.display = this.checked ? 'block' : 'none';
+            });
+        });
+    }
+});
+</script>
 {% endblock %}

@@ -334,32 +334,31 @@ async function checkForTieBreakers() {
 
     const tieCheckQuery = `
       WITH period_bounds AS (
-        -- Get last completed week and month
-        SELECT period, period_end::date
+        SELECT DISTINCT
+          r.period,
+          r.period_start::date,
+          r.period_end::date
         FROM rankings r
         WHERE period IN ('weekly', 'monthly')
-        AND period_end < CURRENT_DATE
-        GROUP BY period, period_end
+          AND period_end::date < CURRENT_DATE
       ),
-      scores AS (
-        -- Get scores for completed periods only
-        SELECT 
+      scored_users AS (
+        -- Use the correct point columns based on mode
+        SELECT
           r.period,
           r.period_start::date,
           r.period_end::date,
           r.username,
-          -- Get both early bird and last-in scores
-          ROUND(COALESCE(r.points, 0)::numeric, 1) as points,
-          ROUND(COALESCE(r.early_bird_points, 0)::numeric, 1) as early_bird_points,
-          ROUND(COALESCE(r.last_in_points, 0)::numeric, 1) as last_in_points
+          ROUND(r.early_bird_points_rounded, 1) as early_bird_score,
+          ROUND(r.last_in_points_rounded, 1) as last_in_score
         FROM rankings r
         INNER JOIN period_bounds pb ON 
           r.period = pb.period AND 
-          r.period_end::date = pb.period_end
+          r.period_end::date = pb.period_end::date
         WHERE EXISTS (
           SELECT 1 FROM entries e 
           WHERE e.name = r.username 
-          AND e.date::date BETWEEN r.period_start AND r.period_end
+          AND e.date::date BETWEEN r.period_start::date AND r.period_end::date
           AND e.status IN ('in-office', 'remote')
         )
       ),
@@ -368,31 +367,35 @@ async function checkForTieBreakers() {
           period,
           period_start,
           period_end,
-          early_bird_points as points,
+          early_bird_score as points,
           'early-bird' as mode,
-          array_agg(username) as usernames
-        FROM scores 
-        GROUP BY period, period_start, period_end, early_bird_points
-        HAVING COUNT(*) > 1 AND early_bird_points > 0
+          array_agg(username) as usernames,
+          COUNT(*) as tied_count
+        FROM scored_users
+        WHERE early_bird_score > 0
+        GROUP BY period, period_start, period_end, early_bird_score
+        HAVING COUNT(*) > 1
       ),
       last_in_ties AS (
         SELECT 
           period,
           period_start,
           period_end,
-          last_in_points as points,
+          last_in_score as points,
           'last-in' as mode,
-          array_agg(username) as usernames
-        FROM scores
-        GROUP BY period, period_start, period_end, last_in_points
-        HAVING COUNT(*) > 1 AND last_in_points > 0
+          array_agg(username) as usernames,
+          COUNT(*) as tied_count
+        FROM scored_users
+        WHERE last_in_score > 0
+        GROUP BY period, period_start, period_end, last_in_score
+        HAVING COUNT(*) > 1
       ),
       all_ties AS (
         SELECT * FROM early_bird_ties
         UNION ALL
         SELECT * FROM last_in_ties
       )
-      SELECT t.*
+      SELECT *
       FROM all_ties t
       WHERE NOT EXISTS (
         SELECT 1 
@@ -402,7 +405,8 @@ async function checkForTieBreakers() {
         AND tb.mode = t.mode
         AND ROUND(tb.points::numeric, 1) = t.points
       )
-      ORDER BY period_end DESC, points DESC`;
+      ORDER BY period_end DESC, points DESC;
+    `;
 
     console.log("Checking for tie breakers...");
     const ties = await client.query(tieCheckQuery);

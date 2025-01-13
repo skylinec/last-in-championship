@@ -4045,3 +4045,61 @@ if __name__ == "__main__":
 def reset_game(game_id):
     print("Passing")
     pass
+
+# ...existing code...
+
+@app.route("/games/<int:game_id>/join", methods=["POST"])
+@login_required
+def join_game(game_id):
+    db = SessionLocal()
+    try:
+        # Get game details
+        game = db.execute(text("""
+            SELECT g.*, tb.status as tie_breaker_status
+            FROM tie_breaker_games g
+            JOIN tie_breakers tb ON g.tie_breaker_id = tb.id
+            WHERE g.id = :game_id
+            AND g.status = 'pending'
+        """), {"game_id": game_id}).fetchone()
+
+        if not game:
+            return jsonify({"error": "Game not found or not available"}), 404
+
+        if game.tie_breaker_status != 'in_progress':
+            return jsonify({"error": "Tie breaker is not in progress"}), 400
+
+        if game.player2:
+            return jsonify({"error": "Game already has two players"}), 400
+
+        # Update game with second player and set to active
+        db.execute(text("""
+            UPDATE tie_breaker_games
+            SET player2 = :player2,
+                status = 'active'
+            WHERE id = :game_id
+        """), {
+            "game_id": game_id,
+            "player2": session['user']
+        })
+
+        db.commit()
+        
+        # Log the action
+        log_audit(
+            "join_game",
+            session['user'],
+            f"Joined game {game_id}",
+            new_data={"game_id": game_id}
+        )
+
+        # Redirect to the game page
+        return redirect(url_for('play_game', game_id=game_id))
+
+    except Exception as e:
+        db.rollback()
+        app.logger.error(f"Error joining game: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+    finally:
+        db.close()
+
+# ...existing code...

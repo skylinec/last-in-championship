@@ -4057,7 +4057,7 @@ def reset_game(game_id):
 
 # ...existing code...
 
-@app.route('/games/<game_id>/join', methods=['POST'])
+@app.route('/games/<int:game_id>/join', methods=['POST'])
 @login_required
 def join_game(game_id):
     db = SessionLocal()
@@ -4076,26 +4076,26 @@ def join_game(game_id):
 
         if not game:
             db.execute('ROLLBACK')
-            return jsonify({"error": "Game not found"}), 404
+            return redirect(url_for('tie_breakers'))
 
         # Check game state
         if game.player2:
             db.execute('ROLLBACK')
-            return jsonify({"error": "Game already has two players"}), 400
+            return redirect(url_for('tie_breakers'))
         if game.status != 'pending':
             db.execute('ROLLBACK')
-            return jsonify({"error": f"Game is {game.status}"}), 400
+            return redirect(url_for('tie_breakers'))
         if game.tie_breaker_status != 'in_progress':
             db.execute('ROLLBACK')
-            return jsonify({"error": "Tie breaker is not in progress"}), 400
+            return redirect(url_for('tie_breakers'))
 
         current_user = session.get('user')
         if not current_user:
             db.execute('ROLLBACK')
-            return jsonify({"error": "Not logged in"}), 401
+            return redirect(url_for('login'))
         if current_user == game.player1:
             db.execute('ROLLBACK')
-            return jsonify({"error": "You cannot join your own game"}), 400
+            return redirect(url_for('tie_breakers'))
 
         # Update game state
         game_state = json.loads(game.game_state) if game.game_state else {}
@@ -4125,7 +4125,7 @@ def join_game(game_id):
 
         if not result.rowcount:
             db.execute('ROLLBACK')
-            return jsonify({"error": "Failed to join game"}), 400
+            return redirect(url_for('tie_breakers'))
 
         # Log the action
         log_audit(
@@ -4136,12 +4136,12 @@ def join_game(game_id):
         )
 
         db.execute('COMMIT')
-        return jsonify({"success": True, "redirect": url_for('play_game', game_id=game_id)})
+        return redirect(url_for('play_game', game_id=game_id))
 
     except Exception as e:
         db.execute('ROLLBACK')
         app.logger.error(f"Error joining game: {str(e)}")
-        return jsonify({"error": str(e)}), 500
+        return redirect(url_for('tie_breakers'))
     finally:
         db.close()
 

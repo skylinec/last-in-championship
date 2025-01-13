@@ -49,7 +49,7 @@
                 
                 {% if tie.games %}
                     {% for game in tie.games %}
-                        {% if game and game.status %}  <!-- Add null check -->
+                        {% if game %}  <!-- Add null check -->
                             {% set has_games = true %}
                             
                             {% if game.status == 'pending' %}
@@ -57,9 +57,9 @@
                                     <div class="game-entry">
                                         <p class="pending-message">Waiting for opponent to join {{ game.game_type|title }} game</p>
                                     </div>
-                                {% elif not game.player2 %}  <!-- Check specifically for no player2 -->
+                                {% elif current_user != game.player1 %}
                                     <div class="game-entry">
-                                        <form method="POST" action="{{ url_for('join_game', game_id=game.id) }}" class="join-form">
+                                        <form action="/games/{{ game.id }}/join" method="POST" class="join-form">
                                             <button type="submit" class="btn game-link join">
                                                 Join {{ game.game_type|title }} against {{ game.player1 }}
                                             </button>

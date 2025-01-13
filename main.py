@@ -4131,7 +4131,7 @@ def join_game(game_id):
     db = engine
     try:
         # Get game with transaction
-        game = db.session.execute(text("""
+        game = db.execute(text("""
             SELECT * FROM tie_breaker_games 
             WHERE id = :game_id
             FOR UPDATE
@@ -4152,7 +4152,7 @@ def join_game(game_id):
         game_state['player2'] = session['username']
         
         # Update game with player2 and status
-        db.session.execute(text("""
+        db.execute(text("""
             UPDATE tie_breaker_games 
             SET player2 = :player2,
                 status = 'active',
@@ -4174,7 +4174,7 @@ def join_game(game_id):
             new_data={"status": "active", "player2": session['username']}
         )
 
-        db.session.commit()
+        db.commit()
         
         # Update metrics
         ACTIVE_GAMES = Gauge('active_games', 'Number of active games')
@@ -4183,6 +4183,6 @@ def join_game(game_id):
         return jsonify({"message": "Successfully joined game"})
 
     except Exception as e:
-        db.session.rollback()
+        db.rollback()
         app.logger.error(f"Error joining game: {str(e)}")
         return jsonify({"error": str(e)}), 500

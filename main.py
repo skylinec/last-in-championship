@@ -18,6 +18,7 @@ from metrics import DB_CONNECTIONS, metrics, record_request_metric, update_atten
 from werkzeug.middleware.dispatcher import DispatcherMiddleware
 from prometheus_client import make_wsgi_app
 import time
+import random
 
 # Add new imports
 from functools import lru_cache
@@ -2493,7 +2494,7 @@ def parse_date_reference(text):
     elif "today" in text:
         return today
     elif "tomorrow" in text:
-        return today + timedelta(days(1))
+        return today + timedelta(days=1)
     elif "last week" in text:
         return today - timedelta(weeks=1)
     elif "next week" in text:
@@ -2869,7 +2870,7 @@ def generate_comparison_response(params, db):
             query = db.query(
                 Entry.name,
                 func.count(Entry.id).label('total_days'),
-                func.avg(func.extract('hour', func.cast(Entry.time, Time))).label('avg_arrival')
+                func.avg(func.extract('hour', func.cast(Entry.time, time))).label('avg_arrival')
             ).filter(
                 Entry.name.in_(users)
             ).group_by(Entry.name)
@@ -3233,19 +3234,42 @@ def chatbot():
             "context": None
         })
 
-def calculate_streak_for_date(name, target_date, db):
-    """Calculate streak for a user up to a specific date with optimized queries"""
+from datetime import datetime, date, timedelta
+from typing import Union, Optional
+
+MAX_WEEKEND_GAP = 3
+WEEKEND_START = 5  # Saturday is 5
+
+def calculate_streak_for_date(
+    name: str,
+    target_date: Union[str, date],
+) -> int:
+    """Calculate work streak for a user up to a specific date.
+    
+    Args:
+        name: User's name
+        target_date: Target date to calculate streak until
+        db: Database session
+    
+    Returns:
+        int: Current streak count
+    """
+    db = SessionLocal()
+    
     try:
-        target_date = datetime.strptime(target_date, '%Y-%m-%d').date() if isinstance(target_date, str) else target_date
+        if not name or not target_date:
+            return 0
+            
+        target_date = (datetime.strptime(target_date, '%Y-%m-%d').date() 
+                      if isinstance(target_date, str) else target_date)
         
-        # Get all relevant entries in a single query
         entries = db.query(
             Entry.date
         ).filter(
             Entry.name == name,
             Entry.status.in_(['in-office', 'remote']),
             Entry.date <= target_date.isoformat()
-        ). order_by(
+        ).order_by(
             Entry.date.desc()
         ).all()
         
@@ -3255,24 +3279,24 @@ def calculate_streak_for_date(name, target_date, db):
         streak = 1
         last_date = datetime.strptime(entries[0].date, "%Y-%m-%d").date()
         
-        # Process dates without additional database queries
-        dates = [datetime.strptime(entry.date, "%Y-%m-%d").date() for entry in entries[1:]]
+        dates = [datetime.strptime(entry.date, "%Y-%m-%d").date() 
+                for entry in entries[1:]]
+                
         for entry_date in dates:
             days_between = (last_date - entry_date).days
             
-            if days_between > 3:  # More than a weekend
+            if days_between > MAX_WEEKEND_GAP:
                 break
-            elif days_between > 1:
-                # Check if gap only includes weekend days
-                weekend_only = all(
-                    (last_date - timedelta(days(d))).weekday() >= 5
+                
+            if days_between > 1:
+                weekend_days = {
+                    (last_date - timedelta(days=d)).weekday()
                     for d in range(1, days_between)
-                )
-                if not weekend_only:
+                }
+                if not weekend_days.issubset({5, 6}):  # Saturday and Sunday
                     break
-            
-            streak += 1
-            last_date = entry_date
+                streak += 1
+                last_date = entry_date
             
         return streak
         
@@ -4945,5 +4969,3 @@ def create_test_games(db, tie_id, users):
             "player2": player2,
             "game_state": json.dumps(game_state)
         })
-
-# ...rest of existing code...

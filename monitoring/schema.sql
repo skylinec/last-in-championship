@@ -294,7 +294,8 @@ daily_scores AS (
                 (SELECT points->>'remote' FROM settings LIMIT 1)::numeric
             ELSE 0
         END as base_points,
-        ROW_NUMBER() OVER (PARTITION BY e.date::date ORDER BY e.time) as position,
+        ROW_NUMBER() OVER (PARTITION BY e.date::date ORDER BY e.time) as early_position,
+        ROW_NUMBER() OVER (PARTITION BY e.date::date ORDER BY e.time DESC) as late_position,
         COUNT(*) OVER (PARTITION BY e.date::date) as total_entries
     FROM entries e
     JOIN periods p ON e.date::date = p.date
@@ -306,17 +307,30 @@ SELECT
     period,
     period_start,
     period_end,
+    -- Early Bird scoring
     SUM(base_points + (
         CASE 
-            WHEN position = total_entries THEN 
-                position * (SELECT late_bonus FROM settings LIMIT 1)
+            WHEN early_position = 1 THEN 
+                total_entries * (SELECT late_bonus FROM settings LIMIT 1)
             ELSE 0
         END
     )) OVER (
         PARTITION BY username, period, period_start
         ORDER BY date
         ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
-    ) as points
+    ) as early_bird_points,
+    -- Last In scoring
+    SUM(base_points + (
+        CASE 
+            WHEN late_position = 1 THEN 
+                total_entries * (SELECT late_bonus FROM settings LIMIT 1)
+            ELSE 0
+        END
+    )) OVER (
+        PARTITION BY username, period, period_start
+        ORDER BY date
+        ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+    ) as last_in_points
 FROM daily_scores;
 
 -- Update indices for the rankings view

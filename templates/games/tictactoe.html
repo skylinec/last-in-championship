@@ -175,13 +175,27 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    // Connect to WebSocket server
-    const socket = io();
-    
-    // Join the game room
-    socket.emit('join_game', { game_id: {{ game.id }} });
-    
-    // Listen for game updates
+    const socket = io({
+        transports: ['websocket'],
+        upgrade: false,
+        reconnection: true,
+        reconnectionDelay: 1000,
+        reconnectionDelayMax: 5000
+    });
+
+    socket.on('connect', () => {
+        console.log('Connected to game server');
+        socket.emit('join_game', { game_id: {{ game.id }} });
+    });
+
+    socket.on('disconnect', () => {
+        console.log('Disconnected from game server');
+    });
+
+    socket.on('error', (error) => {
+        console.error('Socket error:', error);
+    });
+
     socket.on('game_update', function(data) {
         // Update the board
         const cells = document.querySelectorAll('.board-cell');
@@ -192,30 +206,43 @@ document.addEventListener('DOMContentLoaded', function() {
                 cell.textContent = value || '';
             }
         });
-        
+
+        // Update player states
+        document.querySelectorAll('.player').forEach(playerDiv => {
+            playerDiv.classList.remove('active');
+            if (playerDiv.textContent.includes(data.current_player)) {
+                playerDiv.classList.add('active');
+            }
+        });
+
         // Update turn indicator
-        const turnDiv = document.querySelector('.turn');
+        const turnDiv = document.querySelector('.game-status .turn');
         if (turnDiv) {
             turnDiv.textContent = `Current Turn: ${data.current_player}`;
         }
-        
-        // Check for winner
+
+        // Handle game completion
         if (data.winner) {
             if (data.winner === 'draw') {
                 alert("Game ended in a draw! A new game will start with reversed player order.");
-                window.location.reload();
+                if (data.next_game) {
+                    window.location.href = `/games/${data.next_game}`;
+                } else {
+                    window.location.reload();
+                }
             } else {
                 alert(`${data.winner} wins!`);
                 window.location.reload();
             }
         }
     });
-    
+
     // Clean up on page unload
     window.addEventListener('beforeunload', function() {
         socket.emit('leave_game', { game_id: {{ game.id }} });
+        socket.disconnect();
     });
-    
+
     // ...rest of existing game logic...
     
     if ({{ can_play|tojson }} && '{{ game.status }}' === 'active') {

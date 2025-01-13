@@ -160,7 +160,9 @@ END $$;
 ------------------------------------------
 -- SECTION 5: RANKINGS SYSTEM
 ------------------------------------------
-DROP MATERIALIZED VIEW IF EXISTS rankings;
+DROP MATERIALIZED VIEW IF EXISTS rankings CASCADE;
+DROP INDEX IF EXISTS idx_rankings_unique_refresh;
+
 CREATE MATERIALIZED VIEW rankings AS
 WITH RECURSIVE periods AS (
     -- Daily periods
@@ -277,6 +279,15 @@ SELECT
     ROUND(last_in_points::numeric, 1) as last_in_points_rounded
 FROM scored_entries;
 
+-- Add new unique index for concurrent refresh (must be first)
+CREATE UNIQUE INDEX idx_rankings_unique_refresh 
+ON rankings(username, date, period, period_start, period_end);
+
+-- Other indices can remain but should come after
+CREATE INDEX idx_rankings_period ON rankings(period, period_end);
+CREATE INDEX idx_rankings_period_points ON rankings(period, base_points);
+CREATE INDEX idx_rankings_period_end ON rankings(period_end);
+
 ------------------------------------------
 -- SECTION 6: INDICES
 ------------------------------------------
@@ -285,9 +296,6 @@ DROP INDEX IF EXISTS idx_rankings_composite;
 DROP INDEX IF EXISTS idx_tie_breakers_unique_period;
 
 -- Recreate indices with updated constraints
-CREATE UNIQUE INDEX idx_rankings_composite ON rankings(username, date, period)
-WHERE period IN ('week', 'month');
-
 CREATE UNIQUE INDEX idx_tie_breakers_unique_period ON tie_breakers(period, period_end, points, mode) 
 WHERE status != 'completed';
 
@@ -308,7 +316,13 @@ CREATE INDEX idx_tie_breakers_period_range ON tie_breakers(period_start, period_
 CREATE OR REPLACE FUNCTION refresh_rankings()
 RETURNS TRIGGER AS $$
 BEGIN
-    REFRESH MATERIALIZED VIEW CONCURRENTLY rankings;
+    -- Attempt concurrent refresh first
+    BEGIN
+        REFRESH MATERIALIZED VIEW CONCURRENTLY rankings;
+    EXCEPTION WHEN OTHERS THEN
+        -- Fall back to regular refresh if concurrent fails
+        REFRESH MATERIALIZED VIEW rankings;
+    END;
     RETURN NULL;
 END;
 $$ LANGUAGE plpgsql;

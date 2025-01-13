@@ -335,7 +335,7 @@ async function checkForTieBreakers() {
 
     const autoResolve = settings.rows[0]?.auto_resolve_tiebreakers;
     
-    // Modified query to handle historical periods when auto-resolve is disabled
+    // Modified query with explicit type casting
     const tieCheckQuery = `
       WITH period_entries AS (
         SELECT DISTINCT
@@ -347,26 +347,26 @@ async function checkForTieBreakers() {
           date_trunc('month', e.date::date)::date as month_start
         FROM entries e
         WHERE e.date >= CASE 
-          WHEN $1 = true THEN CURRENT_DATE - INTERVAL '7 days'
-          ELSE (SELECT monitoring_start_date FROM settings LIMIT 1)
+          WHEN $1 = true THEN (CURRENT_DATE - INTERVAL '7 days')::date
+          ELSE (SELECT monitoring_start_date::date FROM settings LIMIT 1)
         END
       ),
       tied_rankings AS (
         SELECT 
           period,
           period_start,
-          period_end,
+          period_end::timestamp,
           points,
           array_agg(username) as usernames,
           COUNT(*) as tied_count
         FROM rankings r
         WHERE EXISTS (
           SELECT 1 FROM period_entries pe
-          WHERE (r.period = 'weekly' AND r.period_start = pe.week_start)
-          OR (r.period = 'monthly' AND r.period_start = pe.month_start)
+          WHERE (r.period = 'weekly' AND r.period_start::date = pe.week_start)
+          OR (r.period = 'monthly' AND r.period_start::date = pe.month_start)
         )
         AND period IN ('weekly', 'monthly')
-        AND period_end < CURRENT_DATE
+        AND period_end::date < CURRENT_DATE
         GROUP BY period, period_start, period_end, points
         HAVING COUNT(*) > 1
       )
@@ -376,7 +376,7 @@ async function checkForTieBreakers() {
         SELECT 1 
         FROM tie_breakers tb
         WHERE tb.period = tr.period
-        AND tb.period_end = tr.period_end
+        AND tb.period_end::timestamp = tr.period_end
         AND tb.points = tr.points
       )`;
 

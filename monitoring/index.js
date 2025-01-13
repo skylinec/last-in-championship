@@ -323,7 +323,6 @@ async function checkForTieBreakers() {
   try {
     const startTime = Date.now();
 
-    // Get settings first
     const settings = await client.query('SELECT enable_tiebreakers, tiebreaker_expiry, auto_resolve_tiebreakers FROM settings LIMIT 1');
     if (!settings.rows[0]?.enable_tiebreakers) {
       await logMonitoringEvent('tie_breaker_check', {
@@ -333,56 +332,69 @@ async function checkForTieBreakers() {
       return;
     }
 
-    // Modified query to correctly identify ties at week/month end
     const tieCheckQuery = `
       WITH period_bounds AS (
-        -- Get last completed week and month
+        -- Get completed periods that match the materialized view
         SELECT 'weekly' as period,
           date_trunc('week', current_date - interval '1 week')::date as period_start,
           (date_trunc('week', current_date - interval '1 week') + interval '6 days')::date as period_end
-        WHERE date_trunc('week', current_date) != date_trunc('week', current_date - interval '1 week')
+        WHERE EXISTS (
+          SELECT 1 FROM rankings 
+          WHERE period = 'weekly'
+          AND period_end = (date_trunc('week', current_date - interval '1 week') + interval '6 days')::date
+        )
         UNION ALL
-        SELECT 'monthly',
+        SELECT 'monthly' as period,
           date_trunc('month', current_date - interval '1 month')::date as period_start,
-          (date_trunc('month', current_date) - interval '1 day')::date as period_end
-        WHERE date_trunc('month', current_date) != date_trunc('month', current_date - interval '1 day')
+          (date_trunc('month', current_date - interval '1 month') + interval '1 month - 1 day')::date as period_end
+        WHERE EXISTS (
+          SELECT 1 FROM rankings 
+          WHERE period = 'monthly'
+          AND period_end = (date_trunc('month', current_date - interval '1 month') + interval '1 month - 1 day')::date
+        )
       ),
       period_scores AS (
-        -- Calculate aggregated scores for the period
+        -- Get scores for completed periods only
         SELECT 
           r.period,
           r.period_start::date,
           r.period_end::date,
           r.username,
-          r.points as points,  -- Changed from r.score to r.points
+          ROUND(r.points::numeric, 1) as points,
           COUNT(*) OVER (
-            PARTITION BY r.period, r.period_end::date, ROUND(r.points::numeric, 1)  -- Changed to 1 decimal
+            PARTITION BY r.period, r.period_end::date, ROUND(r.points::numeric, 1)
           ) as tied_count,
           COUNT(*) OVER (
             PARTITION BY r.period, r.period_end::date
           ) as total_participants,
           ROW_NUMBER() OVER (
             PARTITION BY r.period, r.period_end::date
-            ORDER BY r.points DESC  -- Changed from r.score to r.points
+            ORDER BY r.points DESC
           ) as rank
         FROM rankings r
         INNER JOIN period_bounds pb ON 
           r.period = pb.period AND 
           r.period_end::date = pb.period_end
+        -- Only include participants with attendance
+        WHERE EXISTS (
+          SELECT 1 FROM entries e 
+          WHERE e.name = r.username 
+          AND e.date::date BETWEEN r.period_start AND r.period_end
+          AND e.status IN ('in-office', 'remote')
+        )
       ),
       tied_groups AS (
-        -- Find groups of tied scores with 1 decimal precision
         SELECT 
           period,
           period_start,
           period_end,
-          ROUND(points::numeric, 1) as points,  -- Changed to 1 decimal
+          points,
           array_agg(username) as usernames,
           COUNT(*) as tied_count,
           rank
         FROM period_scores
         WHERE tied_count > 1
-        GROUP BY period, period_start, period_end, ROUND(points::numeric, 1), rank  -- Changed to 1 decimal
+        GROUP BY period, period_start, period_end, points, rank
         HAVING COUNT(*) > 1
       )
       SELECT *
@@ -392,7 +404,7 @@ async function checkForTieBreakers() {
         FROM tie_breakers tb
         WHERE tb.period = t.period
         AND tb.period_end::date = t.period_end
-        AND ROUND(tb.points::numeric, 1) = t.points  -- Changed to 1 decimal
+        AND ROUND(tb.points::numeric, 1) = ROUND(t.points::numeric, 1)
       )
       ORDER BY period_end DESC, rank ASC`;
 
@@ -472,7 +484,7 @@ async function checkForTieBreakers() {
 // ...existing code...
 
 async function createPeriodTieBreakers(client, { isWeekly, isMonthly }) {
-  const period = isWeekly ? 'week' : 'month';
+  const period = isWeekly ? 'weekly' : 'monthly';
   const startDate = new Date();
   
   // Set date to start of period

@@ -280,6 +280,11 @@ class TieBreakerGame(Base):
     created_at = Column(DateTime, default=datetime.now)
     completed_at = Column(DateTime, nullable=True)
 
+class IRSystem(Base):
+    __tablename__ = "ir_system"
+    skey = Column("SKey", String, primary_key=True)
+    svalue = Column("SValue", String, nullable=False)
+
 # Create tables
 Base.metadata.create_all(bind=engine)
 
@@ -1122,11 +1127,6 @@ def calculate_current_streak(name):
                 for d in range(1, days_between):
                     check_date = last_date - timedelta(days=d)
                     if check_date.weekday() < 5:  # Not weekend
-                        weekend_only = False
-                        break
-                if not weekend_only:
-                    break
-            
             streak += 1
             last_date = entry_date
             

@@ -365,7 +365,7 @@ async function checkForTieBreakers() {
           e.name,
           COUNT(DISTINCT e.date) as days_present
         FROM period_bounds pb
-        CROSS JOIN (SELECT UNNEST(:core_users) as name) cu
+        CROSS JOIN (SELECT UNNEST($1::text[]) as name) cu  -- Fixed parameter syntax
         LEFT JOIN entries e ON 
           e.date::date BETWEEN pb.period_start AND pb.period_end
           AND e.name = cu.name

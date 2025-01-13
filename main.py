@@ -3643,6 +3643,80 @@ def create_next_game(db, tie_id):
         )
     """), {"tie_id": tie_id}).fetchall()
 
+    # Create games with initial state but only player1 set
+    for pair in pairs:
+        # Determine which games to create 
+        games_to_create = []
+        if pair.player1_choice == pair.player2_choice:
+            # If both chose the same game, create only one instance
+            games_to_create.append((pair.player1, pair.player1_choice))
+        else:
+            # If different games, create one for each player's choice
+            games_to_create.extend([
+                (pair.player1, pair.player1_choice),
+                (pair.player2, pair.player2_choice)
+            ])
+
+        for player, game_choice in games_to_create:
+            initial_state = {
+                "board": [None] * (9 if game_choice == 'tictactoe' else 42),
+                "moves": [],
+                "current_player": player,
+                "player1": player
+            }
+            
+            try:
+                db.execute(text("""
+                    INSERT INTO tie_breaker_games (
+                        tie_breaker_id, 
+                        game_type,
+                        player1,
+                        status,
+                        game_state
+                    ) VALUES (
+                        :tie_id,
+                        :game_type,
+                        :player1,
+                        'pending',
+                        :initial_state
+                    )
+                """), {
+                    "tie_id": tie_id,
+                    "game_type": game_choice,
+                    "player1": player,
+                    "initial_state": json.dumps(initial_state)
+                })
+            except Exception as e:
+                app.logger.error(f"Error creating game: {str(e)}")
+                app.logger.error(f"Failed parameters: tie_id={tie_id}, game_type={game_choice}, player1={player}")
+                raise
+            
+    """Create next available games between tied participants with deduplication"""
+    # Get all unplayed participant pairs and their game choices
+    pairs = db.execute(text("""
+        WITH played_pairs AS (
+            SELECT player1, player2
+            FROM tie_breaker_games
+            WHERE tie_breaker_id = :tie_id
+        )
+        SELECT 
+            p1.username as player1,
+            p1.game_choice as player1_choice, 
+            p2.username as player2,
+            p2.game_choice as player2_choice
+        FROM tie_breaker_participants p1
+        CROSS JOIN tie_breaker_participants p2
+        WHERE p1.tie_breaker_id = :tie_id
+        AND p2.tie_breaker_id = :tie_id
+        AND p1.username < p2.username
+        AND p1.ready = true AND p2.ready = true
+        AND NOT EXISTS (
+            SELECT 1 FROM played_pairs pp
+            WHERE (pp.player1 = p1.username AND pp.player2 = p2.username)
+            OR (pp.player1 = p2.username AND pp.player2 = p1.username)
+        )
+    """), {"tie_id": tie_id}).fetchall()
+
     # Create games with initial state
     for pair in pairs:
         # Determine which games to create
@@ -4051,58 +4125,64 @@ def reset_game(game_id):
 
 # ...existing code...
 
-@app.route("/games/<int:game_id>/join", methods=["POST"])
+@app.route('/games/<game_id>/join', methods=['POST'])
 @login_required
 def join_game(game_id):
-    db = SessionLocal()
+    db = engine
     try:
-        # Get game details
-        game = db.execute(text("""
-            SELECT g.*, tb.status as tie_breaker_status
-            FROM tie_breaker_games g
-            JOIN tie_breakers tb ON g.tie_breaker_id = tb.id
-            WHERE g.id = :game_id
-            AND g.status = 'pending'
+        # Get game with transaction
+        game = db.session.execute(text("""
+            SELECT * FROM tie_breaker_games 
+            WHERE id = :game_id
+            FOR UPDATE
         """), {"game_id": game_id}).fetchone()
 
         if not game:
-            return jsonify({"error": "Game not found or not available"}), 404
+            return jsonify({"error": "Game not found"}), 404
 
-        if game.tie_breaker_status != 'in_progress':
-            return jsonify({"error": "Tie breaker is not in progress"}), 400
+        # Check for valid players
+        if session['username'] == game.player1:
+            return jsonify({"error": "You are already player1 in this game"}), 400
 
-        if game.player2:
+        if game.player2 is not None:
             return jsonify({"error": "Game already has two players"}), 400
 
-        # Update game with second player and set to active
-        db.execute(text("""
-            UPDATE tie_breaker_games
+        # Update game state to include player2
+        game_state = json.loads(game.game_state)
+        game_state['player2'] = session['username']
+        
+        # Update game with player2 and status
+        db.session.execute(text("""
+            UPDATE tie_breaker_games 
             SET player2 = :player2,
-                status = 'active'
+                status = 'active',
+                game_state = :game_state
             WHERE id = :game_id
+            AND player2 IS NULL
         """), {
             "game_id": game_id,
-            "player2": session['user']
+            "player2": session['username'],
+            "game_state": json.dumps(game_state)
         })
 
-        db.commit()
-        
-        # Log the action
+        # Log audit trail
         log_audit(
             "join_game",
-            session['user'],
+            session['username'],
             f"Joined game {game_id}",
-            new_data={"game_id": game_id}
+            old_data={"status": "pending"},
+            new_data={"status": "active", "player2": session['username']}
         )
 
-        # Redirect to the game page
-        return redirect(url_for('play_game', game_id=game_id))
+        db.session.commit()
+        
+        # Update metrics
+        ACTIVE_GAMES = Gauge('active_games', 'Number of active games')
+        ACTIVE_GAMES.inc()
+        
+        return jsonify({"message": "Successfully joined game"})
 
     except Exception as e:
-        db.rollback()
+        db.session.rollback()
         app.logger.error(f"Error joining game: {str(e)}")
         return jsonify({"error": str(e)}), 500
-    finally:
-        db.close()
-
-# ...existing code...

@@ -268,6 +268,99 @@
     text-align: center;
     margin-top: 10px;
 }
+
+/* Add responsive styles */
+@media (max-width: 768px) {
+    .dashboard-container {
+        grid-template-columns: 1fr;
+        gap: 20px;
+        padding: 10px;
+    }
+
+    .attendance-form-container {
+        padding: 15px;
+    }
+
+    .status-buttons {
+        grid-template-columns: 1fr;
+        gap: 8px;
+    }
+
+    .status-button {
+        padding: 15px;
+        font-size: 1.1em;
+    }
+
+    .form-row {
+        grid-template-columns: 1fr;
+        gap: 15px;
+    }
+
+    .form-group {
+        min-height: auto;
+        margin-bottom: 15px;
+    }
+
+    .submit-button {
+        width: 100%;
+        padding: 15px;
+        font-size: 1.1em;
+    }
+
+    .podium-container {
+        margin-top: 30px;
+    }
+
+    .podium {
+        gap: 5px;
+    }
+
+    .podium-place {
+        width: 80px;
+    }
+
+    .trophy {
+        font-size: 20px;
+    }
+
+    .platform {
+        padding: 8px;
+        font-size: 0.9em;
+    }
+
+    .podium-names, .podium-points {
+        grid-template-columns: repeat(3, 80px);
+        font-size: 0.9em;
+    }
+
+    .quick-action-buttons {
+        flex-direction: column;
+        gap: 10px;
+        width: 100%;
+    }
+
+    .quick-action-buttons button {
+        width: 100%;
+    }
+}
+
+/* Add touch-friendly improvements */
+@media (hover: none) {
+    .status-button {
+        -webkit-tap-highlight-color: transparent;
+        cursor: pointer;
+    }
+
+    .status-button:active {
+        transform: scale(0.98);
+        background: var(--accent-color);
+        color: white;
+    }
+
+    .submit-button:active {
+        transform: scale(0.98);
+    }
+}
 </style>
 
 <script>

@@ -158,6 +158,47 @@
     color: #FF9800;
     font-weight: bold;
 }
+
+/* Add responsive styles */
+@media (max-width: 768px) {
+    .game-container {
+        padding: 10px;
+    }
+
+    .board-cell {
+        width: 45px;
+        height: 45px;
+    }
+
+    .player-info {
+        flex-direction: column;
+        gap: 10px;
+    }
+
+    .player {
+        width: 100%;
+    }
+
+    .game-status {
+        font-size: 1em;
+    }
+
+    .board {
+        transform: scale(0.9);
+        margin: 0 auto;
+    }
+}
+
+@media (max-width: 480px) {
+    .board-cell {
+        width: 35px;
+        height: 35px;
+    }
+
+    .board {
+        transform: scale(0.8);
+    }
+}
 </style>
 
 {% if can_play and game.status == 'active' %}

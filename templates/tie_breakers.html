@@ -350,6 +350,72 @@
     margin: 0;
     white-space: pre-wrap;
 }
+
+/* Add responsive styles */
+@media (max-width: 768px) {
+    .tie-breakers-container {
+        padding: 10px;
+    }
+
+    .tie-breaker-card {
+        padding: 15px;
+    }
+
+    .tie-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 10px;
+    }
+
+    .status-badge,
+    .mode-badge {
+        display: inline-block;
+        margin-top: 5px;
+    }
+
+    .participants {
+        flex-direction: column;
+        gap: 8px;
+    }
+
+    .participant {
+        width: 100%;
+        justify-content: space-between;
+    }
+
+    .game-choice-form {
+        margin-top: 10px;
+    }
+
+    .game-choice-form select,
+    .game-choice-form button {
+        width: 100%;
+        margin: 5px 0;
+    }
+
+    .available-games .game-entry {
+        margin: 10px 0;
+    }
+
+    .game-link {
+        width: 100%;
+        text-align: center;
+    }
+
+    .filter-controls {
+        flex-direction: column;
+        gap: 10px;
+    }
+
+    .filter-controls select {
+        width: 100%;
+    }
+
+    .debug-controls {
+        margin: 10px 0;
+        width: 100%;
+    }
+}
 </style>
 
 <script>

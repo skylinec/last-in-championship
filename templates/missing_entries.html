@@ -99,5 +99,30 @@
     border-radius: 8px;
     box-shadow: 0 2px 5px rgba(0,0,0,0.1);
 }
+
+/* Add responsive styles */
+@media (max-width: 768px) {
+    .missing-entries-container {
+        padding: 10px;
+    }
+
+    .missing-entries-table {
+        overflow-x: auto;
+    }
+
+    .missing-users-list li {
+        font-size: 0.9em;
+        margin: 2px 1px;
+    }
+
+    .missing-entries-table td {
+        padding: 8px;
+        font-size: 0.9em;
+    }
+
+    .missing-entries-table th {
+        white-space: nowrap;
+    }
+}
 </style>
 {% endblock %}

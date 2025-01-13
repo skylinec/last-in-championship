@@ -87,5 +87,30 @@
     transform: translateY(-2px);
     box-shadow: 0 2px 5px rgba(0,0,0,0.2);
 }
+
+/* Add responsive styles */
+@media (max-width: 768px) {
+    .error-container {
+        padding: 10px;
+    }
+
+    .error-box {
+        padding: 15px;
+    }
+
+    .error-actions {
+        flex-direction: column;
+        gap: 10px;
+    }
+
+    .back-button, .home-button {
+        width: 100%;
+        text-align: center;
+    }
+
+    .error-message {
+        font-size: 1em;
+    }
+}
 </style>
 {% endblock %}

@@ -88,6 +88,90 @@ select {
     from { opacity: 0; transform: translateY(-10px); }
     to { opacity: 1; transform: translateY(0); }
 }
+
+/* Add responsive styles */
+@media (max-width: 768px) {
+    .viz-grid {
+        grid-template-columns: 1fr;
+        padding: 10px;
+        gap: 15px;
+    }
+
+    .controls {
+        flex-direction: column;
+        gap: 15px;
+        padding: 15px;
+    }
+
+    #userFilter {
+        width: 100%;
+        max-width: none;
+    }
+
+    .viz-card {
+        padding: 15px;
+    }
+
+    .viz-header {
+        flex-direction: column;
+        gap: 10px;
+        align-items: flex-start;
+    }
+
+    .info-toggle {
+        align-self: flex-end;
+        margin-top: -30px;
+    }
+
+    .info-panel {
+        font-size: 0.85em;
+        padding: 8px;
+    }
+
+    /* Adjust Plotly charts for mobile */
+    .js-plotly-plot {
+        max-width: 100%;
+        overflow-x: auto;
+    }
+
+    /* Make charts more compact on mobile */
+    .js-plotly-plot .plot-container {
+        transform: scale(0.9);
+        transform-origin: left top;
+    }
+
+    /* Adjust heatmap specifically */
+    #heatmap {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    /* Make tooltip text more readable on mobile */
+    .plotly-tooltip {
+        font-size: 12px !important;
+    }
+}
+
+/* Even smaller screens */
+@media (max-width: 480px) {
+    .viz-card {
+        padding: 10px;
+    }
+
+    .js-plotly-plot .plot-container {
+        transform: scale(0.8);
+    }
+
+    h1, h2, h3 {
+        font-size: 1.2em;
+    }
+
+    .controls select,
+    .controls input {
+        font-size: 16px; /* Prevent iOS zoom */
+        padding: 8px;
+    }
+}
 </style>
 {% endblock %}
 

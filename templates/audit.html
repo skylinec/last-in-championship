@@ -396,6 +396,48 @@
     background: var(--accent-color);
     color: white;
 }
+
+/* Add responsive styles */
+@media (max-width: 768px) {
+    .filters-container {
+        padding: 10px;
+    }
+
+    .filter-section {
+        grid-template-columns: 1fr;
+    }
+
+    .filter-group select[multiple] {
+        min-height: 100px;
+    }
+
+    .audit-container {
+        padding: 10px;
+        margin: 10px 0;
+        overflow-x: auto;
+    }
+
+    table {
+        font-size: 0.9em;
+    }
+
+    .change-item {
+        flex-wrap: wrap;
+    }
+
+    .field-name {
+        min-width: 60px;
+    }
+
+    .pagination {
+        flex-wrap: wrap;
+        gap: 10px;
+    }
+
+    .btn-nav {
+        width: 100%;
+    }
+}
 </style>
 
 <script>

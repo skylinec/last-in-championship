@@ -26,4 +26,46 @@
         <a href="{{ url_for('login') }}">Already have an account? Login</a>
     </div>
 </div>
+<style>
+.auth-container {
+    max-width: 400px;
+    margin: 40px auto;
+    padding: 20px;
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+}
+
+/* Add responsive styles */
+@media (max-width: 768px) {
+    .auth-container {
+        max-width: 100%;
+        margin: 20px 10px;
+        padding: 15px;
+    }
+
+    .auth-form input,
+    .auth-form button {
+        width: 100%;
+        box-sizing: border-box;
+        padding: 12px;
+        font-size: 16px;
+    }
+
+    .auth-form .form-group {
+        margin-bottom: 15px;
+    }
+
+    .warning-box {
+        font-size: 0.9em;
+        padding: 12px;
+        margin: 10px 0;
+    }
+
+    .auth-links {
+        text-align: center;
+        margin-top: 20px;
+    }
+}
+</style>
 {% endblock %}

@@ -1062,6 +1062,54 @@ scoring-explanation ul li::before {
     border-radius: 6px;
     box-shadow: 0 2px 4px rgba(0,0,0,0.1);
 }
+
+/* Add responsive styles */
+@media (max-width: 768px) {
+    .settings-container {
+        grid-template-columns: 1fr;
+        gap: 20px;
+        padding: 10px;
+    }
+
+    .settings-column,
+    .info-column {
+        padding: 15px;
+    }
+
+    .form-group input,
+    .form-group select {
+        width: 100%;
+    }
+
+    .remote-days-table,
+    .core-users-table,
+    .shift-lengths-table {
+        overflow-x: auto;
+    }
+
+    .settings-section {
+        margin-bottom: 20px;
+    }
+
+    .info-column {
+        position: static;
+        max-height: none;
+    }
+
+    .scoring-dsl-container {
+        grid-template-columns: 1fr;
+    }
+
+    .modal-content {
+        width: 95%;
+        margin: 2.5%;
+        padding: 10px;
+    }
+
+    .rules-documentation {
+        max-height: 200px;
+    }
+}
 </style>
 
 <script>

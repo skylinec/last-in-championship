@@ -335,16 +335,17 @@ async function checkForTieBreakers() {
 
     // Modified query to only check completed periods
     const tieCheckQuery = `
-      WITH period_ends AS (
-        -- Get the end of the last completed periods
+      WITH period_bounds AS (
+        -- Calculate completed periods only
         SELECT 'weekly' as period,
           date_trunc('week', current_date - interval '1 week')::date as period_start,
           (date_trunc('week', current_date - interval '1 week') + interval '6 days')::date as period_end
+        WHERE current_date > date_trunc('week', current_date)::date
         UNION ALL
         SELECT 'monthly',
           date_trunc('month', current_date - interval '1 month')::date,
           (date_trunc('month', current_date) - interval '1 day')::date
-        WHERE date_trunc('month', current_date) != date_trunc('month', current_date - interval '1 day')
+        WHERE current_date > date_trunc('month', current_date)::date
       ),
       user_scores AS (
         SELECT 
@@ -357,9 +358,9 @@ async function checkForTieBreakers() {
             PARTITION BY r.period, r.period_start::date, r.period_end::date, ROUND(r.points::numeric, 2)
           ) as tied_count
         FROM rankings r
-        INNER JOIN period_ends pe ON 
-          r.period = pe.period AND 
-          r.period_end::date = pe.period_end
+        INNER JOIN period_bounds pb ON 
+          r.period = pb.period AND 
+          r.period_end::date = pb.period_end
         WHERE EXISTS (
           SELECT 1 FROM entries e 
           WHERE e.name = r.username 

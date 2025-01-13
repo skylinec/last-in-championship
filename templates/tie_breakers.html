@@ -5,6 +5,15 @@
 <div class="tie-breakers-container">
     <h1>Championship Tie Breakers</h1>
 
+    <div class="info-box">
+        <p>Tie breakers are generated automatically when:</p>
+        <ul>
+            <li>A week or month has completed</li>
+            <li>Two or more players have exactly the same score</li>
+            <li>The tied players had at least one day of attendance during that period</li>
+        </ul>
+    </div>
+
     {% for tie in tie_breakers %}
     <div class="tie-breaker-card {{ tie.status }}">
         <div class="tie-header">
@@ -91,7 +100,7 @@
     </div>
     {% else %}
     <div class="no-tiebreakers">
-        <p>No active tie breakers at the moment.</p>
+        <p>No tie breakers available. Tie breakers will appear here when two or more players have the same score at the end of a week or month.</p>
     </div>
     {% endfor %}
 </div>
@@ -225,6 +234,24 @@
     background: #f0f0f0;
     border-radius: 4px;
     text-align: center;
+}
+
+.info-box {
+    background: #f8f9fa;
+    border: 1px solid #e9ecef;
+    border-radius: 4px;
+    padding: 15px;
+    margin-bottom: 20px;
+}
+
+.info-box ul {
+    margin: 10px 0;
+    padding-left: 20px;
+}
+
+.info-box li {
+    margin: 5px 0;
+    color: #666;
 }
 </style>
 {% endblock %}

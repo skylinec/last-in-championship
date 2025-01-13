@@ -151,21 +151,17 @@ function makeMove(pos) {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
-            'X-CSRF-Token': '{{ csrf_token }}'  // Add CSRF protection
+            'X-CSRF-Token': '{{ csrf_token }}'
         },
         body: JSON.stringify({ 
             move: parseInt(pos),
             game_type: 'tictactoe'
         })
     })
-    .then(response => {
-        if (!response.ok) {
-            throw new Error('Network response was not ok');
-        }
-        return response.json();
-    })
+    .then(response => response.json())
     .then(data => {
         if (data.success) {
+            // Either update the board directly or reload the page
             window.location.reload();
         } else {
             alert(data.message || 'Invalid move');
@@ -173,7 +169,7 @@ function makeMove(pos) {
     })
     .catch(error => {
         console.error('Error:', error);
-        alert('Failed to make move. Please try again.');
+        alert('Server error. Please try again.');
     });
 }
 

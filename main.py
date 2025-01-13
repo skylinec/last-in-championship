@@ -4013,33 +4013,36 @@ def check_tie_breaker_completion(db, tie_id):
 def make_move(game_id):
     db = SessionLocal()
     try:
+        # Get game with proper column selection
         game = db.execute(text("""
-            SELECT * FROM tie_breaker_games WHERE id = :game_id
+            SELECT g.*, g.game_state->>'current_player' as current_player 
+            FROM tie_breaker_games g 
+            WHERE id = :game_id
         """), {"game_id": game_id}).fetchone()
 
         if not game or session['user'] != game.current_player:
-            return jsonify({"error": "Invalid move"}), 400
+            return jsonify({"success": False, "message": "Not your turn"}), 400
 
         move = request.json.get('move')
         game_state = game.game_state
         
         if not is_valid_move(game_state, move, game.game_type):
-            return jsonify({"error": "Invalid move"}), 400
+            return jsonify({"success": False, "message": "Invalid move"}), 400
 
-        # Apply move
-        game_state = apply_move(game_state, move, session['user'], game.game_type)
-        winner = check_winner(game_state, game.game_type)
+        # Apply move and get updated state
+        updated_state = apply_move(game_state, move, session['user'], game.game_type)
+        winner = check_winner(updated_state, game.game_type)
 
-        # Update game state
+        # Update game state with proper JSON handling
         db.execute(text("""
             UPDATE tie_breaker_games 
-            SET game_state = :state,
+            SET game_state = :state::jsonb,
                 winner = :winner,
-                status = CASE WHEN :winner IS NOT NULL THEN 'completed' ELSE status END,
+                status = CASE WHEN :winner IS NOT NULL THEN 'completed' ELSE 'active' END,
                 completed_at = CASE WHEN :winner IS NOT NULL THEN NOW() ELSE NULL END
             WHERE id = :game_id
         """), {
-            "state": json.dumps(game_state),
+            "state": json.dumps(updated_state),
             "winner": winner,
             "game_id": game_id
         })
@@ -4059,15 +4062,15 @@ def make_move(game_id):
 
         db.commit()
         return jsonify({
-            "status": "success",
-            "state": game_state,
+            "success": True,
+            "state": updated_state,
             "winner": winner
         })
 
     except Exception as e:
         db.rollback()
         app.logger.error(f"Error processing move: {str(e)}")
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"success": False, "message": "Server error"}), 500
     finally:
         db.close()
 
@@ -4167,5 +4170,5 @@ if __name__ == "__main__":
 @app.route("/games/<int:game_id>/reset", methods=["POST"])
 @login_required
 def reset_game(game_id):
-    # ...existing code...
+    print("Passing")
     pass

@@ -99,7 +99,7 @@ services:
       - DB_NAME=/data/bugzilla.db
       - BUGZILLA_ADMIN_EMAIL=admin@example.com
       - BUGZILLA_ADMIN_PASS=adminpass
-      - BUGZILLA_URL=https://lic.mattdh.me/bugzilla
+      - BUGZILLA_URL=https://lic.mattdh.me/
     volumes:
       - bugzilla_data:/var/www/html/bugzilla/data
       - bugzilla_db:/data

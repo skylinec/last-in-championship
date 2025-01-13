@@ -57,6 +57,24 @@
             <div>
                 <h3>Seed Test Tie Breakers</h3>
                 <p>Create sample tie breakers for testing</p>
+                
+                <div class="user-selection">
+                    <h4>Select Users (optional)</h4>
+                    <p>Choose two users to create tie breakers between. If none selected, defaults to first two core users.</p>
+                    <select id="user1" class="user-select">
+                        <option value="">Select first user</option>
+                        {% for user in core_users %}
+                        <option value="{{ user }}">{{ user }}</option>
+                        {% endfor %}
+                    </select>
+                    <select id="user2" class="user-select">
+                        <option value="">Select second user</option>
+                        {% for user in core_users %}
+                        <option value="{{ user }}">{{ user }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                
                 <button onclick="seedTestData()" class="action-button">Seed Test Data</button>
             </div>
             <div>
@@ -490,6 +508,21 @@
     border-radius: 8px;
 }
 
+.user-selection {
+    margin: 15px 0;
+    padding: 15px;
+    background: #f8f9fa;
+    border-radius: 6px;
+}
+
+.user-select {
+    width: 100%;
+    padding: 8px;
+    margin: 5px 0;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+}
+
 @media (max-width: 768px) {
     .test-data-actions {
         grid-template-columns: 1fr;
@@ -806,9 +839,21 @@ async function seedTestData() {
     statusDiv.textContent = 'Creating test tie breakers...';
     statusDiv.style.display = 'block';
     
+    // Get selected users
+    const user1 = document.getElementById('user1').value;
+    const user2 = document.getElementById('user2').value;
+    let selectedUsers = [];
+    if (user1 && user2 && user1 !== user2) {
+        selectedUsers = [user1, user2];
+    }
+    
     try {
         const response = await fetch('/maintenance/seed-test-data', {
-            method: 'POST'
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ users: selectedUsers })
         });
         const data = await response.json();
         
@@ -823,6 +868,26 @@ async function seedTestData() {
         statusDiv.className = 'status-message error';
     }
 }
+
+// Prevent selecting same user in both dropdowns
+document.querySelectorAll('.user-select').forEach(select => {
+    select.addEventListener('change', function() {
+        const user1 = document.getElementById('user1');
+        const user2 = document.getElementById('user2');
+        
+        // Re-enable all options
+        user1.querySelectorAll('option').forEach(opt => opt.disabled = false);
+        user2.querySelectorAll('option').forEach(opt => opt.disabled = false);
+        
+        // Disable selected options in other dropdown
+        if (user1.value) {
+            user2.querySelector(`option[value="${user1.value}"]`).disabled = true;
+        }
+        if (user2.value) {
+            user1.querySelector(`option[value="${user2.value}"]`).disabled = true;
+        }
+    });
+});
 
 async function removeTestData() {
     const statusDiv = document.getElementById('seedStatus');

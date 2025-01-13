@@ -4848,10 +4848,23 @@ def seed_test_data():
     try:
         app.logger.info("Starting test data seeding...")
 
-        # Get core users
+        # Get selected users from request, fallback to first two core users
+        selected_users = request.json.get('users', []) if request.is_json else []
         settings = db.query(Settings).first()
-        core_users = settings.core_users[:2] if settings else ["Matt", "Nathan"]  # Use actual core users
-        app.logger.info(f"Using core users for test: {core_users}")
+        core_users = settings.core_users if settings else ["Matt", "Nathan"]
+        
+        # Use selected users if valid, otherwise use first two core users
+        test_users = []
+        if len(selected_users) >= 2:
+            # Validate selected users are core users
+            valid_users = [u for u in selected_users if u in core_users]
+            if len(valid_users) >= 2:
+                test_users = valid_users[:2]
+            
+        if not test_users:
+            test_users = core_users[:2]
+            
+        app.logger.info(f"Using users for test: {test_users}")
 
         created_ties = []
 
@@ -4861,7 +4874,7 @@ def seed_test_data():
         app.logger.info(f"Creating weekly tie breaker ending {week_end}")
         
         # Create test entries for the period to ensure valid tie breaker
-        for user in core_users:
+        for user in test_users:
             # Add a test entry for each user
             entry = Entry(
                 id=str(uuid.uuid4()),
@@ -4872,20 +4885,20 @@ def seed_test_data():
             )
             db.add(entry)
         
-        tie_id = create_test_tie_breaker(db, 'weekly', week_end, 10.0, 'last-in', core_users)
+        tie_id = create_test_tie_breaker(db, 'weekly', week_end, 10.0, 'last-in', test_users)
         if tie_id:
             app.logger.info(f"Created weekly tie breaker with ID: {tie_id}")
             created_ties.append(tie_id)
-            create_test_games(db, tie_id, core_users)
+            create_test_games(db, tie_id, test_users)
 
         # Create monthly tie breaker
         month_end = datetime.now().replace(day=1) - timedelta(days=1)
         app.logger.info(f"Creating monthly tie breaker ending {month_end}")
-        tie_id = create_test_tie_breaker(db, 'monthly', month_end, 15.0, 'early-bird', core_users)
+        tie_id = create_test_tie_breaker(db, 'monthly', month_end, 15.0, 'early-bird', test_users)
         if tie_id:
             app.logger.info(f"Created monthly tie breaker with ID: {tie_id}")
             created_ties.append(tie_id)
-            create_test_games(db, tie_id, core_users)
+            create_test_games(db, tie_id, test_users)
 
         db.commit()
         

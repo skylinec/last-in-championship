@@ -61,17 +61,19 @@ BEGIN
 END $$;
 
 -- Drop and recreate tie breakers table with correct schema
-DROP TABLE IF EXISTS tie_breaker_games;
-DROP TABLE IF EXISTS tie_breaker_participants;
-DROP TABLE IF EXISTS tie_breakers;
+DROP TABLE IF EXISTS tie_breaker_games CASCADE;
+DROP TABLE IF EXISTS tie_breaker_participants CASCADE;
+DROP TABLE IF EXISTS tie_breakers CASCADE;
 
 CREATE TABLE tie_breakers (
     id SERIAL PRIMARY KEY,
-    period VARCHAR(10) NOT NULL CHECK (period IN ('daily', 'weekly', 'monthly')),
+    period VARCHAR(10) NOT NULL CHECK (period IN ('weekly', 'monthly')),
     period_start TIMESTAMP NOT NULL,
     period_end TIMESTAMP NOT NULL,
-    points DECIMAL NOT NULL,
+    points DECIMAL(10,2) NOT NULL,  -- Add points column with proper precision
+    mode VARCHAR(20) NOT NULL CHECK (mode IN ('early-bird', 'last-in')),
     status VARCHAR(20) DEFAULT 'pending' CHECK (status IN ('pending', 'in_progress', 'completed')),
+    points_applied BOOLEAN DEFAULT false,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     resolved_at TIMESTAMP
 );
@@ -392,6 +394,29 @@ CREATE TRIGGER trg_refresh_rankings
 
 -- Initial refresh of the rankings view
 REFRESH MATERIALIZED VIEW rankings;
+
+-- Create active_users view
+CREATE OR REPLACE VIEW active_users AS
+WITH period_bounds AS (
+    SELECT DISTINCT
+        r.period,
+        r.period_end::date,
+        COUNT(DISTINCT e.name) as active_user_count
+    FROM rankings r
+    JOIN entries e ON e.date::date <= r.period_end::date 
+        AND e.date::date >= r.period_start::date
+    WHERE e.status IN ('in-office', 'remote')
+    GROUP BY r.period, r.period_end::date
+)
+SELECT * FROM period_bounds;
+
+-- Add indices for tie breakers
+CREATE INDEX idx_tie_breakers_period_end ON tie_breakers(period_end);
+CREATE INDEX idx_tie_breakers_points ON tie_breakers(points);
+CREATE INDEX idx_tie_breakers_status ON tie_breakers(status);
+CREATE UNIQUE INDEX idx_tie_breakers_unique_period ON 
+    tie_breakers(period, period_end, points, mode) 
+    WHERE status != 'completed';
 
 -- Create Mattermost DB
 \echo 'Creating Mattermost database if it does not exist'

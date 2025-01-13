@@ -4425,6 +4425,7 @@ CORS(app, resources={
             "http://localhost:9000",
             "http://127.0.0.1:9000",
             "http://localhost:5000",
+            "https://lic.mattdh.me",  # Add production domain
             os.getenv('ALLOWED_ORIGIN', '*')
         ],
         "methods": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
@@ -4441,11 +4442,18 @@ CORS(app, resources={
 
 @app.after_request 
 def add_security_headers(response):
-    # Update CORS headers for development
-    if os.getenv('FLASK_ENV') == 'development':
-        response.headers['Access-Control-Allow-Origin'] = request.headers.get('Origin', '*')
+    allowed_origins = [
+        "http://localhost:9000",
+        "http://127.0.0.1:9000",
+        "http://localhost:5000", 
+        "https://lic.mattdh.me"
+    ]
+    origin = request.headers.get('Origin')
+    
+    if origin in allowed_origins or os.getenv('FLASK_ENV') == 'development':
+        response.headers['Access-Control-Allow-Origin'] = origin
         response.headers['Access-Control-Allow-Credentials'] = 'true'
-        
+    
     return response
 
 # Initialize Socket.IO with optimized settings
@@ -4456,6 +4464,7 @@ socketio = SocketIO(
         "http://localhost:9000",
         "http://127.0.0.1:9000", 
         "http://localhost:5000",
+        "https://lic.mattdh.me",  # Add production domain
         os.getenv('ALLOWED_ORIGIN', '*')
     ],
     logger=True,

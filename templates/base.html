@@ -29,9 +29,9 @@
             box-shadow: 0 2px 5px rgba(0,0,0,0.1);
             display: flex;
             align-items: center;
-            gap: 10px;
+            justify-content: space-between; /* Add this */
             position: relative;
-            flex-wrap: wrap;
+            z-index: 1000; /* Ensure nav is above other elements */
         }
 
         .nav-links {
@@ -634,25 +634,27 @@
             }
 
             .hamburger {
-                display: flex;  /* Show in mobile */
-                position: relative;
-                margin-right: 10px;
+                display: flex;
+                margin-left: 10px;
+                position: absolute;
+                top: 15px;
+                left: 15px;
             }
 
             .hamburger.active .bar:nth-child(1) {
-                transform: translateY(8px) rotate(45deg);
-            }
+        transform: translateY(10px) rotate(45deg);
+    }
 
-            .hamburger.active .bar:nth-child(2) {
-                opacity: 0;
-            }
+    .hamburger.active .bar:nth-child(2) {
+        opacity: 0;
+    }
 
-            .hamburger.active .bar:nth-child(3) {
-                transform: translateY(-8px) rotate(-45deg);
-            }
+    .hamburger.active .bar:nth-child(3) {
+        transform: translateY(-10px) rotate(-45deg);
+    }
 
             .nav-links {
-                display: none;  /* Hidden by default */
+                display: none;
                 position: fixed;
                 top: 0;
                 left: 0;
@@ -660,12 +662,13 @@
                 bottom: 0;
                 background: var(--primary-color);
                 flex-direction: column;
-                padding: 60px 20px 20px;
+                align-items: flex-start;
+                padding: 80px 20px 20px;
                 z-index: 1001;
-            }
+                }
 
             .nav-links.active {
-                display: flex;  /* Show when active */
+                display: flex;
             }
 
             .nav-item {
@@ -793,7 +796,6 @@
             height: 3px;
             background-color: white;
             transition: all 0.3s ease;
-            border-radius: 2px;
         }
     </style>
     {% block head %}{% endblock %}

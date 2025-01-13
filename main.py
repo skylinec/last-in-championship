@@ -4286,115 +4286,68 @@ def create_next_game_after_draw(db, tie_breaker_id, game_type, player1, player2)
 def make_move(game_id):
     db = SessionLocal()
     try:
-        # Get game with type information
-        game = db.execute(text("""
-            SELECT g.*, t.status as tie_breaker_status
-            FROM tie_breaker_games g
-            JOIN tie_breakers t ON g.tie_breaker_id = t.id
-            WHERE g.id = :game_id
-            FOR UPDATE
-        """), {"game_id": game_id}).fetchone()
-
-        if not game:
-            return jsonify({"success": False, "message": "Game not found"}), 404
-
-        # Add game type to game state if not present
-        game_state = game.game_state if isinstance(game.game_state, dict) else json.loads(game.game_state)
-        game_state['game_type'] = game.game_type
-
-        # Get move from request
-        move = request.json.get('move')
-        if move is None:
-            return jsonify({"success": False, "message": "No move provided"}), 400
-
-        current_user = session.get('user')
-        if current_user != game_state.get('current_player'):
-            return jsonify({"success": False, "message": "Not your turn"}), 400
-
-        try:
-            # Apply move and get updated state
-            updated_state = apply_move(game_state, move, current_user)
-            winner = check_winner(updated_state, game.game_type)
+        data = request.get_json()
+        if not data:
+            return jsonify({"success": False, "message": "No data provided"}), 400
             
-            # Emit game update through WebSocket
-            try:
-                socketio.emit('game_update', {
-                    'game_id': game_id,
-                    'state': updated_state,
-                    'winner': winner,
-                    'current_player': updated_state.get('current_player')
-                }, room=f'game_{game_id}', namespace='/')
-            except Exception as ws_error:
-                app.logger.warning(f"WebSocket emit failed: {str(ws_error)}")
-
-            if winner == 'draw':
-                app.logger.info(f"Game {game_id} ended in a draw")
-                # Create new game with same players
-                new_game_id = create_next_game_after_draw(
-                    db, 
-                    game.tie_breaker_id,
-                    game.game_type,
-                    game.player1,
-                    game.player2
-                )
+        move = data.get('move')
+        game_type = data.get('game_type')
+        
+        game = db.query(TieBreakerGame).filter(TieBreakerGame.id == game_id).first()
+        if not game or game.status != 'active':
+            return jsonify({"success": False, "message": "Invalid game"}), 400
+            
+        # Validate move
+        game_state = game.game_state
+        if game_type == 'tictactoe':
+            if move < 0 or move > 8 or game_state['board'][move]:
+                return jsonify({"success": False, "message": "Invalid move"}), 400
+            game_state['board'][move] = game.current_player
+            
+        elif game_type == 'connect4':
+            if move < 0 or move > 6:
+                return jsonify({"success": False, "message": "Invalid column"}), 400
+            # Find first empty cell in column
+            col = move
+            for row in range(5, -1, -1):
+                index = row * 7 + col 
+                if not game_state['board'][index]:
+                    game_state['board'][index] = game.current_player
+                    break
+            else:
+                return jsonify({"success": False, "message": "Column full"}), 400
                 
-                # Mark current game as completed
-                db.execute(text("""
-                    UPDATE tie_breaker_games 
-                    SET game_state = :state,
-                        status = 'completed',
-                        winner = NULL
-                    WHERE id = :game_id
-                """), {
-                    "state": json.dumps(updated_state),
-                    "game_id": game_id
-                })
-                
-                db.commit()
-                
-                return jsonify({
-                    "success": True,
-                    "state": updated_state,
-                    "winner": "draw",
-                    "next_game": new_game_id
-                })
-            
-            # Normal win/continue case
-            db.execute(text("""
-                UPDATE tie_breaker_games 
-                SET game_state = :state,
-                    winner = :winner,
-                    status = CASE 
-                        WHEN :winner IS NOT NULL THEN 'completed'
-                        ELSE 'active'
-                    END
-                WHERE id = :game_id
-            """), {
-                "state": json.dumps(updated_state),
-                "winner": winner if winner not in ['draw', None] else None,
-                "game_id": game_id
-            })
-
-            if winner and winner != 'draw':
-                check_tie_breaker_completion(db, game.tie_breaker_id)
-            
-            db.commit()
-            
-            return jsonify({
-                "success": True,
-                "state": updated_state,
-                "winner": winner
-            })
-            
-        except ValueError as e:
-            return jsonify({"success": False, "message": str(e)}), 400
-            
+        # Update game state
+        game.game_state = game_state
+        
+        # Switch current player
+        game.current_player = game.player2 if game.current_player == game.player1 else game.player1
+        
+        # Check for winner
+        winner = check_winner(game_state['board'], game_type)
+        if winner:
+            game.status = 'completed'
+            game.winner = winner
+            game.completed_at = datetime.now()
+        
+        db.commit()
+        
+        # Emit game update via WebSocket
+        socketio.emit('game_update', {
+            'state': game_state,
+            'current_player': game.current_player,
+            'winner': winner
+        }, room=f"game_{game_id}")
+        
+        return jsonify({"success": True})
+        
     except Exception as e:
         db.rollback()
-        app.logger.error(f"Error processing move: {str(e)}")
-        return jsonify({"success": False, "message": "Server error"}), 500
+        print(f"Error making move: {str(e)}")
+        return jsonify({"success": False, "message": str(e)}), 500
     finally:
         db.close()
+
 
 def calculate_streak_for_date(username, target_date, db):
     """Calculate streak up to a specific date with proper day handling"""
@@ -4479,6 +4432,8 @@ CORS(app, resources={
     }
 })
 
+eventlet.monkey_patch()
+
 # Initialize Socket.IO with optimized settings
 socketio = SocketIO(
     app,
@@ -4494,29 +4449,22 @@ socketio = SocketIO(
 
 @socketio.on('connect')
 def handle_connect():
-    app.logger.info(f"Client connected: {request.sid}")
+    print("Client connected")
 
 @socketio.on('disconnect')
 def handle_disconnect():
-    app.logger.info(f"Client disconnected: {request.sid}")
+    print("Client disconnected")
 
 @socketio.on('join_game')
-def on_join_game(data):
-    """Join game room with error handling"""
-    try:
-        game_id = data.get('game_id')
-        if game_id:
-            join_room(f'game_{game_id}')
-            app.logger.info(f"Player {request.sid} joined game {game_id}")
-            emit('joined', {'game_id': game_id}, room=f'game_{game_id}')
-    except Exception as e:
-        app.logger.error(f"Error joining game: {str(e)}")
-
-@socketio.on('leave_game')
-def on_leave_game(data):
-    """Leave game room"""
+def handle_join_game(data):
     game_id = data['game_id']
-    leave_room(f'game_{game_id}')
+    join_room(f"game_{game_id}")
+    emit('joined', {'game_id': game_id})
+
+@socketio.on('leave_game')  
+def handle_leave_game(data):
+    game_id = data['game_id']
+    leave_room(f"game_{game_id}")
 
 def notify_game_update(game_id, game_state, winner=None):
     """Notify players of game state changes"""

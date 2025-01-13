@@ -2593,8 +2593,8 @@ def build_dynamic_query(db, params):
         elif "month" in params["date_range"]:
             start_date = date.replace(day=1)
             if "last" in params["date_range"]:
-                start_date = (start_date - timedelta(days=1).replace(day=1))
-            next_month = (start_date.replace(day=28) + timedelta(days=4).replace(day=1))
+                start_date = (start_date - timedelta(days=1)).replace(day=1)
+            next_month = (start_date.replace(day=28) + timedelta(days=4)).replace(day=1)
             query = query.filter(Entry.date.between(start_date.isoformat(), (next_month - timedelta(days=1)).isoformat()))
         else:
             query = query.filter(Entry.date == date.isoformat())
@@ -4726,3 +4726,202 @@ def create_tie_breaker(db, period_end, points, mode, users):
     except Exception as e:
         app.logger.error(f"Error creating tie breaker: {str(e)}")
         raise
+
+# ...existing code...
+
+# ...existing code...
+
+@app.route("/maintenance/seed-test-data", methods=["POST"])
+@login_required
+def seed_test_data():
+    db = SessionLocal()
+    try:
+        # Log the action
+        log_audit(
+            "seed_test_data",
+            session['user'],
+            "Seeding test tie breaker data"
+        )
+
+        # Get core users
+        settings = db.query(Settings).first()
+        core_users = settings.core_users[:2] if settings else ["TestUser1", "TestUser2"]
+
+        # Create test tie breakers
+        # Last week tie breaker
+        last_week = datetime.now() - timedelta(days=7)
+        week_start = last_week - timedelta(days=last_week.weekday())
+        week_end = week_start + timedelta(days=6)
+        
+        # Create a weekly tie breaker
+        tie_id = create_test_tie_breaker(db, 'weekly', week_end, 10.0, 'last-in', core_users)
+        if tie_id:
+            # Create some test games
+            create_test_games(db, tie_id, core_users)
+
+        # Create a monthly tie breaker
+        month_end = datetime.now().replace(day=1) - timedelta(days=1)  # End of last month
+        tie_id = create_test_tie_breaker(db, 'monthly', month_end, 15.0, 'early-bird', core_users)
+        if tie_id:
+            create_test_games(db, tie_id, core_users)
+
+        db.commit()
+        
+        return jsonify({
+            "message": "Test data seeded successfully",
+            "type": "success"
+        })
+
+    except Exception as e:
+        db.rollback()
+        return jsonify({
+            "message": f"Error seeding test data: {str(e)}",
+            "type": "error"
+        }), 500
+    finally:
+        db.close()
+
+@app.route("/maintenance/remove-test-data", methods=["POST"])
+@login_required
+def remove_test_data():
+    db = SessionLocal()
+    try:
+        # Log the action
+        log_audit(
+            "remove_test_data",
+            session['user'],
+            "Removing test tie breaker data"
+        )
+
+        # Delete test tie breakers (will cascade to games and participants)
+        result = db.execute(text("""
+            DELETE FROM tie_breakers
+            WHERE period_end > CURRENT_DATE - INTERVAL '30 days'
+            AND (
+                player1 LIKE 'Test%'
+                OR player2 LIKE 'Test%'
+                OR EXISTS (
+                    SELECT 1 FROM tie_breaker_participants
+                    WHERE tie_breaker_id = tie_breakers.id
+                    AND username LIKE 'Test%'
+                )
+            )
+        """))
+
+        db.commit()
+        
+        return jsonify({
+            "message": f"Removed {result.rowcount} test tie breakers",
+            "type": "success"
+        })
+
+    except Exception as e:
+        db.rollback()
+        return jsonify({
+            "message": f"Error removing test data: {str(e)}",
+            "type": "error"
+        }), 500
+    finally:
+        db.close()
+
+def create_test_tie_breaker(db, period, period_end, points, mode, users):
+    """Helper function to create a test tie breaker"""
+    period_start = period_end - timedelta(days=6 if period == 'weekly' else 30)
+    
+    result = db.execute(text("""
+        INSERT INTO tie_breakers (
+            period,
+            period_start,
+            period_end,
+            points,
+            mode,
+            status
+        ) VALUES (
+            :period,
+            :period_start,
+            :period_end,
+            :points,
+            :mode,
+            'in_progress'
+        ) RETURNING id
+    """), {
+        "period": period,
+        "period_start": period_start,
+        "period_end": period_end,
+        "points": points,
+        "mode": mode
+    })
+
+    tie_id = result.fetchone()[0]
+
+    # Add participants
+    for user in users:
+        db.execute(text("""
+            INSERT INTO tie_breaker_participants (
+                tie_breaker_id, 
+                username,
+                game_choice,
+                ready
+            ) VALUES (
+                :tie_id,
+                :username,
+                :game_choice,
+                true
+            )
+        """), {
+            "tie_id": tie_id,
+            "username": user,
+            "game_choice": random.choice(['tictactoe', 'connect4'])
+        })
+
+    return tie_id
+
+def create_test_games(db, tie_id, users):
+    """Helper function to create test games for a tie breaker"""
+    if len(users) < 2:
+        return
+
+    game_types = ['tictactoe', 'connect4']
+    
+    # Create one of each game type
+    for game_type in game_types:
+        # Randomly assign players
+        player1, player2 = random.sample(users, 2)
+        
+        # Initialize game state
+        board_size = 9 if game_type == 'tictactoe' else 42
+        game_state = {
+            'board': [None] * board_size,
+            'moves': [],
+            'current_player': player1,
+            'player1': player1,
+            'player2': player2,
+            'game_type': game_type
+        }
+
+        # Create game
+        db.execute(text("""
+            INSERT INTO tie_breaker_games (
+                tie_breaker_id,
+                game_type,
+                player1,
+                player2,
+                status,
+                game_state
+            ) VALUES (
+                :tie_id,
+                :game_type,
+                :player1,
+                :player2,
+                'active',
+                :game_state
+            )
+        """), {
+            "tie_id": tie_id,
+            "game_type": game_type,
+            "player1": player1,
+            "player2": player2,
+            "game_state": json.dumps(game_state)
+        })
+
+# ...rest of existing code...

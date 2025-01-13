@@ -52,6 +52,22 @@
     </div>
 
     <div class="maintenance-section">
+        <h2>Test Data Management</h2>
+        <div class="test-data-actions">
+            <div>
+                <h3>Seed Test Tie Breakers</h3>
+                <p>Create sample tie breakers for testing</p>
+                <button onclick="seedTestData()" class="action-button">Seed Test Data</button>
+            </div>
+            <div>
+                <h3>Remove Test Data</h3>
+                <p>Remove all test tie breakers and related data</p>
+                <button onclick="removeTestData()" class="action-button warning">Remove Test Data</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="maintenance-section">
         <h2>Monitoring Logs</h2>
         <div class="log-viewer">
             <div class="log-controls">
@@ -460,6 +476,24 @@
         margin: 5% auto;
     }
 }
+
+.test-data-actions {
+    display: grid;
+    gap: 20px;
+    margin-top: 15px;
+}
+
+.test-data-actions > div {
+    background: #f8f9fa;
+    padding: 15px;
+    border-radius: 8px;
+}
+
+@media (max-width: 768px) {
+    .test-data-actions {
+        grid-template-columns: 1fr;
+    }
+}
 </style>
 
 <script>
@@ -764,6 +798,36 @@ function resetStreaks() {
     .catch(error => {
         showStatus('Error resetting streaks: ' + error, 'error');
     });
+}
+
+function seedTestData() {
+    if (confirm('Are you sure you want to seed test tie breakers?')) {
+        fetch('/maintenance/seed-test-data', {
+            method: 'POST'
+        })
+        .then(response => response.json())
+        .then(data => {
+            showStatus(data.message, data.type || 'success');
+        })
+        .catch(error => {
+            showStatus('Error seeding test data: ' + error, 'error');
+        });
+    }
+}
+
+function removeTestData() {
+    if (confirm('Are you sure you want to remove all test tie breakers?')) {
+        fetch('/maintenance/remove-test-data', {
+            method: 'POST'
+        })
+        .then(response => response.json())
+        .then(data => {
+            showStatus(data.message, data.type || 'success');
+        })
+        .catch(error => {
+            showStatus('Error removing test data: ' + error, 'error');
+        });
+    }
 }
 </script>
 {% endblock %}

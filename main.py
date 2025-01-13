@@ -3494,7 +3494,7 @@ def health_check():
 def tie_breakers():
     db = SessionLocal()
     try:
-        # Modified query to properly fetch all relevant games
+        # Modified query to properly fetch all games for all participants
         tie_breakers = db.execute(text("""
             WITH tie_breakers_cte AS (
                 SELECT 
@@ -3506,13 +3506,13 @@ def tie_breakers():
                     t.status,
                     t.created_at,
                     t.resolved_at,
-                    jsonb_agg(distinct jsonb_build_object(
+                    jsonb_agg(DISTINCT jsonb_build_object(
                         'username', tp.username,
                         'game_choice', tp.game_choice,
                         'ready', tp.ready,
                         'winner', tp.winner
-                    )) as participants,
-                    jsonb_agg(distinct jsonb_build_object(
+                    )) FILTER (WHERE tp.username IS NOT NULL) as participants,
+                    jsonb_agg(DISTINCT jsonb_build_object(
                         'id', g.id,
                         'game_type', g.game_type,
                         'player1', g.player1,
@@ -3532,24 +3532,30 @@ def tie_breakers():
             ORDER BY created_at DESC
         """)).fetchall()
 
+        # Add debug logging
+        app.logger.debug("Processing tie breakers...")
+
         formatted_tie_breakers = []
         for tb in tie_breakers:
             tie_breaker_dict = dict(tb)
             
+            # Debug log the raw data
+            app.logger.debug(f"Raw tie breaker data: {tie_breaker_dict}")
+            
             # Ensure games list is properly initialized
-            tie_breaker_dict['games'] = (
-                [] if tie_breaker_dict['games'] is None 
-                else json.loads(tie_breaker_dict['games'])
-                if isinstance(tie_breaker_dict['games'], str)
-                else tie_breaker_dict['games']
-            )
+            if tie_breaker_dict['games'] is None:
+                tie_breaker_dict['games'] = []
+            elif isinstance(tie_breaker_dict['games'], str):
+                tie_breaker_dict['games'] = json.loads(tie_breaker_dict['games'])
             
             # Ensure participants list is properly initialized
-            tie_breaker_dict['participants'] = (
-                json.loads(tie_breaker_dict['participants'])
-                if isinstance(tie_breaker_dict['participants'], str)
-                else tie_breaker_dict['participants']
-            )
+            if tie_breaker_dict['participants'] is None:
+                tie_breaker_dict['participants'] = []
+            elif isinstance(tie_breaker_dict['participants'], str):
+                tie_breaker_dict['participants'] = json.loads(tie_breaker_dict['participants'])
+            
+            # Debug log the processed data
+            app.logger.debug(f"Processed tie breaker: Games: {len(tie_breaker_dict['games'])}, Participants: {len(tie_breaker_dict['participants'])}")
             
             formatted_tie_breakers.append(tie_breaker_dict)
 

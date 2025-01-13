@@ -46,7 +46,7 @@
             <div class="available-games">
                 <h4>Available Games</h4>
                 {% for game in tie.games %}
-                    {% if game.status == 'pending' %}
+                    {% if game.status == 'pending' and not game.player2 %}
                         {% if current_user == game.player1 %}
                             <div class="game-entry">
                                 <p class="pending-message">Waiting for opponent to join {{ game.game_type|title }} game</p>
@@ -64,17 +64,17 @@
                         <div class="game-entry">
                             {% if current_user in [game.player1, game.player2] %}
                                 <a href="{{ url_for('play_game', game_id=game.id) }}" class="btn game-link">
-                                    Continue {{ game.game_type|title }} game
+                                    Continue {{ game.game_type|title }} against {% if current_user == game.player1 %}{{ game.player2 }}{% else %}{{ game.player1 }}{% endif %}
                                 </a>
                             {% else %}
                                 <a href="{{ url_for('play_game', game_id=game.id) }}" class="btn game-link spectate">
-                                    Watch {{ game.game_type|title }} game
+                                    Watch {{ game.game_type|title }}: {{ game.player1 }} vs {{ game.player2 }}
                                 </a>
                             {% endif %}
                         </div>
                     {% endif %}
                 {% endfor %}
-
+                
                 {% if not tie.games %}
                     <p class="no-games">No active games available.</p>
                 {% endif %}

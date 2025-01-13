@@ -4059,50 +4059,49 @@ def join_game(game_id):
         # Start transaction
         db.execute('BEGIN')
 
-        # Get game with explicit locking
+        # First verify the game exists and can be joined
         game = db.execute(text("""
-            SELECT * FROM tie_breaker_games 
-            WHERE id = :game_id 
-            AND status = 'pending'
-            AND player2 IS NULL
+            SELECT g.*, tb.status as tie_breaker_status
+            FROM tie_breaker_games g
+            JOIN tie_breakers tb ON g.tie_breaker_id = tb.id
+            WHERE g.id = :game_id
             FOR UPDATE NOWAIT
         """), {"game_id": game_id}).fetchone()
 
         if not game:
             db.execute('ROLLBACK')
-            # Check why the game wasn't found
-            game_status = db.execute(text("""
-                SELECT status, player1, player2 
-                FROM tie_breaker_games 
-                WHERE id = :game_id
-            """), {"game_id": game_id}).fetchone()
-            
-            if not game_status:
-                return jsonify({"error": "Game not found"}), 404
-            elif game_status.player2:
-                return jsonify({"error": "Game already has two players"}), 400
-            elif game_status.status != 'pending':
-                return jsonify({"error": f"Game is {game_status.status}"}), 400
-            else:
-                return jsonify({"error": "Could not join game"}), 400
+            return jsonify({"error": "Game not found"}), 404
+
+        # Check game state
+        if game.player2:
+            db.execute('ROLLBACK')
+            return jsonify({"error": "Game already has two players"}), 400
+        if game.status != 'pending':
+            db.execute('ROLLBACK')
+            return jsonify({"error": f"Game is {game.status}"}), 400
+        if game.tie_breaker_status != 'in_progress':
+            db.execute('ROLLBACK')
+            return jsonify({"error": "Tie breaker is not in progress"}), 400
 
         current_user = session.get('user')
         if not current_user:
             db.execute('ROLLBACK')
             return jsonify({"error": "Not logged in"}), 401
-
         if current_user == game.player1:
             db.execute('ROLLBACK')
-            return jsonify({"error": "You are already player1 in this game"}), 400
+            return jsonify({"error": "You cannot join your own game"}), 400
 
         # Update game state
-        game_state = json.loads(game.game_state)
+        game_state = json.loads(game.game_state) if game.game_state else {}
         game_state.update({
-            'player2': current_user,
-            'current_player': game.player1  # Ensure player1 starts
+            'board': [None] * (9 if game.game_type == 'tictactoe' else 42),
+            'moves': [],
+            'current_player': game.player1,
+            'player1': game.player1,
+            'player2': current_user
         })
 
-        # Update game with player2 and activate it
+        # Update game
         result = db.execute(text("""
             UPDATE tie_breaker_games 
             SET player2 = :player2,
@@ -4120,11 +4119,18 @@ def join_game(game_id):
 
         if not result.rowcount:
             db.execute('ROLLBACK')
-            return jsonify({"error": "Game already taken"}), 400
+            return jsonify({"error": "Failed to join game"}), 400
 
-        # Commit transaction
+        # Log the action
+        log_audit(
+            "join_game",
+            current_user,
+            f"Joined game {game_id} against {game.player1}",
+            new_data={"game_id": game_id, "player1": game.player1, "player2": current_user}
+        )
+
         db.execute('COMMIT')
-        return jsonify({"success": True})
+        return jsonify({"success": True, "redirect": url_for('play_game', game_id=game_id)})
 
     except Exception as e:
         db.execute('ROLLBACK')
@@ -4132,3 +4138,5 @@ def join_game(game_id):
         return jsonify({"error": str(e)}), 500
     finally:
         db.close()
+
+# ...existing code...

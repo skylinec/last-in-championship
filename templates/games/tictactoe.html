@@ -278,18 +278,33 @@ document.addEventListener('DOMContentLoaded', function() {
                 turnDiv.textContent = `Current Turn: ${currentPlayer}`;
             }
 
-            // Handle game completion
-            if (data.winner || data.state.winner) {
-                const winner = data.winner || data.state.winner;
+            // Handle game completion states
+            if (data.gameStatus === 'completed') {
+                const winner = data.winner;
+                // Update game status display immediately
+                const statusDiv = document.querySelector('.game-status');
+                if (statusDiv) {
+                    if (winner === 'draw') {
+                        statusDiv.innerHTML = '<div class="draw">It\'s a draw!</div>';
+                    } else {
+                        statusDiv.innerHTML = `<div class="winner">Winner: ${winner}</div>`;
+                    }
+                }
+
+                // Show alert and handle redirection after a short delay
                 setTimeout(() => {
                     if (winner === 'draw') {
                         alert("Game ended in a draw! A new game will start with reversed player order.");
-                        window.location.reload();
+                        if (data.next_game) {
+                            window.location.href = `/games/${data.next_game}`;
+                        } else {
+                            window.location.reload();
+                        }
                     } else {
                         alert(`${winner} wins!`);
                         window.location.reload();
                     }
-                }, 100);
+                }, 500);
             }
         });
 

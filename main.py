@@ -4419,63 +4419,62 @@ def calculate_streak_for_date(username, target_date, db):
         return 0
 
 CORS(app, resources={
-    # Allow all routes with appropriate settings
     r"/*": {
-        "origins": [
-            "http://localhost:9000",
-            "http://127.0.0.1:9000",
-            "http://localhost:5000",
-            "https://lic.mattdh.me",  # Add production domain
-            os.getenv('ALLOWED_ORIGIN', '*')
-        ],
-        "methods": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+        "origins": "*",
         "allow_headers": ["Content-Type", "Authorization"],
         "expose_headers": ["Content-Range", "X-Total-Count"],
         "supports_credentials": True
     },
-    # Special config for WebSocket endpoints
     r"/socket.io/*": {
         "origins": "*",
-        "allow_credentials": True
+        "allow_credentials": True,
+        "allow_headers": ["Content-Type", "Authorization"],
+        "expose_headers": ["Content-Range", "X-Total-Count"]
     }
 })
 
-@app.after_request 
+@app.after_request
 def add_security_headers(response):
+    """Add required CORS headers for WebSocket support"""
+    origin = request.headers.get('Origin')
     allowed_origins = [
         "http://localhost:9000",
         "http://127.0.0.1:9000",
-        "http://localhost:5000", 
         "https://lic.mattdh.me"
     ]
-    origin = request.headers.get('Origin')
     
-    if origin in allowed_origins or os.getenv('FLASK_ENV') == 'development':
+    if origin in allowed_origins:
         response.headers['Access-Control-Allow-Origin'] = origin
         response.headers['Access-Control-Allow-Credentials'] = 'true'
-    
+        response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
+        response.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, PATCH, DELETE, OPTIONS'
+        
+    # Add WebSocket-specific headers
+    if request.environ.get('HTTP_UPGRADE') == 'websocket':
+        response.headers['Upgrade'] = 'websocket'
+        response.headers['Connection'] = 'Upgrade'
+        
     return response
 
 # Initialize Socket.IO with optimized settings
 socketio = SocketIO(
     app,
     async_mode='gevent',
-    cors_allowed_origins=[
-        "http://localhost:9000",
-        "http://127.0.0.1:9000", 
-        "http://localhost:5000",
-        "https://lic.mattdh.me",  # Add production domain
-        os.getenv('ALLOWED_ORIGIN', '*')
-    ],
+    cors_allowed_origins="*", 
+    ping_timeout=20,
+    ping_interval=25,
     logger=True,
     engineio_logger=True,
-    ping_timeout=20,
-    ping_interval=25
+    path='socket.io'  # Specify explicit path
 )
 
 @socketio.on('connect')
-def handle_connect():
-    print("Client connected")
+def on_connect():
+    app.logger.info(f"Client connected from {request.origin}")
+    if request.origin not in socketio.cors_allowed_origins:
+        app.logger.warning(f"Rejected connection from {request.origin}")
+        return False
+    return True
 
 @socketio.on('disconnect')
 def handle_disconnect():
@@ -4577,7 +4576,7 @@ if __name__ == "__main__":
         host='0.0.0.0',
         port=9000,
         debug=True,
-        use_reloader=True,
+        allow_unsafe_werkzeug=True,  # Add this for development
         log_output=True
     )
 

@@ -186,28 +186,44 @@ document.addEventListener('DOMContentLoaded', function() {
             socket.close();
         }
 
+        // Get the current protocol (http/https)
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const host = window.location.host;
+
         socket = io({
             path: '/socket.io',
             transports: ['websocket', 'polling'],
+            secure: window.location.protocol === 'https:',
+            rejectUnauthorized: false,
             reconnection: true,
             reconnectionAttempts: 5,
             reconnectionDelay: 1000,
             reconnectionDelayMax: 5000,
-            autoConnect: true
+            autoConnect: true,
+            withCredentials: true,
+            extraHeaders: {
+                'Origin': window.location.origin
+            }
+        });
+
+        // Add connection error handling
+        socket.on('connect_error', (error) => {
+            console.error('Connection error:', error);
+            if (retryCount < maxRetries) {
+                retryCount++;
+                // Fall back to polling if WebSocket fails
+                if (socket.io.opts.transports[0] === 'websocket') {
+                    console.log('Falling back to polling transport');
+                    socket.io.opts.transports = ['polling', 'websocket'];
+                }
+                setTimeout(connectSocket, retryDelay * retryCount);
+            }
         });
 
         socket.on('connect', function() {
             console.log('Connected to server');
             socket.emit('join_game', { game_id: {{ game.id }} });
             retryCount = 0; // Reset retry count on successful connection
-        });
-
-        socket.on('connect_error', function(error) {
-            console.error('Connection error:', error);
-            retryCount++;
-            if (retryCount <= maxRetries) {
-                setTimeout(connectSocket, retryDelay * retryCount);
-            }
         });
 
         socket.on('game_update', function(data) {

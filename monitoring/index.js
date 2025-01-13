@@ -333,22 +333,18 @@ async function checkForTieBreakers() {
       return;
     }
 
-    // Modified query with proper tie detection
+    // Modified query to only check completed periods
     const tieCheckQuery = `
-      WITH period_entries AS (
-        SELECT DISTINCT
-          e.date,
-          CASE 
-            WHEN extract(dow from e.date::date) = 0 THEN e.date::date - interval '6 days'
-            ELSE e.date::date - (extract(dow from e.date::date) - 1 || ' days')::interval
-          END as week_start,
-          date_trunc('month', e.date::date)::date as month_start
-        FROM entries e
-        WHERE e.status IN ('in-office', 'remote')
-        AND e.date::date >= CASE 
-          WHEN $1 = true THEN (CURRENT_DATE - INTERVAL '7 days')::date
-          ELSE (SELECT monitoring_start_date FROM settings LIMIT 1)::date
-        END
+      WITH period_ends AS (
+        -- Get the end of the last completed periods
+        SELECT 'weekly' as period,
+          date_trunc('week', current_date - interval '1 week')::date as period_start,
+          (date_trunc('week', current_date - interval '1 week') + interval '6 days')::date as period_end
+        UNION ALL
+        SELECT 'monthly',
+          date_trunc('month', current_date - interval '1 month')::date,
+          (date_trunc('month', current_date) - interval '1 day')::date
+        WHERE date_trunc('month', current_date) != date_trunc('month', current_date - interval '1 day')
       ),
       user_scores AS (
         SELECT 
@@ -358,51 +354,42 @@ async function checkForTieBreakers() {
           r.username,
           r.points,
           COUNT(*) OVER (
-            PARTITION BY r.period, r.period_start::date, r.period_end::date, r.points
-          ) as tied_count,
-          EXISTS (
-            SELECT 1 FROM entries e 
-            WHERE e.name = r.username 
-            AND e.date::date BETWEEN r.period_start AND r.period_end
-            AND e.status IN ('in-office', 'remote')
-          ) as has_attendance
+            PARTITION BY r.period, r.period_start::date, r.period_end::date, ROUND(r.points::numeric, 2)
+          ) as tied_count
         FROM rankings r
+        INNER JOIN period_ends pe ON 
+          r.period = pe.period AND 
+          r.period_end::date = pe.period_end
         WHERE EXISTS (
-          SELECT 1 FROM period_entries pe
-          WHERE (r.period = 'weekly' AND r.period_start = pe.week_start)
-          OR (r.period = 'monthly' AND r.period_start = pe.month_start)
+          SELECT 1 FROM entries e 
+          WHERE e.name = r.username 
+          AND e.date::date BETWEEN r.period_start AND r.period_end
+          AND e.status IN ('in-office', 'remote')
         )
-        AND period IN ('weekly', 'monthly')
-        AND period_end::date < CURRENT_DATE
       ),
-      tied_rankings AS (
+      tied_groups AS (
         SELECT 
           period,
           period_start,
           period_end,
-          points,
+          ROUND(points::numeric, 2) as points,
           array_agg(username) as usernames,
-          COUNT(*) as tied_count,
-          SUM(CASE WHEN has_attendance THEN 1 ELSE 0 END) as users_with_attendance
+          COUNT(*) as tied_count
         FROM user_scores
-        WHERE tied_count > 1  -- Only include actual ties
-        GROUP BY period, period_start, period_end, points
-        HAVING COUNT(*) > 1 
-        AND SUM(CASE WHEN has_attendance THEN 1 ELSE 0 END) > 1  -- At least 2 users must have attendance
+        WHERE tied_count > 1
+        GROUP BY period, period_start, period_end, ROUND(points::numeric, 2)
+        HAVING COUNT(*) > 1
       )
       SELECT *
-      FROM tied_rankings tr
+      FROM tied_groups t
       WHERE NOT EXISTS (
         SELECT 1 
         FROM tie_breakers tb
-        WHERE tb.period = tr.period
-        AND tb.period_end::date = tr.period_end
-        AND tb.points = tr.points
+        WHERE tb.period = t.period
+        AND tb.period_end::date = t.period_end
+        AND ROUND(tb.points::numeric, 2) = t.points
       )
-      AND NOT EXISTS (  -- Don't create ties for future periods
-        SELECT 1
-        WHERE tr.period_end >= CURRENT_DATE
-      )`;
+      ORDER BY period_end DESC, points DESC`;
 
     // Initialize new tie breakers
     const ties = await client.query(tieCheckQuery, [settings.rows[0].auto_resolve_tiebreakers]);

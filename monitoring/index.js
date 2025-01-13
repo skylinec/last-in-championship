@@ -323,7 +323,7 @@ async function checkForTieBreakers() {
   try {
     const startTime = Date.now();
 
-    const settings = await client.query('SELECT enable_tiebreakers, tiebreaker_expiry, auto_resolve_tiebreakers FROM settings LIMIT 1');
+    const settings = await client.query('SELECT enable_tiebreakers, tiebreaker_expiry, auto_resolve_tiebreakers, tiebreaker_weekly, tiebreaker_monthly FROM settings LIMIT 1');
     if (!settings.rows[0]?.enable_tiebreakers) {
       await logMonitoringEvent('tie_breaker_check', {
         duration: Date.now() - startTime,
@@ -332,9 +332,17 @@ async function checkForTieBreakers() {
       return;
     }
 
-    // Get core users for validation
-    const coreUsers = await client.query('SELECT core_users FROM settings LIMIT 1');
-    const coreUsersList = coreUsers.rows[0]?.core_users || [];
+    // Get allowed periods based on settings
+    let periodsToCheck = [];
+    if (settings.rows[0].tiebreaker_weekly) periodsToCheck.push('weekly');
+    if (settings.rows[0].tiebreaker_monthly) periodsToCheck.push('monthly');
+
+    if (periodsToCheck.length === 0) {
+      await logMonitoringEvent('tie_breaker_check', {
+        message: 'No tie breaker periods enabled'
+      });
+      return;
+    }
 
     const tieCheckQuery = `
       WITH period_bounds AS (
@@ -343,7 +351,7 @@ async function checkForTieBreakers() {
           r.period_start::date,
           r.period_end::date
         FROM rankings r
-        WHERE period IN ('weekly', 'monthly')
+        WHERE period = ANY($1)
           AND period_end::date < CURRENT_DATE
       ),
       working_days AS (
@@ -462,7 +470,7 @@ async function checkForTieBreakers() {
     // OR if using named parameters:
     const ties = await client.query({
       text: tieCheckQuery,
-      values: [coreUsersList]
+      values: [periodsToCheck]
     });
 
     console.log("Checking for tie breakers...");

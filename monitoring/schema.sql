@@ -1,4 +1,6 @@
--- First ensure the table exists
+------------------------------------------
+-- SECTION 1: MONITORING SYSTEM
+------------------------------------------
 CREATE TABLE IF NOT EXISTS monitoring_logs (
     id SERIAL PRIMARY KEY,
     timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -7,45 +9,19 @@ CREATE TABLE IF NOT EXISTS monitoring_logs (
     status VARCHAR(20) DEFAULT 'success'
 );
 
--- Add index for monitoring_logs if it doesn't exist
-DO $$
-BEGIN
-    IF NOT EXISTS (
-        SELECT 1 FROM pg_indexes 
-        WHERE tablename = 'monitoring_logs' 
-        AND indexname = 'idx_monitoring_logs_timestamp'
-    ) THEN
-        CREATE INDEX idx_monitoring_logs_timestamp ON monitoring_logs(timestamp DESC);
-    END IF;
-END $$;
+CREATE INDEX IF NOT EXISTS idx_monitoring_logs_timestamp 
+ON monitoring_logs(timestamp DESC);
 
--- Add unique constraint to user_streaks if it doesn't exist
-DO $$
-BEGIN
-    IF NOT EXISTS (
-        SELECT 1 FROM pg_constraint 
-        WHERE conname = 'user_streaks_username_key' 
-        AND conrelid = 'user_streaks'::regclass
-    ) THEN
-        ALTER TABLE user_streaks ADD CONSTRAINT user_streaks_username_key UNIQUE (username);
-    END IF;
-END $$;
-
--- Create cleanup function
 CREATE OR REPLACE FUNCTION cleanup_monitoring_logs() RETURNS TRIGGER AS $$
 BEGIN
     DELETE FROM monitoring_logs 
     WHERE id IN (
-        SELECT id 
-        FROM monitoring_logs 
-        ORDER BY timestamp DESC 
-        OFFSET 5000
+        SELECT id FROM monitoring_logs ORDER BY timestamp DESC OFFSET 5000
     );
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
 
--- Create trigger only if it doesn't exist
 DO $$
 BEGIN
     IF NOT EXISTS (
@@ -60,14 +36,31 @@ BEGIN
     END IF;
 END $$;
 
--- Drop and recreate tie breakers table with correct schema
+------------------------------------------
+-- SECTION 2: USER STREAKS
+------------------------------------------
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint 
+        WHERE conname = 'user_streaks_username_key' 
+        AND conrelid = 'user_streaks'::regclass
+    ) THEN
+        ALTER TABLE user_streaks 
+        ADD CONSTRAINT user_streaks_username_key UNIQUE (username);
+    END IF;
+END $$;
+
+------------------------------------------
+-- SECTION 3: TIE BREAKER SYSTEM
+------------------------------------------
 DROP TABLE IF EXISTS tie_breaker_games CASCADE;
 DROP TABLE IF EXISTS tie_breaker_participants CASCADE;
 DROP TABLE IF EXISTS tie_breakers CASCADE;
 
 CREATE TABLE tie_breakers (
     id SERIAL PRIMARY KEY,
-    period VARCHAR(10) NOT NULL CHECK (period IN ('weekly', 'monthly')), -- Add daily mode
+    period VARCHAR(10) NOT NULL CHECK (period IN ('daily', 'weekly', 'monthly')),
     period_start TIMESTAMP NOT NULL,
     period_end TIMESTAMP NOT NULL, 
     points DECIMAL(10,2) NOT NULL,
@@ -75,53 +68,11 @@ CREATE TABLE tie_breakers (
     status VARCHAR(20) DEFAULT 'pending' CHECK (status IN ('pending', 'in_progress', 'completed')),
     points_applied BOOLEAN DEFAULT false,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    resolved_at TIMESTAMP
+    resolved_at TIMESTAMP,
+    CONSTRAINT tie_breakers_unique_period UNIQUE (period, period_start, period_end, points, mode)
 );
 
--- Alter tie_breakers table to add mode column
-ALTER TABLE tie_breakers 
-ADD COLUMN IF NOT EXISTS mode VARCHAR(20) CHECK (mode IN ('early-bird', 'last-in'));
-
--- Add unique constraint to prevent duplicate tie breakers
-ALTER TABLE tie_breakers 
-DROP CONSTRAINT IF EXISTS tie_breakers_unique_period;
-
-ALTER TABLE tie_breakers 
-ADD CONSTRAINT tie_breakers_unique_period 
-UNIQUE (period, period_start, period_end, points, mode);
-
--- Add index for mode queries
-CREATE INDEX IF NOT EXISTS idx_tie_breakers_mode ON tie_breakers(mode);
-
--- Modify the tie_breakers table constraints
-ALTER TABLE tie_breakers 
-DROP CONSTRAINT IF EXISTS tie_breakers_period_check;
-
-ALTER TABLE tie_breakers 
-ADD CONSTRAINT tie_breakers_period_check 
-CHECK (period IN ('daily', 'weekly', 'monthly'));
-
--- Update tie breakers table constraints
-ALTER TABLE tie_breakers 
-DROP CONSTRAINT IF EXISTS tie_breaker_status_check;
-
-ALTER TABLE tie_breakers 
-ADD CONSTRAINT tie_breaker_status_check 
-CHECK (status IN ('pending', 'in_progress', 'completed'));
-
--- Ensure new tie breakers start as pending
-ALTER TABLE tie_breakers 
-ALTER COLUMN status SET DEFAULT 'pending';
-
--- Add points_applied column to tie_breakers table
-ALTER TABLE tie_breakers 
-ADD COLUMN IF NOT EXISTS points_applied BOOLEAN DEFAULT false;
-
--- Add index for tie breaker points tracking
-CREATE INDEX IF NOT EXISTS idx_tie_breakers_points_tracking 
-ON tie_breakers(period_end, points_applied, status);
-
-CREATE TABLE IF NOT EXISTS tie_breaker_participants (
+CREATE TABLE tie_breaker_participants (
     id SERIAL PRIMARY KEY,
     tie_breaker_id INTEGER REFERENCES tie_breakers(id) ON DELETE CASCADE,
     username VARCHAR(50) NOT NULL,
@@ -131,24 +82,21 @@ CREATE TABLE IF NOT EXISTS tie_breaker_participants (
     UNIQUE(tie_breaker_id, username)
 );
 
-CREATE TABLE IF NOT EXISTS tie_breaker_games (
+CREATE TABLE tie_breaker_games (
     id SERIAL PRIMARY KEY,
     tie_breaker_id INTEGER REFERENCES tie_breakers(id) ON DELETE CASCADE,
     game_type VARCHAR(20) NOT NULL,
     player1 VARCHAR(50) NOT NULL,
-    player2 VARCHAR(50), -- Remove NOT NULL constraint
-    status VARCHAR(20) DEFAULT 'pending' CHECK (status IN ('pending', 'available', 'active', 'completed')),
+    player2 VARCHAR(50),
+    status VARCHAR(20) DEFAULT 'pending' CHECK (status IN ('pending', 'active', 'completed')),
     game_state JSONB DEFAULT '{"board":[], "moves":[], "current_player":null}'::jsonb,
     winner VARCHAR(50),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    completed_at TIMESTAMP
+    completed_at TIMESTAMP,
+    final_tiebreaker BOOLEAN DEFAULT false
 );
 
--- Add final_tiebreaker column to tie_breaker_games
-ALTER TABLE tie_breaker_games
-ADD COLUMN IF NOT EXISTS final_tiebreaker BOOLEAN DEFAULT false;
-
--- Add trigger to prevent multiple final tie-breaker games
+-- Tie breaker game constraints
 CREATE OR REPLACE FUNCTION check_final_tiebreaker()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -164,60 +112,14 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-DROP TRIGGER IF EXISTS trg_check_final_tiebreaker ON tie_breaker_games;
 CREATE TRIGGER trg_check_final_tiebreaker
     BEFORE INSERT OR UPDATE ON tie_breaker_games
     FOR EACH ROW
     EXECUTE FUNCTION check_final_tiebreaker();
 
--- Modify tie_breaker_games constraints
-ALTER TABLE tie_breaker_games 
-DROP CONSTRAINT IF EXISTS tie_breaker_games_status_check;
-
-ALTER TABLE tie_breaker_games 
-ADD CONSTRAINT tie_breaker_games_status_check 
-CHECK (status IN ('pending', 'active', 'completed'));
-
--- Fix default status
-ALTER TABLE tie_breaker_games 
-ALTER COLUMN status SET DEFAULT 'pending',
-ALTER COLUMN game_state SET DEFAULT '{"board":[], "moves":[], "current_player":null}'::jsonb;
-
--- Add cascade delete for cleanup
-ALTER TABLE tie_breaker_games
-DROP CONSTRAINT IF EXISTS tie_breaker_games_tie_breaker_id_fkey,
-ADD CONSTRAINT tie_breaker_games_tie_breaker_id_fkey
-FOREIGN KEY (tie_breaker_id) REFERENCES tie_breakers(id) ON DELETE CASCADE;
-
-ALTER TABLE tie_breaker_participants
-DROP CONSTRAINT IF EXISTS tie_breaker_participants_tie_breaker_id_fkey,
-ADD CONSTRAINT tie_breaker_participants_tie_breaker_id_fkey
-FOREIGN KEY (tie_breaker_id) REFERENCES tie_breakers(id) ON DELETE CASCADE;
-
-ALTER TABLE tie_breaker_games 
-DROP CONSTRAINT IF EXISTS tie_breaker_games_status_check;
-
-ALTER TABLE tie_breaker_games 
-ADD CONSTRAINT tie_breaker_games_status_check 
-CHECK (status IN ('pending', 'active', 'completed'));
-
-ALTER TABLE tie_breaker_games
-ALTER COLUMN status SET DEFAULT 'pending';
-
--- Drop existing indices
-DROP INDEX IF EXISTS idx_tiebreakers_date;
-DROP INDEX IF EXISTS idx_tiebreakers_type;
-DROP INDEX IF EXISTS idx_tiebreakers_status;
-DROP INDEX IF EXISTS idx_tiebreakers_period;
-
--- Add correct indices for the new schema
-CREATE INDEX idx_tiebreakers_period ON tie_breakers(period);
-CREATE INDEX idx_tiebreakers_status ON tie_breakers(status);
-CREATE INDEX idx_tiebreakers_period_range ON tie_breakers(period_start, period_end);
-CREATE INDEX idx_tiebreakers_points ON tie_breakers(points);
-CREATE INDEX idx_tiebreakers_composite ON tie_breakers(period_start, points, status);
-
--- Add tie breaker settings columns if they don't exist
+------------------------------------------
+-- SECTION 4: SETTINGS
+------------------------------------------
 DO $$
 BEGIN
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
@@ -227,36 +129,41 @@ BEGIN
         ADD COLUMN enable_tiebreakers BOOLEAN DEFAULT false,
         ADD COLUMN tiebreaker_points INTEGER DEFAULT 5,
         ADD COLUMN tiebreaker_expiry INTEGER DEFAULT 24,
-        ADD COLUMN auto_resolve_tiebreakers BOOLEAN DEFAULT false;
+        ADD COLUMN auto_resolve_tiebreakers BOOLEAN DEFAULT false,
+        ADD COLUMN tiebreaker_types JSONB DEFAULT '{"daily":true,"weekly":true,"monthly":true}'::jsonb,
+        DROP COLUMN IF EXISTS tiebreaker_weekly,
+        DROP COLUMN IF EXISTS tiebreaker_monthly;
     END IF;
 END $$;
 
--- Add tie breaker timing settings columns if they don't exist
 DO $$
 BEGIN
+    -- Add new columns for tie breaker generation if they don't exist
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
                   WHERE table_name = 'settings' 
-                  AND column_name = 'tiebreaker_types') THEN
+                  AND column_name = 'tiebreaker_weekly') THEN
         ALTER TABLE settings 
-            DROP COLUMN IF EXISTS tiebreaker_weekly,
-            DROP COLUMN IF EXISTS tiebreaker_monthly;
-
-        ALTER TABLE settings 
-        ADD COLUMN IF NOT EXISTS tiebreaker_types JSONB 
-        DEFAULT '{"daily": true, "weekly": true, "monthly": true}'::jsonb;
+        ADD COLUMN tiebreaker_weekly BOOLEAN DEFAULT true,
+        ADD COLUMN tiebreaker_monthly BOOLEAN DEFAULT true;
     END IF;
+
+    -- Update settings initialization with default values if needed
+    UPDATE settings 
+    SET 
+        tiebreaker_weekly = true,
+        tiebreaker_monthly = true
+    WHERE 
+        tiebreaker_weekly IS NULL 
+        OR tiebreaker_monthly IS NULL;
 END $$;
 
-ALTER TABLE tie_breaker_games 
-ADD COLUMN IF NOT EXISTS status VARCHAR(20) 
-DEFAULT 'pending' 
-CHECK (status IN ('pending', 'active', 'completed'));
-
--- Drop and recreate the rankings view with proper point references
+------------------------------------------
+-- SECTION 5: RANKINGS SYSTEM
+------------------------------------------
 DROP MATERIALIZED VIEW IF EXISTS rankings;
 CREATE MATERIALIZED VIEW rankings AS
 WITH RECURSIVE periods AS (
-    -- Generate daily, weekly, and monthly periods
+    -- Daily periods
     SELECT 
         date::date as date,
         'daily' as period,
@@ -267,7 +174,10 @@ WITH RECURSIVE periods AS (
         CURRENT_DATE,
         '1 day'::interval
     ) date
+    
     UNION ALL
+    
+    -- Weekly periods
     SELECT 
         date::date,
         'weekly',
@@ -278,7 +188,10 @@ WITH RECURSIVE periods AS (
         CURRENT_DATE,
         '1 day'::interval
     ) date
+    
     UNION ALL
+    
+    -- Monthly periods
     SELECT 
         date::date,
         'monthly',
@@ -320,7 +233,6 @@ scored_entries AS (
         period,
         period_start,
         period_end,
-        -- Early Bird scoring
         SUM(base_points + (
             CASE 
                 WHEN early_position = 1 THEN 
@@ -332,7 +244,6 @@ scored_entries AS (
             ORDER BY date
             ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
         ) as early_bird_points,
-        -- Last In scoring
         SUM(base_points + (
             CASE 
                 WHEN late_position = 1 THEN 
@@ -344,7 +255,6 @@ scored_entries AS (
             ORDER BY date
             ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
         ) as last_in_points,
-        -- Used for proper point tracking in each mode
         early_position,
         late_position,
         total_entries,
@@ -363,22 +273,38 @@ SELECT
     late_position,
     total_entries,
     base_points,
-    -- Pre-calculate points for both modes rounded to 1 decimal
     ROUND(early_bird_points::numeric, 1) as early_bird_points_rounded,
     ROUND(last_in_points::numeric, 1) as last_in_points_rounded
 FROM scored_entries;
 
--- Update indices to reference correct columns
-DROP INDEX IF EXISTS idx_rankings_user_date;
-CREATE UNIQUE INDEX idx_rankings_composite ON rankings(username, date, period);
-CREATE INDEX idx_rankings_period ON rankings(period, period_end);
+------------------------------------------
+-- SECTION 6: INDICES
+------------------------------------------
+-- Drop conflicting indices before recreation
+DROP INDEX IF EXISTS idx_rankings_composite;
+DROP INDEX IF EXISTS idx_tie_breakers_unique_period;
 
--- Update historical tie breaker indices to use base_points
+-- Recreate indices with updated constraints
+CREATE UNIQUE INDEX idx_rankings_composite ON rankings(username, date, period)
+WHERE period IN ('week', 'month');
+
+CREATE UNIQUE INDEX idx_tie_breakers_unique_period ON tie_breakers(period, period_end, points, mode) 
+WHERE status != 'completed';
+
+-- Keep other indices
+CREATE INDEX IF NOT EXISTS idx_rankings_period ON rankings(period, period_end);
 CREATE INDEX IF NOT EXISTS idx_rankings_period_points ON rankings(period, base_points);
-CREATE INDEX IF NOT EXISTS idx_rankings_period_end ON rankings(period_end);
-CREATE INDEX IF NOT EXISTS idx_tie_breakers_composite ON tie_breakers(period, period_end, points, status);
+CREATE INDEX idx_rankings_period_end ON rankings(period_end);
 
--- Create refresh function
+CREATE INDEX idx_tie_breakers_mode ON tie_breakers(mode);
+CREATE INDEX idx_tie_breakers_period_end ON tie_breakers(period_end);
+CREATE INDEX idx_tie_breakers_points ON tie_breakers(points);
+CREATE INDEX idx_tie_breakers_status ON tie_breakers(status);
+CREATE INDEX idx_tie_breakers_period_range ON tie_breakers(period_start, period_end);
+
+------------------------------------------
+-- SECTION 7: VIEWS AND FUNCTIONS
+------------------------------------------
 CREATE OR REPLACE FUNCTION refresh_rankings()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -387,17 +313,11 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- Create trigger for rankings refresh
-DROP TRIGGER IF EXISTS trg_refresh_rankings ON entries;
 CREATE TRIGGER trg_refresh_rankings
     AFTER INSERT OR UPDATE OR DELETE ON entries
     FOR EACH STATEMENT
     EXECUTE FUNCTION refresh_rankings();
 
--- Initial refresh of the rankings view
-REFRESH MATERIALIZED VIEW rankings;
-
--- Create active_users view
 CREATE OR REPLACE VIEW active_users AS
 WITH period_bounds AS (
     SELECT DISTINCT
@@ -412,15 +332,12 @@ WITH period_bounds AS (
 )
 SELECT * FROM period_bounds;
 
--- Add indices for tie breakers
-CREATE INDEX idx_tie_breakers_period_end ON tie_breakers(period_end);
-CREATE INDEX idx_tie_breakers_points ON tie_breakers(points);
-CREATE INDEX idx_tie_breakers_status ON tie_breakers(status);
-CREATE UNIQUE INDEX idx_tie_breakers_unique_period ON 
-    tie_breakers(period, period_end, points, mode) 
-    WHERE status != 'completed';
+-- Initial rankings refresh
+REFRESH MATERIALIZED VIEW rankings;
 
--- Create Mattermost DB
+------------------------------------------
+-- SECTION 8: EXTERNAL SYSTEMS
+------------------------------------------
 \echo 'Creating Mattermost database if it does not exist'
 SELECT 'CREATE DATABASE mattermost WITH ENCODING = ''UTF8'' CONNECTION LIMIT = -1'
 WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'mattermost')\gexec

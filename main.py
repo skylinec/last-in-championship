@@ -243,6 +243,42 @@ class UserStreak(Base):
     current_streak = Column(Integer, default=0)
     last_attendance = Column(DateTime, nullable=True)
     max_streak = Column(Integer, default=0)
+    
+# Add after existing models (Entry, User, Settings, etc.)
+class TieBreaker(Base):
+    __tablename__ = "tie_breakers"
+    id = Column(Integer, primary_key=True)
+    period = Column(String, nullable=False)  # 'week' or 'month'
+    period_start = Column(DateTime, nullable=False)
+    period_end = Column(DateTime, nullable=False)
+    points = Column(Integer, nullable=False)
+    mode = Column(String, nullable=False)  # 'last-in' or 'early-bird'
+    status = Column(String, nullable=False, default='pending')  # 'pending', 'in_progress', 'completed'
+    created_at = Column(DateTime, default=datetime.now)
+    resolved_at = Column(DateTime, nullable=True)
+
+class TieBreakerParticipant(Base):
+    __tablename__ = "tie_breaker_participants"
+    id = Column(Integer, primary_key=True)
+    tie_breaker_id = Column(Integer, nullable=False)
+    username = Column(String, nullable=False)
+    game_choice = Column(String, nullable=True)  # 'tictactoe' or 'connect4'
+    ready = Column(Boolean, default=False)
+    winner = Column(Boolean, default=False)
+
+class TieBreakerGame(Base):
+    __tablename__ = "tie_breaker_games"
+    id = Column(Integer, primary_key=True)
+    tie_breaker_id = Column(Integer, nullable=False)
+    game_type = Column(String, nullable=False)  # 'tictactoe' or 'connect4'
+    player1 = Column(String, nullable=False)
+    player2 = Column(String, nullable=False)
+    status = Column(String, nullable=False, default='pending')  # 'pending', 'active', 'completed'
+    game_state = Column(JSON, nullable=False)
+    winner = Column(String, nullable=True)
+    final_tiebreaker = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=datetime.now)
+    completed_at = Column(DateTime, nullable=True)
 
 # Create tables
 Base.metadata.create_all(bind=engine)
@@ -3318,7 +3354,7 @@ def start_metrics_updater():
 
     thread = Thread(target=update_loop, daemon=True)
     thread.start()
-        
+
 if __name__ == "__main__":
     # Remove the start_http_server call as we're using WSGI middleware now
     start_metrics_updater()  # Start metrics updater
@@ -3489,12 +3525,20 @@ def health_check():
 
 # ...existing code...
 
+from decimal import Decimal
+
+def decimal_to_float(obj):
+    """Convert Decimal objects to float for JSON serialization"""
+    if isinstance(obj, Decimal):
+        return float(obj)
+    return obj
+
 @app.route("/tie-breakers")
 @login_required
 def tie_breakers():
     db = SessionLocal()
     try:
-        # Modified query to show all tie breakers and order by status and creation date
+        mode = request.args.get('mode', 'last-in')  # Get current mode
         tie_breakers = db.execute(text("""
             WITH tie_breakers_cte AS (
                 SELECT 
@@ -3502,7 +3546,8 @@ def tie_breakers():
                     t.period,
                     t.period_start,
                     t.period_end,
-                    t.points,
+                    t.points::float as points,  -- Convert Decimal to float
+                    t.mode,
                     t.status,
                     t.created_at,
                     t.resolved_at,
@@ -3524,7 +3569,7 @@ def tie_breakers():
                 FROM tie_breakers t
                 LEFT JOIN tie_breaker_participants tp ON t.id = tp.tie_breaker_id
                 LEFT JOIN tie_breaker_games g ON t.id = g.tie_breaker_id
-                GROUP BY t.id, t.period, t.period_start, t.period_end, t.points, 
+                GROUP BY t.id, t.period, t.period_start, t.period_end, t.points, t.mode,
                          t.status, t.created_at, t.resolved_at
             )
             SELECT * FROM tie_breakers_cte
@@ -3539,40 +3584,39 @@ def tie_breakers():
                 period_end DESC
         """)).fetchall()
 
-        # Rest of the function remains the same...
-        # ...existing code...
-
-        # Add debug logging
         app.logger.debug("Processing tie breakers...")
 
         formatted_tie_breakers = []
         for tb in tie_breakers:
             tie_breaker_dict = dict(tb)
             
-            # Debug log the raw data
-            app.logger.debug(f"Raw tie breaker data: {tie_breaker_dict}")
+            # Handle JSON serialization of all fields
+            tie_breaker_dict = {
+                k: decimal_to_float(v) if isinstance(v, Decimal) else v
+                for k, v in tie_breaker_dict.items()
+            }
             
-            # Ensure games list is properly initialized
+            # Debug log the processed data
+            app.logger.debug(f"Processing tie breaker: {tie_breaker_dict['id']}")
+            
+            # Ensure proper JSON parsing of nested structures
             if tie_breaker_dict['games'] is None:
                 tie_breaker_dict['games'] = []
             elif isinstance(tie_breaker_dict['games'], str):
                 tie_breaker_dict['games'] = json.loads(tie_breaker_dict['games'])
             
-            # Ensure participants list is properly initialized
             if tie_breaker_dict['participants'] is None:
                 tie_breaker_dict['participants'] = []
             elif isinstance(tie_breaker_dict['participants'], str):
                 tie_breaker_dict['participants'] = json.loads(tie_breaker_dict['participants'])
-            
-            # Debug log the processed data
-            app.logger.debug(f"Processed tie breaker: Games: {len(tie_breaker_dict['games'])}, Participants: {len(tie_breaker_dict['participants'])}")
             
             formatted_tie_breakers.append(tie_breaker_dict)
 
         return render_template(
             "tie_breakers.html",
             tie_breakers=formatted_tie_breakers,
-            current_user=session['user']
+            current_user=session['user'],
+            mode=mode  # Pass current mode to template
         )
         
     except Exception as e:
@@ -4107,7 +4151,7 @@ def join_game(game_id):
     db = SessionLocal()
     try:
         # Get game with transaction lock
-        game = db.query(TieBreaker).filter_by(id=game_id).with_for_update().first()
+        game = db.query(TieBreakerGame).filter_by(id=game_id).with_for_update().first()
         
         if not game or game.player2 or game.status != 'pending':
             app.logger.warning(f"Cannot join game {game_id}: Invalid game state")

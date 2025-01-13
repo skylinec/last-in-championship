@@ -182,7 +182,9 @@ select {
 async function createHeatmap(data) {
     const chartDiv = document.getElementById('heatmap');
     try {
-        console.log("Raw heatmap data:", data);
+        if (!data) {
+            throw new Error('No data available');
+        }
         
         const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
         // Create 15-minute intervals from 7 AM to 12 PM

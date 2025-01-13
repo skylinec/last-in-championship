@@ -3898,117 +3898,286 @@ def check_tie_breaker_completion(db, tie_id):
 
     return False
 
-def is_valid_move(board, position):
-    """Check if move is valid"""
+def is_valid_move(game_state, move):
+    """Check if move is valid for the current game state"""
+    if not game_state or not isinstance(game_state, dict):
+        return False
+        
+    board = game_state.get('board', [])
+    game_type = game_state.get('game_type', '')
+    
     try:
-        row, col = map(int, position.split(','))
-        if 0 <= row < 3 and 0 <= col < 3:
-            return board[row][col] == ''
+        position = int(move)
+        if game_type == 'tictactoe':
+            return 0 <= position < 9 and not board[position]
+        elif game_type == 'connect4':
+            # For Connect4, check if column is valid and not full
+            col = position
+            if not (0 <= col < 7):
+                return False
+            # Find first empty slot in column
+            for row in range(5, -1, -1):
+                if not board[row * 7 + col]:
+                    return True
         return False
-    except (ValueError, IndexError):
+    except (ValueError, TypeError, IndexError):
         return False
 
-def apply_move(board, position, symbol):
-    """Apply move to board"""
-    row, col = map(int, position.split(','))
-    board[row][col] = symbol
-    return board
+def apply_move(game_state, move, player):
+    """Apply move to game state"""
+    if not is_valid_move(game_state, move):
+        raise ValueError("Invalid move")
+        
+    board = game_state['board']
+    game_type = game_state.get('game_type', '')
+    
+    if game_type == 'tictactoe':
+        board[move] = player
+    else:  # Connect4
+        col = move
+        # Find first empty slot in column
+        for row in range(5, -1, -1):
+            pos = row * 7 + col
+            if not board[pos]:
+                board[pos] = player
+                break
+                
+    game_state['moves'].append({
+        'player': player,
+        'position': move,
+        'timestamp': datetime.now().isoformat()
+    })
+    
+    # Update current player
+    game_state['current_player'] = (
+        game_state['player2'] 
+        if player == game_state['player1']
+        else game_state['player1']
+    )
+    
+    return game_state
 
-def check_winner(board):
-    """Check for winner"""
+# Add after apply_move function and before make_move route
+def check_line(board, start, step, length, player):
+    """Check if a line contains a win for the given player"""
+    return all(board[start + i * step] == player for i in range(length))
+
+def check_tictactoe_winner(board, player):
+    """Check if player has won in tic-tac-toe"""
     # Check rows
-    for row in board:
-        if row.count(row[0]) == 3 and row[0]:
-            return row[0]
-    
+    for i in range(0, 9, 3):
+        if check_line(board, i, 1, 3, player):
+            return True
+            
     # Check columns
-    for col in range(3):
-        if board[0][col] == board[1][col] == board[2][col] and board[0][col]:
-            return board[0][col]
-    
+    for i in range(3):
+        if check_line(board, i, 3, 3, player):
+            return True
+            
     # Check diagonals
-    if board[0][0] == board[1][1] == board[2][2] and board[0][0]:
-        return board[0][0]
-    if board[0][2] == board[1][1] == board[2][0] and board[0][2]:
-        return board[0][2]
-    
-    # Check for tie
-    if all(all(cell for cell in row) for row in board):
-        return 'tie'
-    
+    if check_line(board, 0, 4, 3, player) or check_line(board, 2, 2, 3, player):
+        return True
+        
+    return False
+
+def check_connect4_winner(board, player):
+    """Check if player has won in Connect 4"""
+    # Check horizontal
+    for row in range(6):
+        for col in range(4):
+            if check_line(board, row * 7 + col, 1, 4, player):
+                return True
+                
+    # Check vertical
+    for row in range(3):
+        for col in range(7):
+            if check_line(board, row * 7 + col, 7, 4, player):
+                return True
+                
+    # Check diagonal (positive slope)
+    for row in range(3):
+        for col in range(4):
+            if check_line(board, row * 7 + col, 8, 4, player):
+                return True
+                
+    # Check diagonal (negative slope)
+    for row in range(3):
+        for col in range(3, 7):
+            if check_line(board, row * 7 + col, 6, 4, player):
+                return True
+                
+    return False
+
+def check_winner(game_state, game_type):
+    """Check if there's a winner in the current game state"""
+    if not game_state or not isinstance(game_state, dict):
+        return None
+        
+    board = game_state.get('board', [])
+    if not board:
+        return None
+        
+    # Check for each player
+    for player in [game_state.get('player1'), game_state.get('player2')]:
+        if not player:
+            continue
+            
+        if game_type == 'tictactoe' and check_tictactoe_winner(board, player):
+            return player
+        elif game_type == 'connect4' and check_connect4_winner(board, player):
+            return player
+            
+    # Check for draw
+    if all(cell is not None for cell in board):
+        return 'draw'
+        
     return None
 
-# Update make_move to use the new completion check
+def is_valid_board(board, game_type):
+    """Validate board state"""
+    if not isinstance(board, list):
+        return False
+        
+    expected_size = 9 if game_type == 'tictactoe' else 42
+    if len(board) != expected_size:
+        return False
+        
+    return all(cell is None or isinstance(cell, str) for cell in board)
+
 @app.route("/games/<int:game_id>/move", methods=["POST"])
 @login_required
 def make_move(game_id):
     db = SessionLocal()
     try:
-        # Get game with proper column selection
         game = db.execute(text("""
-            SELECT g.*, g.game_state->>'current_player' as current_player,
-                   g.game_type, g.tie_breaker_id
-            FROM tie_breaker_games g 
-            WHERE id = :game_id
+            SELECT g.*, t.status as tie_breaker_status
+            FROM tie_breaker_games g
+            JOIN tie_breakers t ON g.tie_breaker_id = t.id
+            WHERE g.id = :game_id
+            FOR UPDATE
         """), {"game_id": game_id}).fetchone()
 
-        if not game or session['user'] != game.current_player:
+        if not game or game.status != 'active':
+            return jsonify({"success": False, "message": "Game not available"}), 400
+
+        current_user = session.get('user')
+        if current_user != game.game_state.get('current_player'):
             return jsonify({"success": False, "message": "Not your turn"}), 400
 
         move = request.json.get('move')
-        game_state = game.game_state
-        
-        if not is_valid_move(game_state, move, game.game_type):
-            return jsonify({"success": False, "message": "Invalid move"}), 400
+        if move is None:
+            return jsonify({"success": False, "message": "No move provided"}), 400
 
-        # Apply move and get updated state
-        updated_state = apply_move(game_state, move, session['user'], game.game_type)
-        winner = check_winner(updated_state, game.game_type)
-
-        # Fix: Update game state using proper SQL syntax
-        db.execute(text("""
-            UPDATE tie_breaker_games 
-            SET game_state = :state,
-                winner = :winner,
-                status = CASE WHEN :winner IS NOT NULL THEN 'completed' ELSE 'active' END,
-                completed_at = CASE WHEN :winner IS NOT NULL THEN NOW() ELSE NULL END
-            WHERE id = :game_id
-        """), {
-            "state": json.dumps(updated_state),
-            "winner": winner,
-            "game_id": game_id
-        })
-
-        if winner:
-            # Check if tie breaker is complete
-            is_complete = check_tie_breaker_completion(db, game.tie_breaker_id)
+        try:
+            # Apply move and get updated state
+            updated_state = apply_move(game.game_state, move, current_user)
+            winner = check_winner(updated_state, game.game_type)
             
-            if is_complete:
-                log_audit(
-                    "tie_breaker_resolved",
-                    session['user'],
-                    f"Tie breaker resolved with winner: {winner}",
-                    old_data={"tie_id": game.tie_breaker_id},
-                    new_data={"winner": winner}
-                )
+            # Update database
+            db.execute(text("""
+                UPDATE tie_breaker_games 
+                SET game_state = :state,
+                    winner = :winner,
+                    status = CASE 
+                        WHEN :winner IS NOT NULL THEN 'completed'
+                        ELSE 'active'
+                    END,
+                    completed_at = CASE 
+                        WHEN :winner IS NOT NULL THEN NOW()
+                        ELSE NULL
+                    END
+                WHERE id = :game_id
+            """), {
+                "state": json.dumps(updated_state),
+                "winner": winner,
+                "game_id": game_id
+            })
 
-        db.commit()
-        
-        # Notify other players through WebSocket
-        notify_game_update(game_id, updated_state, winner)
-        
-        return jsonify({
-            "success": True,
-            "state": updated_state,
-            "winner": winner
-        })
-
+            if winner:
+                check_tie_breaker_completion(db, game.tie_breaker_id)
+            
+            db.commit()
+            
+            return jsonify({
+                "success": True,
+                "state": updated_state,
+                "winner": winner
+            })
+            
+        except ValueError as e:
+            return jsonify({"success": False, "message": str(e)}), 400
+            
     except Exception as e:
         db.rollback()
         app.logger.error(f"Error processing move: {str(e)}")
-        return jsonify({"success": False, "message": str(e)}), 500
+        return jsonify({"success": False, "message": "Server error"}), 500
     finally:
         db.close()
+
+def calculate_streak_for_date(username, target_date, db):
+    """Calculate streak up to a specific date with proper day handling"""
+    try:
+        # Get all attendance records up to target date
+        entries = db.execute(text("""
+            WITH RECURSIVE dates AS (
+                SELECT 
+                    date::date as date,
+                    (EXTRACT(DOW FROM date::date) BETWEEN 1 AND 5) as is_weekday
+                FROM generate_series(
+                    (SELECT MIN(date::date) FROM entries WHERE name = :username),
+                    :target_date,
+                    '1 day'::interval
+                ) date
+            ),
+            attendance AS (
+                SELECT 
+                    e.date::date as date,
+                    e.status
+                FROM entries e
+                WHERE e.name = :username
+                AND e.date::date <= :target_date
+                AND e.status IN ('in-office', 'remote')
+            )
+            SELECT 
+                d.date,
+                d.is_weekday,
+                a.status
+            FROM dates d
+            LEFT JOIN attendance a ON d.date = a.date
+            ORDER BY d.date DESC
+        """), {
+            "username": username,
+            "target_date": target_date
+        }).fetchall()
+
+        if not entries:
+            return 0
+
+        # Calculate streak
+        streak = 0
+        last_date = None
+        
+        for entry in entries:
+            current_date = entry.date
+            
+            if last_date and (last_date - current_date).days > 3:
+                break
+                
+            if entry.is_weekday:
+                if entry.status:
+                    streak += 1
+                else:
+                    break
+                    
+            last_date = current_date
+            
+        return streak
+
+    except Exception as e:
+        app.logger.error(f"Error calculating streak: {str(e)}")
+        return 0
+
+# ...existing code...
 
 # Add WebSocket support for real-time game updates
 from flask_socketio import SocketIO, emit, join_room, leave_room

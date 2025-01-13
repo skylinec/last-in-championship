@@ -93,7 +93,36 @@ services:
     depends_on:
       - db
 
+  bugzilla:
+    image: bugzilla/bugzilla-dev
+    environment:
+      - DB_DRIVER=sqlite3
+      - DB_NAME=/data/bugzilla.db
+      - BUGZILLA_ADMIN_EMAIL=admin@example.com
+      - BUGZILLA_ADMIN_PASS=adminpass
+    volumes:
+      - bugzilla_data:/var/www/html/bugzilla/data
+      - bugzilla_db:/data
+
+  mattermost:
+    image: mattermost/mattermost-team-edition
+    environment:
+      - MM_SQLSETTINGS_DRIVERNAME=sqlite3
+      - MM_SQLSETTINGS_DATASOURCE=/data/mattermost.db
+      - MM_SERVICESETTINGS_SITEURL=https://lic.mattdh.me/mattermost
+    volumes:
+      - mattermost_data:/mattermost/data
+      - mattermost_logs:/mattermost/logs
+      - mattermost_config:/mattermost/config
+      - mattermost_db:/data
+
 volumes:
   postgres_data:
   prometheus_data:
   grafana-storage:
+  bugzilla_data:
+  mattermost_data:
+  mattermost_logs:
+  mattermost_config:
+  bugzilla_db:
+  mattermost_db:

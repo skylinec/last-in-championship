@@ -203,8 +203,20 @@ function makeMove(pos) {
     .then(response => response.json())
     .then(data => {
         if (data.success) {
-            // Either update the board directly or reload the page
-            window.location.reload();
+            if (data.winner === 'draw') {
+                alert("Game ended in a draw! A new game will start with reversed player order.");
+                // Redirect to the new game
+                if (data.next_game) {
+                    window.location.href = `/games/${data.next_game}`;
+                } else {
+                    window.location.reload();
+                }
+            } else if (data.winner) {
+                alert(`${data.winner} wins!`);
+                window.location.reload();
+            } else {
+                window.location.reload();
+            }
         } else {
             alert(data.message || 'Invalid move');
         }
@@ -214,13 +226,6 @@ function makeMove(pos) {
         alert('Server error. Please try again.');
     });
 }
-
-// Auto-refresh for spectators
-{% if not can_play and game.status == 'active' %}
-setInterval(() => {
-    window.location.reload();
-}, 5000);
-{% endif %}
 </script>
 {% endif %}
 {% endblock %}

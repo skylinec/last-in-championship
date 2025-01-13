@@ -4222,6 +4222,60 @@ def is_valid_board(board, game_type):
         
     return all(cell is None or isinstance(cell, str) for cell in board)
 
+def create_next_game_after_draw(db, tie_breaker_id, game_type, player1, player2):
+    """Create a new game after a draw with reversed player order"""
+    try:
+        # Initialize new game state with reversed player order
+        board_size = 9 if game_type == 'tictactoe' else 42
+        initial_state = {
+            'board': [None] * board_size,
+            'moves': [],
+            'current_player': player2,  # Reversed order
+            'player1': player2,         # Reversed order
+            'player2': player1,         # Reversed order
+            'game_type': game_type
+        }
+
+        # Create new game
+        result = db.execute(text("""
+            INSERT INTO tie_breaker_games (
+                tie_breaker_id,
+                game_type,
+                player1,
+                player2,
+                status,
+                game_state
+            ) VALUES (
+                :tie_id,
+                :game_type,
+                :player1,
+                :player2,
+                'pending',
+                :game_state
+            ) RETURNING id
+        """), {
+            "tie_id": tie_breaker_id,
+            "game_type": game_type,
+            "player1": player2,  # Reversed order
+            "player2": player1,  # Reversed order
+            "game_state": json.dumps(initial_state)
+        })
+
+        new_game_id = result.fetchone()[0]
+
+        # Update status to active immediately since both players are known
+        db.execute(text("""
+            UPDATE tie_breaker_games 
+            SET status = 'active'
+            WHERE id = :game_id
+        """), {"game_id": new_game_id})
+
+        return new_game_id
+
+    except Exception as e:
+        app.logger.error(f"Error creating next game after draw: {str(e)}")
+        raise
+
 @app.route("/games/<int:game_id>/move", methods=["POST"])
 @login_required
 def make_move(game_id):
@@ -4257,7 +4311,39 @@ def make_move(game_id):
             updated_state = apply_move(game_state, move, current_user)
             winner = check_winner(updated_state, game.game_type)
             
-            # Update game in database
+            if winner == 'draw':
+                app.logger.info(f"Game {game_id} ended in a draw")
+                # Create new game with same players
+                new_game_id = create_next_game_after_draw(
+                    db, 
+                    game.tie_breaker_id,
+                    game.game_type,
+                    game.player1,
+                    game.player2
+                )
+                
+                # Mark current game as completed
+                db.execute(text("""
+                    UPDATE tie_breaker_games 
+                    SET game_state = :state,
+                        status = 'completed',
+                        winner = NULL
+                    WHERE id = :game_id
+                """), {
+                    "state": json.dumps(updated_state),
+                    "game_id": game_id
+                })
+                
+                db.commit()
+                
+                return jsonify({
+                    "success": True,
+                    "state": updated_state,
+                    "winner": "draw",
+                    "next_game": new_game_id
+                })
+            
+            # Normal win/continue case
             db.execute(text("""
                 UPDATE tie_breaker_games 
                 SET game_state = :state,
@@ -4269,11 +4355,11 @@ def make_move(game_id):
                 WHERE id = :game_id
             """), {
                 "state": json.dumps(updated_state),
-                "winner": winner if winner != 'draw' else None,
+                "winner": winner if winner not in ['draw', None] else None,
                 "game_id": game_id
             })
 
-            if winner:
+            if winner and winner != 'draw':
                 check_tie_breaker_completion(db, game.tie_breaker_id)
             
             db.commit()

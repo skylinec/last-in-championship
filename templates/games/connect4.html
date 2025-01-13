@@ -227,8 +227,8 @@ function isValidMove(col) {
     return Array.from(cells).some(cell => !cell.dataset.value);
 }
 
-function makeMove(col) {
-    if (col === undefined || col < 0 || col > 6) return;  // Validate column
+function makeMove(pos) {
+    if (pos === undefined || pos < 0 || pos > 6) return;  // Validate column
 
     fetch(`/games/{{ game.id }}/move`, {
         method: 'POST',
@@ -236,7 +236,7 @@ function makeMove(col) {
             'Content-Type': 'application/json',
         },
         body: JSON.stringify({ 
-            move: parseInt(col),
+            move: parseInt(pos),
             game_type: 'connect4'
         })
     })
@@ -248,7 +248,20 @@ function makeMove(col) {
     })
     .then(data => {
         if (data.success) {
-            window.location.reload();
+            if (data.winner === 'draw') {
+                alert("Game ended in a draw! A new game will start with reversed player order.");
+                // Redirect to the new game
+                if (data.next_game) {
+                    window.location.href = `/games/${data.next_game}`;
+                } else {
+                    window.location.reload();
+                }
+            } else if (data.winner) {
+                alert(`${data.winner} wins!`);
+                window.location.reload();
+            } else {
+                window.location.reload();
+            }
         } else {
             alert(data.message || 'Invalid move');
         }
@@ -279,13 +292,6 @@ document.querySelectorAll('.board-cell').forEach(cell => {
         });
     });
 });
-
-// Auto-refresh for spectators
-{% if not can_play and game.status == 'active' %}
-setInterval(() => {
-    window.location.reload();
-}, 5000);
-{% endif %}
 </script>
 {% endif %}
 {% endblock %}

@@ -4459,8 +4459,29 @@ def calculate_streak_for_date(username, target_date, db):
 
 # Add WebSocket support for real-time game updates
 from flask_socketio import SocketIO, emit, join_room, leave_room
+from flask_cors import CORS
 
-socketio = SocketIO(app)
+# After app creation, before route definitions:
+CORS(app, resources={
+    r"/*": {
+        "origins": [
+            "https://lic.mattdh.me",
+            "http://localhost:9000",
+            "http://127.0.0.1:9000"
+        ]
+    }
+})
+
+socketio = SocketIO(
+    app,
+    cors_allowed_origins=[
+        "https://lic.mattdh.me",
+        "http://localhost:9000",
+        "http://127.0.0.1:9000"
+    ],
+    ping_timeout=60,
+    ping_interval=25
+)
 
 @socketio.on('join_game')
 def on_join_game(data):

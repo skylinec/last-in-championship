@@ -186,36 +186,27 @@ document.addEventListener('DOMContentLoaded', function() {
             socket.close();
         }
 
-        // Get the current protocol (http/https)
-        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        const host = window.location.host;
-
         socket = io({
             path: '/socket.io',
-            transports: ['websocket', 'polling'],
+            transports: ['polling', 'websocket'],  // Start with polling first
             secure: window.location.protocol === 'https:',
             rejectUnauthorized: false,
             reconnection: true,
             reconnectionAttempts: 5,
             reconnectionDelay: 1000,
             reconnectionDelayMax: 5000,
+            timeout: 10000,
             autoConnect: true,
             withCredentials: true,
-            extraHeaders: {
-                'Origin': window.location.origin
-            }
+            forceBase64: true,  // Add this to handle encoding issues
+            rememberUpgrade: true,  // Remember successful transport upgrades
         });
 
-        // Add connection error handling
         socket.on('connect_error', (error) => {
             console.error('Connection error:', error);
             if (retryCount < maxRetries) {
                 retryCount++;
-                // Fall back to polling if WebSocket fails
-                if (socket.io.opts.transports[0] === 'websocket') {
-                    console.log('Falling back to polling transport');
-                    socket.io.opts.transports = ['polling', 'websocket'];
-                }
+                console.log(`Retry attempt ${retryCount}`);
                 setTimeout(connectSocket, retryDelay * retryCount);
             }
         });

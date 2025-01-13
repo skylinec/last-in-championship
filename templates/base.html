@@ -30,6 +30,7 @@
             display: flex;
             align-items: center;
             gap: 10px;
+            position: relative;
         }
 
         nav a { 
@@ -623,6 +624,109 @@
                 right: 5vw;
                 bottom: 100px;
             }
+
+            .hamburger {
+                display: flex;
+                z-index: 2;
+            }
+
+            .hamburger.active .bar:nth-child(1) {
+                transform: translateY(8px) rotate(45deg);
+            }
+
+            .hamburger.active .bar:nth-child(2) {
+                opacity: 0;
+            }
+
+            .hamburger.active .bar:nth-child(3) {
+                transform: translateY(-8px) rotate(-45deg);
+            }
+
+            .nav-links {
+                position: fixed;
+                left: -100%;
+                top: 0;
+                gap: 0;
+                flex-direction: column;
+                background-color: var(--primary-color);
+                width: 100%;
+                height: 100vh;
+                text-align: center;
+                transition: 0.3s;
+                z-index: 1;
+                padding-top: 60px;
+                overflow-y: auto;
+            }
+
+            .nav-links.active {
+                left: 0;
+            }
+
+            .nav-item {
+                margin: 8px 0;
+                width: 100%;
+                padding: 12px;
+            }
+
+            .dropdown {
+                width: 100%;
+            }
+
+            .dropdown-content {
+                position: static;
+                width: 100%;
+                max-height: 0;
+                overflow: hidden;
+                transition: max-height 0.3s ease;
+            }
+
+            .dropdown.active .dropdown-content {
+                max-height: 300px;
+            }
+
+            .dropdown-trigger::after {
+                content: '▾';
+                margin-left: 5px;
+                display: inline-block;
+                transition: transform 0.3s ease;
+            }
+
+            .dropdown.active .dropdown-trigger::after {
+                transform: rotate(180deg);
+            }
+
+            .championship-mode {
+                flex-direction: column;
+                align-items: center;
+                margin: 15px 0;
+            }
+
+            .user-info {
+                margin-top: 20px;
+                padding: 15px;
+                border-top: 1px solid rgba(255, 255, 255, 0.1);
+            }
+        }
+
+        .hamburger {
+            display: none;
+            flex-direction: column;
+            justify-content: space-around;
+            width: 30px;
+            height: 25px;
+            background: transparent;
+            border: none;
+            cursor: pointer;
+            padding: 0;
+            margin-right: 10px;
+        }
+
+        .bar {
+            width: 100%;
+            height: 3px;
+            background-color: white;
+            transition: all 0.3s ease;
+            border-radius: 2px;
         }
     </style>
     {% block head %}{% endblock %}
@@ -632,49 +736,57 @@
         ⚠️ Missing attendance for: <span id="missing-users"></span>
     </div>
     <nav>
-        {% if session.get('user') %}
-            <a href="/">Log Attendance</a>
-            <a href="/history">View/Edit History</a>
-            <div class="dropdown">
-                <a href="#">Rankings ▾</a>
-                <div class="dropdown-content">
-                    <a href="/rankings/day">Daily Rankings</a>
-                    <a href="/rankings/week">Weekly Rankings</a>
-                    <a href="/rankings/month">Monthly Rankings</a>
-                    <a href="/streaks">Streaks</a>
-                    <a href="/tie-breakers">Tie Breakers</a>
+        <button class="hamburger" onclick="toggleNav()">
+            <span class="bar"></span>
+            <span class="bar"></span>
+            <span class="bar"></span>
+        </button>
+        
+        <div class="nav-links">
+            {% if session.get('user') %}
+                <a href="/" class="nav-item">Log Attendance</a>
+                <a href="/history" class="nav-item">View/Edit History</a>
+                <div class="dropdown nav-item">
+                    <a href="#" class="dropdown-trigger">Rankings ▾</a>
+                    <div class="dropdown-content">
+                        <a href="/rankings/day">Daily Rankings</a>
+                        <a href="/rankings/week">Weekly Rankings</a>
+                        <a href="/rankings/month">Monthly Rankings</a>
+                        <a href="/streaks">Streaks</a>
+                        <a href="/tie-breakers">Tie Breakers</a>
+                    </div>
                 </div>
-            </div>
-            <a href="/visualisations">Visualisations</a>
-            <div class="dropdown">
-                <a href="#">Admin ▾</a>
-                <div class="dropdown-content">
-                    <a href="/settings">Settings</a>
-                    <a href="/missing-entries">Missing Entries</a>
-                    <a href="/audit">Audit Trail</a>
-                    <a href="/maintenance">Maintenance</a>
-                    <a href="/grafana">Grafana</a>
+                <a href="/visualisations" class="nav-item">Visualisations</a>
+                <div class="dropdown nav-item">
+                    <a href="#" class="dropdown-trigger">Admin ▾</a>
+                    <div class="dropdown-content">
+                        <a href="/settings">Settings</a>
+                        <a href="/missing-entries">Missing Entries</a>
+                        <a href="/audit">Audit Trail</a>
+                        <a href="/maintenance">Maintenance</a>
+                        <a href="/grafana">Grafana</a>
+                    </div>
                 </div>
-            </div>
-            <div class="championship-mode">
-                <label class="switch">
-                    <input type="checkbox" id="championshipToggle">
-                    <span class="slider"></span>
-                </label>
-                <div class="mode-info">
-                    <span class="mode-label">Last-In Mode</span>
-                    <span class="mode-description"></span>
+                <div class="championship-mode nav-item">
+                    <label class="switch">
+                        <input type="checkbox" id="championshipToggle">
+                        <span class="slider"></span>
+                    </label>
+                    <div class="mode-info">
+                        <span class="mode-label">Last-In Mode</span>
+                        <span class="mode-description"></span>
+                    </div>
                 </div>
-            </div>
-            <div class="user-info">
-                {{ session.user }} | <a href="{{ url_for('logout') }}">Logout</a>
-            </div>
-        {% else %}
-            <div class="auth-links">
-                <a href="{{ url_for('login') }}">Login</a>
-                <a href="{{ url_for('register') }}">Register</a>
-            </div>
-        {% endif %}
+                <div class="user-info nav-item">
+                    {{ session.user }} | <a href="{{ url_for('logout') }}">Logout</a>
+                </div>
+            {% else %}
+                <div class="auth-links">
+                    <a href="{{ url_for('login') }}" class="nav-item">Login</a>
+                    <a href="{{ url_for('register') }}" class="nav-item">Register</a>
+                </div>
+            {% endif %}
+        </div>
     </nav>
 
     <div class="quick-clock-in">
@@ -989,6 +1101,52 @@
     // Prevent menu from closing when clicking inside it
     document.querySelector('.global-clock-in').addEventListener('click', function(event) {
         event.stopPropagation();
+    });
+
+    // Add this to your existing JavaScript
+    function toggleNav() {
+        const hamburger = document.querySelector('.hamburger');
+        const navLinks = document.querySelector('.nav-links');
+        hamburger.classList.toggle('active');
+        navLinks.classList.toggle('active');
+        document.body.style.overflow = navLinks.classList.contains('active') ? 'hidden' : '';
+    }
+
+    document.addEventListener('DOMContentLoaded', function() {
+        // Handle mobile dropdown menus
+        const dropdowns = document.querySelectorAll('.dropdown');
+        dropdowns.forEach(dropdown => {
+            const trigger = dropdown.querySelector('.dropdown-trigger');
+            if (trigger) {
+                trigger.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    // Close other dropdowns
+                    dropdowns.forEach(d => {
+                        if (d !== dropdown) d.classList.remove('active');
+                    });
+                    dropdown.classList.toggle('active');
+                });
+            }
+        });
+
+        // Close menu when clicking outside
+        document.addEventListener('click', (e) => {
+            if (!e.target.closest('.nav-links') && !e.target.closest('.hamburger')) {
+                document.querySelector('.nav-links').classList.remove('active');
+                document.querySelector('.hamburger').classList.remove('active');
+                document.body.style.overflow = '';
+            }
+        });
+
+        // Close menu when clicking a nav link (except dropdowns)
+        const navLinks = document.querySelectorAll('.nav-item:not(.dropdown)');
+        navLinks.forEach(link => {
+            link.addEventListener('click', () => {
+                document.querySelector('.nav-links').classList.remove('active');
+                document.querySelector('.hamburger').classList.remove('active');
+                document.body.style.overflow = '';
+            });
+        });
     });
     </script>
     {% endif %}

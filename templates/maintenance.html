@@ -44,6 +44,13 @@
         </div>
         <div class="dangerous-action">
             <div>
+                <h3>Reset Tie Breaker Effects</h3>
+                <p>Remove all scoring effects from past tie breakers and allow them to be re-fought</p>
+            </div>
+            <button onclick="showTieBreakerEffectsModal()" class="action-button warning">Reset Effects</button>
+        </div>
+        <div class="dangerous-action">
+            <div>
                 <h3>Reset Streaks</h3>
                 <p>Clear all streaks and let them recalculate automatically</p>
             </div>
@@ -180,8 +187,25 @@
     </div>
 </div>
 
-<div id="streakModal" class="modal">
+<div id="tieBreakerEffectsModal" class="modal">
     <div class="modal-content">
+        <h2>⚠️ Warning: Reset Tie Breaker Effects</h2>
+        <p>This will:</p>
+        <ul>
+            <li>Remove all points awarded from past tie breakers</li>
+            <li>Mark all completed tie breakers as unresolved</li>
+            <li>Allow tie breakers to be re-fought</li>
+            <li>Recalculate all rankings without tie breaker effects</li>
+        </ul>
+        <div class="modal-actions">
+            <button onclick="resetTieBreakerEffects()" class="action-button warning">Reset Effects</button>
+            <button onclick="hideModal('tieBreakerEffectsModal')" class="action-button">Cancel</button>
+        </div>
+    </div>
+</div>
+
+<div id="streakModal" class="modal">
+    <div class="modal-content"></div>
         <h2>⚠️ Warning: Reset Streaks</h2>
         <p>This will:</p>
         <ul>
@@ -802,6 +826,10 @@ function showTieBreakerModal() {
     document.getElementById('tieBreakerModal').style.display = 'block';
 }
 
+function showTieBreakerEffectsModal() {
+    document.getElementById('tieBreakerEffectsModal').style.display = 'block';
+}
+
 function showStreakModal() {
     document.getElementById('streakModal').style.display = 'block';
 }
@@ -817,6 +845,20 @@ function resetTieBreakers() {
     })
     .catch(error => {
         showStatus('Error resetting tie breakers: ' + error, 'error');
+    });
+}
+
+function resetTieBreakerEffects() {
+    fetch('/maintenance/reset-tiebreaker-effects', {
+        method: 'POST'
+    })
+    .then(response => response.json())
+    .then(data => {
+        showStatus(data.message, data.type || 'success');
+        hideModal('tieBreakerEffectsModal');
+    })
+    .catch(error => {
+        showStatus('Error resetting tie breaker effects: ' + error, 'error');
     });
 }
 

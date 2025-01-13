@@ -4733,6 +4733,66 @@ def reset_streaks():
     finally:
         db.close()
 
+@app.route("/maintenance/reset-tiebreaker-effects", methods=["POST"])
+@login_required
+def reset_tiebreaker_effects():
+    db = SessionLocal()
+    try:
+        # Log the action first
+        log_audit(
+            "reset_tiebreaker_effects",
+            session['user'],
+            "Manual reset of tie breaker effects"
+        )
+        
+        # Update all completed tie breakers
+        db.execute(text("""
+            UPDATE tie_breakers 
+            SET status = 'pending',
+                points_applied = false,
+                resolved_at = NULL
+            WHERE status = 'completed'
+        """))
+        
+        # Reset all participants
+        db.execute(text("""
+            UPDATE tie_breaker_participants
+            SET winner = NULL,
+                ready = false,
+                game_choice = NULL
+            WHERE tie_breaker_id IN (
+                SELECT id FROM tie_breakers
+                WHERE status = 'pending'
+            )
+        """))
+        
+        # Delete all games for reset tie breakers
+        db.execute(text("""
+            DELETE FROM tie_breaker_games
+            WHERE tie_breaker_id IN (
+                SELECT id FROM tie_breakers
+                WHERE status = 'pending'
+            )
+        """))
+        
+        # Force rankings refresh
+        db.execute(text("REFRESH MATERIALIZED VIEW rankings"))
+        
+        db.commit()
+        
+        return jsonify({
+            "message": "Tie breaker effects reset successfully. Rankings have been recalculated.",
+            "type": "success"
+        })
+    except Exception as e:
+        db.rollback()
+        return jsonify({
+            "message": f"Error resetting tie breaker effects: {str(e)}",
+            "type": "error"
+        }), 500
+    finally:
+        db.close()
+
 if __name__ == "__main__":
     debug_mode = os.getenv('FLASK_ENV') == 'development'
     
@@ -4978,7 +5038,7 @@ def create_tie_breaker(db, period_end, points, mode, users):
     try:
         # Calculate period start based on period type
         period_type = 'weekly' if isinstance(period_end, datetime) and period_end.weekday() == 6 else 'monthly'
-        period_start = period_end - timedelta(days=6 if period_type == 'weekly' else 30)
+        period_start = period_end - timedelta(days=(6 if period_type == 'weekly' else 30))
 
         # Validate core user attendance
         settings = db.query(Settings).first()

@@ -20,6 +20,8 @@ from prometheus_client import make_wsgi_app
 import time
 import random
 
+from flask_cors import CORS
+
 # Add new imports
 from functools import lru_cache
 from prometheus_client import Counter
@@ -4416,29 +4418,46 @@ def calculate_streak_for_date(username, target_date, db):
         app.logger.error(f"Error calculating streak: {str(e)}")
         return 0
 
-# ...existing code...
-
-# Add WebSocket support for real-time game updates
-
-
-# After app creation, before route definitions:
 CORS(app, resources={
+    # Allow all routes with appropriate settings
     r"/*": {
         "origins": [
-            "https://lic.mattdh.me",
             "http://localhost:9000",
-            "http://127.0.0.1:9000"
+            "http://127.0.0.1:9000",
+            "http://localhost:5000",
+            os.getenv('ALLOWED_ORIGIN', '*')
         ],
-        "methods": ["GET", "POST", "OPTIONS"],
-        "allow_headers": ["Content-Type"]
+        "methods": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+        "allow_headers": ["Content-Type", "Authorization"],
+        "expose_headers": ["Content-Range", "X-Total-Count"],
+        "supports_credentials": True
+    },
+    # Special config for WebSocket endpoints
+    r"/socket.io/*": {
+        "origins": "*",
+        "allow_credentials": True
     }
 })
+
+@app.after_request 
+def add_security_headers(response):
+    # Update CORS headers for development
+    if os.getenv('FLASK_ENV') == 'development':
+        response.headers['Access-Control-Allow-Origin'] = request.headers.get('Origin', '*')
+        response.headers['Access-Control-Allow-Credentials'] = 'true'
+        
+    return response
 
 # Initialize Socket.IO with optimized settings
 socketio = SocketIO(
     app,
     async_mode='gevent',
-    cors_allowed_origins="*",
+    cors_allowed_origins=[
+        "http://localhost:9000",
+        "http://127.0.0.1:9000", 
+        "http://localhost:5000",
+        os.getenv('ALLOWED_ORIGIN', '*')
+    ],
     logger=True,
     engineio_logger=True,
     ping_timeout=20,

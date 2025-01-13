@@ -346,24 +346,24 @@ async function checkForTieBreakers() {
           END as week_start,
           date_trunc('month', e.date::date)::date as month_start
         FROM entries e
-        WHERE e.date >= CASE 
+        WHERE e.date::date >= CASE 
           WHEN $1 = true THEN (CURRENT_DATE - INTERVAL '7 days')::date
-          ELSE (SELECT monitoring_start_date::date FROM settings LIMIT 1)
+          ELSE (SELECT monitoring_start_date FROM settings LIMIT 1)::date
         END
       ),
       tied_rankings AS (
         SELECT 
           period,
-          period_start,
-          period_end::timestamp,
+          period_start::date,
+          period_end::date,
           points,
           array_agg(username) as usernames,
           COUNT(*) as tied_count
         FROM rankings r
         WHERE EXISTS (
           SELECT 1 FROM period_entries pe
-          WHERE (r.period = 'weekly' AND r.period_start::date = pe.week_start)
-          OR (r.period = 'monthly' AND r.period_start::date = pe.month_start)
+          WHERE (r.period = 'weekly' AND r.period_start = pe.week_start)
+          OR (r.period = 'monthly' AND r.period_start = pe.month_start)
         )
         AND period IN ('weekly', 'monthly')
         AND period_end::date < CURRENT_DATE
@@ -376,7 +376,7 @@ async function checkForTieBreakers() {
         SELECT 1 
         FROM tie_breakers tb
         WHERE tb.period = tr.period
-        AND tb.period_end::timestamp = tr.period_end
+        AND tb.period_end::date = tr.period_end
         AND tb.points = tr.points
       )`;
 

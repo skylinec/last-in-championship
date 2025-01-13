@@ -4149,11 +4149,12 @@ def apply_move(game_state, move, player):
 # Add after apply_move function and before make_move route
 def check_line(board, start, step, length, player):
     """Check if a line contains a win for the given player"""
-    return all(board[start + i * step] == player for i in length)
+    # Fix: Use range(length) instead of just length
+    return all(board[start + i * step] == player for i in range(length))
 
 def check_tictactoe_winner(board, player):
     """Check if player has won in tic-tac-toe"""
-    # Check rows
+    # Check rows 
     for i in range(0, 9, 3):
         if check_line(board, i, 1, 3, player):
             return True
@@ -4177,7 +4178,7 @@ def check_connect4_winner(board, player):
             if check_line(board, row * 7 + col, 1, 4, player):
                 return True
                 
-    # Check vertical
+    # Check vertical  
     for row in range(3):
         for col in range(7):
             if check_line(board, row * 7 + col, 7, 4, player):

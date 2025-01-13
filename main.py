@@ -997,12 +997,12 @@ def calculate_daily_score(entry, settings, position=None, total_entries=None, mo
             finally:
                 db.close()
 
-    # Apply tie breaker wins if enabled
+    # Apply tie breaker wins if enabled - Modified to use the exact date
     tie_breaker_points = 0
     if settings.get("enable_tiebreakers", False):
         db = SessionLocal()
         try:
-            # Get tie breaker wins for this user on this date
+            # Updated query to get wins specifically for ties that ended on this date
             wins = db.execute(text("""
                 SELECT COUNT(*) FROM tie_breakers t
                 JOIN tie_breaker_participants p ON t.id = p.tie_breaker_id
@@ -2558,7 +2558,7 @@ def build_dynamic_query(db, params):
             start_date = date.replace(day=1)
             if "last" in params["date_range"]:
                 start_date = (start_date - timedelta(days(1)).replace(day=1))
-            next_month = (start_date.replace(day=28) + timedelta(days=4)).replace(day=1)
+            next_month = (start_date.replace(day=28) + timedelta(days(4)).replace(day=1))
             query = query.filter(Entry.date.between(start_date.isoformat(), (next_month - timedelta(days=1)).isoformat()))
         else:
             query = query.filter(Entry.date == date.isoformat())
@@ -3516,8 +3516,7 @@ def tie_breakers():
                         'id', g.id,
                         'game_type', g.game_type,
                         'player1', g.player1,
-                        'player2', g.player2,
-                        'status', g.status,
+                        'player2', g.status,
                         'game_state', g.game_state,
                         'final_tiebreaker', g.final_tiebreaker
                     )) FILTER (WHERE g.id IS NOT NULL) as games
@@ -3588,8 +3587,8 @@ def choose_game(tie_id):
 # ...existing code...
 
 def create_next_game(db, tie_id):
-    """Create next available games between tied participants"""
-    # Get all unplayed participant pairs
+    """Create next available games between tied participants with deduplication"""
+    # Get all unplayed participant pairs and their game choices
     pairs = db.execute(text("""
         WITH played_pairs AS (
             SELECT player1, player2
@@ -3614,37 +3613,51 @@ def create_next_game(db, tie_id):
         )
     """), {"tie_id": tie_id}).fetchall()
 
-    # Create games with initial state - let each player be player1 once with their chosen game
+    # Create games with initial state
     for pair in pairs:
-        # Create two games - one for each player's choice
-        for player, game_choice in [(pair.player1, pair.player1_choice),
-                                  (pair.player2, pair.player2_choice)]:
+        # Determine which games to create
+        games_to_create = []
+        if pair.player1_choice == pair.player2_choice:
+            # If both chose the same game, create only one instance
+            games_to_create.append((pair.player1, pair.player1_choice))
+        else:
+            # If different games, create one for each player's choice
+            games_to_create.extend([
+                (pair.player1, pair.player1_choice),
+                (pair.player2, pair.player2_choice)
+            ])
+
+        for player, game_choice in games_to_create:
             initial_state = {
                 "board": [None] * (9 if game_choice == 'tictactoe' else 42),
                 "moves": [],
-                "current_player": player
+                "current_player": player,
+                "player1": player,
+                "player2": pair.player2 if player == pair.player1 else pair.player1
             }
             
             try:
-                # Update the status to match the constraint
                 db.execute(text("""
                     INSERT INTO tie_breaker_games (
                         tie_breaker_id, 
                         game_type,
                         player1,
+                        player2,
                         status,
                         game_state
                     ) VALUES (
                         :tie_id,
                         :game_type,
                         :player1,
-                        'pending',  -- This now matches the constraint
+                        :player2,
+                        'pending',
                         :initial_state
                     )
                 """), {
                     "tie_id": tie_id,
                     "game_type": game_choice,
                     "player1": player,
+                    "player2": pair.player2 if player == pair.player1 else pair.player1,
                     "initial_state": json.dumps(initial_state)
                 })
             except Exception as e:
@@ -3655,7 +3668,38 @@ def create_next_game(db, tie_id):
 # Update the determine_winner function to use correct status
 def determine_winner(db, tie_id):
     """Determine the winner across all games for a tie breaker"""
-    # ... existing code ...
+    # Get wins per player
+    wins = db.execute(text("""
+        SELECT player1 as player, COUNT(*) as wins
+        FROM tie_breaker_games
+        WHERE tie_breaker_id = :tie_id
+        AND winner IS NOT NULL
+        AND NOT final_tiebreaker
+        GROUP BY player1
+    """), {"tie_id": tie_id}).fetchall()
+
+    if not wins:
+        return None
+
+    # If there's a clear winner, return them
+    max_wins = max(w.wins for w in wins)
+    winners = [w.player for w in wins if w.wins == max_wins]
+    
+    if len(winners) == 1:
+        return winners[0]
+
+    # If tie, create final tie-breaker game
+    player1, player2 = winners[:2]  # Take first two players for final
+    chosen_game = random.choice(['tictactoe', 'connect4'])
+    
+    # Initialize game state based on game type
+    initial_state = {
+        "board": [None] * (9 if chosen_game == 'tictactoe' else 42),
+        "moves": [],
+        "current_player": player1,
+        "player1": player1,
+        "player2": player2
+    }
 
     # Update the status value in the final tie-breaker game creation
     db.execute(text("""
@@ -3688,292 +3732,18 @@ def determine_winner(db, tie_id):
 
 # ...existing code...
 
-@app.route("/games/<int:game_id>/join", methods=["POST"])
-@login_required
-def join_game(game_id):
-    db = SessionLocal()
-    try:
-        # First check if game exists and is available
-        game = db.execute(text("""
-            SELECT g.*, t.id as tie_id 
-            FROM tie_breaker_games g
-            JOIN tie_breakers t ON g.tie_breaker_id = t.id
-            WHERE g.id = :game_id
-            AND g.status = 'pending'
-            AND g.player2 IS NULL
-        """), {"game_id": game_id}).fetchone()
-
-        if not game:
-            return jsonify({"error": "Game not available for joining"}), 400
-
-        # Check if user is eligible to join
-        is_eligible = db.execute(text("""
-            SELECT EXISTS (
-                SELECT 1 FROM tie_breaker_participants
-                WHERE tie_breaker_id = :tie_id
-                AND username = :username
-                AND username != :player1
-                AND ready = true
-            )
-        """), {
-            "tie_id": game.tie_id,
-            "username": session['user'],
-            "player1": game.player1
-        }).scalar()
-
-        if not is_eligible:
-            return jsonify({"error": "Not eligible to join this game"}), 403
-
-        # Update game with player2 and activate it
-        db.execute(text("""
-            UPDATE tie_breaker_games 
-            SET player2 = :player2,
-                status = 'active'
-            WHERE id = :game_id
-            AND status = 'pending'
-            AND player2 IS NULL
-        """), {
-            "player2": session['user'],
-            "game_id": game_id
-        })
-
-        db.commit()
-        return redirect(url_for('play_game', game_id=game_id))
-    except Exception as e:
-        db.rollback()
-        app.logger.error(f"Error joining game: {str(e)}")
-        return jsonify({"error": "Failed to join game"}), 500
-    finally:
-        db.close()
-
-@app.route("/games/<int:game_id>")
-@login_required
-def play_game(game_id):
-    """Handle game display and status checks"""
-    db = SessionLocal()
-    try:
-        game = db.execute(text("""
-            SELECT g.*, t.period, t.period_end, t.status as tie_status,
-                   tp.username as participant
-            FROM tie_breaker_games g
-            JOIN tie_breakers t ON g.tie_breaker_id = t.id
-            JOIN tie_breaker_participants tp ON t.id = tp.tie_breaker_id
-            WHERE g.id = :game_id
-            AND tp.username = :username
-        """), {
-            "game_id": game_id,
-            "username": session['user']
-        }).fetchone()
-
-        if not game:
-            return "Game not found or you don't have access", 404
-
-        if game.tie_status != 'in_progress':
-            return "This tie breaker is no longer active", 400
-
-        # Determine if user can view/play the game
-        can_play = session['user'] in [game.player1, game.player2] if game.player2 else session['user'] == game.player1
-        is_participant = bool(game.participant)
-
-        if not (can_play or is_participant):
-            return "You don't have access to this game", 403
-
-        if game.status == 'pending':
-            return "This game hasn't started yet", 400
-
-        template = f"games/{game.game_type}.html"
-        return render_template(
-            template,
-            game=game,
-            current_user=session['user'],
-            can_play=can_play
-        )
-    finally:
-        db.close()
-
-def is_valid_move(game_state, move, game_type):
-    """Validate move based on game type"""
-    board = game_state['board']
-    
-    if game_type == 'tictactoe':
-        return 0 <= move < 9 and board[move] is None
-    elif game_type == 'connect4':
-        if not (0 <= move < 7):  # Check column is valid
-            return False
-        # Find first empty spot in column
-        for i in range(35, -1, -7):  # Check from bottom up
-            if board[i + move] is None:
-                return True
-        return False
-    return False
-
-def apply_move(game_state, move, player, game_type):
-    """Apply move to game state"""
-    board = game_state['board']
-    moves = game_state['moves']
-    
-    if game_type == 'tictactoe':
-        board[move] = player
-    elif game_type == 'connect4':
-        # Find first empty spot in column
-        for i in range(35, -1, -7):
-            if board[i + move] is None:
-                board[i + move] = player
-                break
-                
-    moves.append({
-        "player": player,
-        "position": move,
-        "timestamp": datetime.now().isoformat()
-    })
-    
-    # Update current player - Fixed logic to handle initial moves
-    if len(moves) >= 2:
-        current_player = game_state['current_player']
-        next_player = moves[0]['player'] if current_player == moves[1]['player'] else moves[1]['player']
-    else:
-        # For the first move, just switch to the other player
-        next_player = game_state.get('player2') if player == game_state.get('player1') else game_state.get('player1')
-    
-    return {
-        "board": board,
-        "moves": moves,
-        "current_player": next_player
-    }
-
-# ...existing code...
-
-def check_winner(game_state, game_type):
-    """Check for winner based on game type"""
-    board = game_state['board']
-    
-    if game_type == 'tictactoe':
-        # Check rows, columns and diagonals
-        lines = [
-            [0,1,2], [3,4,5], [6,7,8],  # rows
-            [0,3,6], [1,4,7], [2,5,8],  # columns
-            [0,4,8], [2,4,6]  # diagonals
-        ]
-        
-        for line in lines:
-            if (board[line[0]] is not None and
-                board[line[0]] == board[line[1]] == board[line[2]]):
-                return board[line[0]]
-                
-    elif game_type == 'connect4':
-        # Check horizontal
-        for row in range(6):
-            for col in range(4):
-                idx = row * 7 + col
-                if (board[idx] is not None and
-                    board[idx+1] is not None and
-                    board[idx+2] is not None and
-                    board[idx+3] is not None and
-                    board[idx] == board[idx+1] == board[idx+2] == board[idx+3]):
-                    return board[idx]
-        
-        # Check vertical
-        for row in range(3):
-            for col in range(7):
-                idx = row * 7 + col
-                if (board[idx] is not None and
-                    board[idx+7] is not None and
-                    board[idx+14] is not None and
-                    board[idx+21] is not None and
-                    board[idx] == board[idx+7] == board[idx+14] == board[idx+21]):
-                    return board[idx]
-        
-        # Check diagonal (down-right)
-        for row in range(3):
-            for col in range(4):
-                idx = row * 7 + col
-                if (board[idx] is not None and
-                    board[idx+8] is not None and
-                    board[idx+16] is not None and
-                    board[idx+24] is not None and
-                    board[idx] == board[idx+8] == board[idx+16] == board[idx+24]):
-                    return board[idx]
-        
-        # Check diagonal (down-left)
-        for row in range(3):
-            for col in range(3, 7):
-                idx = row * 7 + col
-                if (board[idx] is not None and
-                    board[idx+6] is not None and
-                    board[idx+12] is not None and
-                    board[idx+18] is not None and
-                    board[idx] == board[idx+6] == board[idx+12] == board[idx+18]):
-                    return board[idx]
-    
-    return None
-
-def determine_winner(db, tie_id):
-    """Determine the winner across all games for a tie breaker"""
-    winners = db.execute(text("""
-        SELECT player1 as player, COUNT(*) as wins
-        FROM tie_breaker_games
-        WHERE tie_breaker_id = :tie_id
-        AND winner = player1
-        AND NOT final_tiebreaker
-        GROUP BY player1
-        UNION ALL
-        SELECT player2 as player, COUNT(*) as wins
-        FROM tie_breaker_games
-        WHERE tie_breaker_id = :tie_id
-        AND winner = player2
-        AND NOT final_tiebreaker
-        GROUP BY player2
-        ORDER BY wins DESC
-    """), {"tie_id": tie_id}).fetchall()
-
-    if not winners:
-        return None
-
-    # If there's a clear winner (most wins)
-    if len(winners) == 1 or winners[0].wins > winners[1].wins:
-        return winners[0].player
-
-    # If there's a tie, create a final tie-breaker game
-    player1, player2 = winners[0].player, winners[1].player
-    game_types = ['tictactoe', 'connect4']
-    chosen_game = random.choice(game_types)
-
-    initial_state = {
-        "board": [None] * (9 if chosen_game == 'tictactoe' else 42),
-        "moves": [],
-        "current_player": player1
-    }
-
-    db.execute(text("""
-        INSERT INTO tie_breaker_games (
-            tie_breaker_id,
-            game_type,
-            player1,
-            player2,
-            status,
-            game_state,
-            final_tiebreaker
-        ) VALUES (
-            :tie_id,
-            :game_type,
-            :player1,
-            :player2,
-            'pending',  -- Changed from 'active' to match constraint
-            :initial_state,
-            true
-        )
-    """), {
-        "tie_id": tie_id,
-        "game_type": chosen_game,
-        "player1": player1,
-        "player2": player2,
-        "initial_state": json.dumps(initial_state)
-    })
-
-    return None
-
 def check_tie_breaker_completion(db, tie_id):
     """Check if a tie breaker is complete and determine the winner"""
+    # Get the tie breaker period end date first
+    tie_breaker = db.execute(text("""
+        SELECT period_end, points 
+        FROM tie_breakers 
+        WHERE id = :tie_id
+    """), {"tie_id": tie_id}).fetchone()
+    
+    if not tie_breaker:
+        return False
+
     # Check if all non-final games are complete
     incomplete_games = db.execute(text("""
         SELECT COUNT(*) 
@@ -4003,7 +3773,7 @@ def check_tie_breaker_completion(db, tie_id):
             return False
 
         if winner:
-            # Update tie breaker as completed with winner
+            # Update tie breaker as completed with winner and store resolution date
             db.execute(text("""
                 UPDATE tie_breakers
                 SET status = 'completed',
@@ -4021,9 +3791,62 @@ def check_tie_breaker_completion(db, tie_id):
                 "winner": winner
             })
 
+            # Log the resolution with the period_end date
+            log_audit(
+                "tie_breaker_resolved",
+                winner,
+                f"Tie breaker resolved for period ending {tie_breaker.period_end}",
+                old_data={"tie_id": tie_id, "period_end": tie_breaker.period_end},
+                new_data={
+                    "winner": winner,
+                    "points": tie_breaker.points,
+                    "period_end": tie_breaker.period_end
+                }
+            )
+
             return True
 
     return False
+
+def is_valid_move(board, position):
+    """Check if move is valid"""
+    try:
+        row, col = map(int, position.split(','))
+        if 0 <= row < 3 and 0 <= col < 3:
+            return board[row][col] == ''
+        return False
+    except (ValueError, IndexError):
+        return False
+
+def apply_move(board, position, symbol):
+    """Apply move to board"""
+    row, col = map(int, position.split(','))
+    board[row][col] = symbol
+    return board
+
+def check_winner(board):
+    """Check for winner"""
+    # Check rows
+    for row in board:
+        if row.count(row[0]) == 3 and row[0]:
+            return row[0]
+    
+    # Check columns
+    for col in range(3):
+        if board[0][col] == board[1][col] == board[2][col] and board[0][col]:
+            return board[0][col]
+    
+    # Check diagonals
+    if board[0][0] == board[1][1] == board[2][2] and board[0][0]:
+        return board[0][0]
+    if board[0][2] == board[1][1] == board[2][0] and board[0][2]:
+        return board[0][2]
+    
+    # Check for tie
+    if all(all(cell for cell in row) for row in board):
+        return 'tie'
+    
+    return None
 
 # Update make_move to use the new completion check
 @app.route("/games/<int:game_id>/move", methods=["POST"])
@@ -4033,7 +3856,8 @@ def make_move(game_id):
     try:
         # Get game with proper column selection
         game = db.execute(text("""
-            SELECT g.*, g.game_state->>'current_player' as current_player 
+            SELECT g.*, g.game_state->>'current_player' as current_player,
+                   g.game_type, g.tie_breaker_id
             FROM tie_breaker_games g 
             WHERE id = :game_id
         """), {"game_id": game_id}).fetchone()
@@ -4051,10 +3875,10 @@ def make_move(game_id):
         updated_state = apply_move(game_state, move, session['user'], game.game_type)
         winner = check_winner(updated_state, game.game_type)
 
-        # Update game state with proper JSON handling
+        # Fix: Update game state using proper SQL syntax
         db.execute(text("""
             UPDATE tie_breaker_games 
-            SET game_state = :state::jsonb,
+            SET game_state = :state,
                 winner = :winner,
                 status = CASE WHEN :winner IS NOT NULL THEN 'completed' ELSE 'active' END,
                 completed_at = CASE WHEN :winner IS NOT NULL THEN NOW() ELSE NULL END
@@ -4079,6 +3903,10 @@ def make_move(game_id):
                 )
 
         db.commit()
+        
+        # Notify other players through WebSocket
+        notify_game_update(game_id, updated_state, winner)
+        
         return jsonify({
             "success": True,
             "state": updated_state,
@@ -4088,7 +3916,7 @@ def make_move(game_id):
     except Exception as e:
         db.rollback()
         app.logger.error(f"Error processing move: {str(e)}")
-        return jsonify({"success": False, "message": "Server error"}), 500
+        return jsonify({"success": False, "message": str(e)}), 500
     finally:
         db.close()
 

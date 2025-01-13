@@ -42,40 +42,48 @@
         {% endif %}
 
         <!-- Show available games for in-progress tie breakers -->
-        {% if tie.status == 'in_progress' and tie.games %}
+        {% if tie.status == 'in_progress' %}
             <div class="available-games">
                 <h4>Available Games</h4>
-                {% for game in tie.games %}
-                    {% if game.status == 'pending' and not game.player2 %}
-                        {% if current_user == game.player1 %}
-                            <div class="game-entry">
-                                <p class="pending-message">Waiting for opponent to join {{ game.game_type|title }} game</p>
-                            </div>
-                        {% elif current_user != game.player1 %}
-                            <div class="game-entry">
-                                <form method="POST" action="{{ url_for('join_game', game_id=game.id) }}" class="join-form">
-                                    <button type="submit" class="btn game-link join">
-                                        Join {{ game.game_type|title }} against {{ game.player1 }}
-                                    </button>
-                                </form>
-                            </div>
-                        {% endif %}
-                    {% elif game.status == 'active' %}
-                        <div class="game-entry">
-                            {% if current_user in [game.player1, game.player2] %}
-                                <a href="{{ url_for('play_game', game_id=game.id) }}" class="btn game-link">
-                                    Continue {{ game.game_type|title }} against {% if current_user == game.player1 %}{{ game.player2 }}{% else %}{{ game.player1 }}{% endif %}
-                                </a>
-                            {% else %}
-                                <a href="{{ url_for('play_game', game_id=game.id) }}" class="btn game-link spectate">
-                                    Watch {{ game.game_type|title }}: {{ game.player1 }} vs {{ game.player2 }}
-                                </a>
-                            {% endif %}
-                        </div>
-                    {% endif %}
-                {% endfor %}
+                {% set has_games = false %}
                 
-                {% if not tie.games %}
+                {% if tie.games %}
+                    {% for game in tie.games %}
+                        {% if game and game.status %}  <!-- Add null check -->
+                            {% set has_games = true %}
+                            
+                            {% if game.status == 'pending' %}
+                                {% if current_user == game.player1 %}
+                                    <div class="game-entry">
+                                        <p class="pending-message">Waiting for opponent to join {{ game.game_type|title }} game</p>
+                                    </div>
+                                {% elif not game.player2 %}  <!-- Check specifically for no player2 -->
+                                    <div class="game-entry">
+                                        <form method="POST" action="{{ url_for('join_game', game_id=game.id) }}" class="join-form">
+                                            <button type="submit" class="btn game-link join">
+                                                Join {{ game.game_type|title }} against {{ game.player1 }}
+                                            </button>
+                                        </form>
+                                    </div>
+                                {% endif %}
+                            {% elif game.status == 'active' %}
+                                <div class="game-entry">
+                                    {% if current_user in [game.player1, game.player2] %}
+                                        <a href="{{ url_for('play_game', game_id=game.id) }}" class="btn game-link">
+                                            Continue {{ game.game_type|title }} against {% if current_user == game.player1 %}{{ game.player2 }}{% else %}{{ game.player1 }}{% endif %}
+                                        </a>
+                                    {% else %}
+                                        <a href="{{ url_for('play_game', game_id=game.id) }}" class="btn game-link spectate">
+                                            Watch {{ game.game_type|title }}: {{ game.player1 }} vs {{ game.player2 }}
+                                        </a>
+                                    {% endif %}
+                                </div>
+                            {% endif %}
+                        {% endif %}
+                    {% endfor %}
+                {% endif %}
+                
+                {% if not has_games %}
                     <p class="no-games">No active games available.</p>
                 {% endif %}
             </div>

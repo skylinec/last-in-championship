@@ -3643,101 +3643,27 @@ def create_next_game(db, tie_id):
         )
     """), {"tie_id": tie_id}).fetchall()
 
-    # Create games with initial state but only player1 set
-    for pair in pairs:
-        # Determine which games to create 
-        games_to_create = []
-        if pair.player1_choice == pair.player2_choice:
-            # If both chose the same game, create only one instance
-            games_to_create.append((pair.player1, pair.player1_choice))
-        else:
-            # If different games, create one for each player's choice
-            games_to_create.extend([
-                (pair.player1, pair.player1_choice),
-                (pair.player2, pair.player2_choice)
-            ])
-
-        for player, game_choice in games_to_create:
-            initial_state = {
-                "board": [None] * (9 if game_choice == 'tictactoe' else 42),
-                "moves": [],
-                "current_player": player,
-                "player1": player
-            }
-            
-            try:
-                db.execute(text("""
-                    INSERT INTO tie_breaker_games (
-                        tie_breaker_id, 
-                        game_type,
-                        player1,
-                        status,
-                        game_state
-                    ) VALUES (
-                        :tie_id,
-                        :game_type,
-                        :player1,
-                        'pending',
-                        :initial_state
-                    )
-                """), {
-                    "tie_id": tie_id,
-                    "game_type": game_choice,
-                    "player1": player,
-                    "initial_state": json.dumps(initial_state)
-                })
-            except Exception as e:
-                app.logger.error(f"Error creating game: {str(e)}")
-                app.logger.error(f"Failed parameters: tie_id={tie_id}, game_type={game_choice}, player1={player}")
-                raise
-            
-    """Create next available games between tied participants with deduplication"""
-    # Get all unplayed participant pairs and their game choices
-    pairs = db.execute(text("""
-        WITH played_pairs AS (
-            SELECT player1, player2
-            FROM tie_breaker_games
-            WHERE tie_breaker_id = :tie_id
-        )
-        SELECT 
-            p1.username as player1,
-            p1.game_choice as player1_choice, 
-            p2.username as player2,
-            p2.game_choice as player2_choice
-        FROM tie_breaker_participants p1
-        CROSS JOIN tie_breaker_participants p2
-        WHERE p1.tie_breaker_id = :tie_id
-        AND p2.tie_breaker_id = :tie_id
-        AND p1.username < p2.username
-        AND p1.ready = true AND p2.ready = true
-        AND NOT EXISTS (
-            SELECT 1 FROM played_pairs pp
-            WHERE (pp.player1 = p1.username AND pp.player2 = p2.username)
-            OR (pp.player1 = p2.username AND pp.player2 = p1.username)
-        )
-    """), {"tie_id": tie_id}).fetchall()
-
     # Create games with initial state
     for pair in pairs:
         # Determine which games to create
         games_to_create = []
         if pair.player1_choice == pair.player2_choice:
             # If both chose the same game, create only one instance
-            games_to_create.append((pair.player1, pair.player1_choice))
+            games_to_create.append((pair.player1, pair.player1_choice, pair.player2))
         else:
             # If different games, create one for each player's choice
             games_to_create.extend([
-                (pair.player1, pair.player1_choice),
-                (pair.player2, pair.player2_choice)
+                (pair.player1, pair.player1_choice, pair.player2),
+                (pair.player2, pair.player2_choice, pair.player1)
             ])
 
-        for player, game_choice in games_to_create:
+        for player1, game_choice, player2 in games_to_create:
             initial_state = {
                 "board": [None] * (9 if game_choice == 'tictactoe' else 42),
                 "moves": [],
-                "current_player": player,
-                "player1": player,
-                "player2": pair.player2 if player == pair.player1 else pair.player2
+                "current_player": player1,
+                "player1": player1,
+                "player2": player2
             }
             
             try:
@@ -3760,13 +3686,13 @@ def create_next_game(db, tie_id):
                 """), {
                     "tie_id": tie_id,
                     "game_type": game_choice,
-                    "player1": player,
-                    "player2": pair.player2 if player == pair.player1 else pair.player2,
+                    "player1": player1,
+                    "player2": player2,
                     "initial_state": json.dumps(initial_state)
                 })
             except Exception as e:
                 app.logger.error(f"Error creating game: {str(e)}")
-                app.logger.error(f"Failed parameters: tie_id={tie_id}, game_type={game_choice}, player1={player}")
+                app.logger.error(f"Failed parameters: tie_id={tie_id}, game_type={game_choice}, player1={player1}")
                 raise
 
 # Update the determine_winner function to use correct status
@@ -4140,8 +4066,13 @@ def join_game(game_id):
         if not game:
             return jsonify({"error": "Game not found"}), 404
 
+        # Fix: Use 'user' instead of 'username' from session
+        current_user = session.get('user')
+        if not current_user:
+            return jsonify({"error": "Not logged in"}), 401
+
         # Check for valid players
-        if session['username'] == game.player1:
+        if current_user == game.player1:
             return jsonify({"error": "You are already player1 in this game"}), 400
 
         if game.player2 is not None:
@@ -4149,7 +4080,7 @@ def join_game(game_id):
 
         # Update game state to include player2
         game_state = json.loads(game.game_state)
-        game_state['player2'] = session['username']
+        game_state['player2'] = current_user
         
         # Update game with player2 and status
         db.execute(text("""
@@ -4161,28 +4092,16 @@ def join_game(game_id):
             AND player2 IS NULL
         """), {
             "game_id": game_id,
-            "player2": session['username'],
+            "player2": current_user,
             "game_state": json.dumps(game_state)
         })
 
-        # Log audit trail
-        log_audit(
-            "join_game",
-            session['username'],
-            f"Joined game {game_id}",
-            old_data={"status": "pending"},
-            new_data={"status": "active", "player2": session['username']}
-        )
-
         db.commit()
-        
-        # Update metrics
-        ACTIVE_GAMES = Gauge('active_games', 'Number of active games')
-        ACTIVE_GAMES.inc()
-        
         return jsonify({"message": "Successfully joined game"})
 
     except Exception as e:
         db.rollback()
         app.logger.error(f"Error joining game: {str(e)}")
         return jsonify({"error": str(e)}), 500
+    finally:
+        db.close()

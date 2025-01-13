@@ -560,6 +560,70 @@
             margin-left: auto;
             border-bottom-right-radius: 4px;
         }
+
+        /* Add responsive styles */
+        @media (max-width: 768px) {
+            body {
+                padding: 10px;
+            }
+
+            nav {
+                flex-direction: column;
+                padding: 10px;
+            }
+
+            nav a {
+                width: 100%;
+                margin: 5px 0;
+                text-align: center;
+            }
+
+            .dropdown {
+                width: 100%;
+            }
+
+            .dropdown-content {
+                position: static;
+                width: 100%;
+                box-shadow: none;
+            }
+
+            .championship-mode {
+                margin: 10px 0;
+                width: 100%;
+                justify-content: center;
+            }
+
+            .user-info {
+                margin: 10px 0;
+                text-align: center;
+                width: 100%;
+            }
+
+            .chatbot-container {
+                bottom: 70px;
+            }
+
+            .chat-window {
+                width: 90vw;
+                left: 5vw;
+                right: 5vw;
+                bottom: 100px;
+                height: 60vh;
+            }
+
+            .quick-clock-in {
+                bottom: 70px;
+                right: 20px;
+            }
+
+            .global-clock-in {
+                width: 90vw;
+                left: 5vw;
+                right: 5vw;
+                bottom: 100px;
+            }
+        }
     </style>
     {% block head %}{% endblock %}
 </head>

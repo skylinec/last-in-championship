@@ -420,6 +420,46 @@
     background: var(--warning-color);
     color: white;
 }
+
+/* Add responsive styles */
+@media (max-width: 768px) {
+    .maintenance-container {
+        padding: 10px;
+    }
+
+    .maintenance-section {
+        padding: 15px;
+    }
+
+    .dangerous-action {
+        flex-direction: column;
+        gap: 10px;
+    }
+
+    .action-button {
+        width: 100%;
+    }
+
+    .log-controls {
+        flex-direction: column;
+        gap: 10px;
+    }
+
+    .log-controls select {
+        width: 100%;
+    }
+
+    .log-table {
+        display: block;
+        overflow-x: auto;
+        white-space: nowrap;
+    }
+
+    .modal-content {
+        width: 95%;
+        margin: 5% auto;
+    }
+}
 </style>
 
 <script>

@@ -372,6 +372,47 @@
     opacity: 1;
     visibility: visible;
 }
+
+/* Add responsive styles */
+@media (max-width: 768px) {
+    .rankings-container {
+        overflow-x: auto;
+    }
+
+    .period-selector {
+        flex-direction: column;
+        gap: 15px;
+    }
+
+    .period-selector input,
+    .period-selector button {
+        width: 100%;
+    }
+
+    .timeline-container {
+        padding: 10px;
+    }
+
+    .timeline-name {
+        width: 80px;
+        font-size: 0.8em;
+    }
+
+    .timeline-bar .timeline-time,
+    .timeline-bar .timeline-end-time {
+        font-size: 0.7em;
+    }
+
+    .timeline-scale span {
+        font-size: 0.7em;
+    }
+
+    .score-cell::before {
+        width: 200px;
+        left: -100px;
+        transform: translateX(0);
+    }
+}
 </style>
 
 <script>

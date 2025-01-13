@@ -491,5 +491,40 @@ loadHistory();
 .btn-nav:disabled:hover {
     transform: none;
 }
+
+/* Add responsive styles */
+@media (max-width: 768px) {
+    .filters-container {
+        padding: 10px;
+    }
+
+    .filter-section {
+        grid-template-columns: 1fr;
+    }
+
+    .filter-group select,
+    .filter-group input {
+        width: 100%;
+    }
+
+    .date-range {
+        grid-template-columns: 1fr;
+    }
+
+    #historyTable {
+        display: block;
+        overflow-x: auto;
+        white-space: nowrap;
+    }
+
+    .action-buttons {
+        flex-direction: column;
+        gap: 5px;
+    }
+
+    .action-buttons button {
+        width: 100%;
+    }
+}
 </style>
 {% endblock %}

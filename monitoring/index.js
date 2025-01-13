@@ -391,9 +391,9 @@ async function checkForTieBreakers() {
       )
       ORDER BY period_end DESC, points DESC`;
 
-    // Initialize new tie breakers
-    const ties = await client.query(tieCheckQuery, [settings.rows[0].auto_resolve_tiebreakers]);
-    
+    // Initialize new tie breakers - Remove the parameter since we're not using it
+    const ties = await client.query(tieCheckQuery);
+
     // Add debug logging
     console.log(`Found ${ties.rows.length} potential tie breakers`);
     ties.rows.forEach(tie => {

@@ -333,30 +333,38 @@ async function checkForTieBreakers() {
       return;
     }
 
-    // Modified query to only check completed periods
+    // Modified query to correctly identify ties at week/month end
     const tieCheckQuery = `
       WITH period_bounds AS (
-        -- Calculate completed periods only
+        -- Get last completed week and month
         SELECT 'weekly' as period,
           date_trunc('week', current_date - interval '1 week')::date as period_start,
           (date_trunc('week', current_date - interval '1 week') + interval '6 days')::date as period_end
-        WHERE current_date > date_trunc('week', current_date)::date
+        WHERE date_trunc('week', current_date) != date_trunc('week', current_date - interval '1 week')
         UNION ALL
         SELECT 'monthly',
-          date_trunc('month', current_date - interval '1 month')::date,
-          (date_trunc('month', current_date) - interval '1 day')::date
-        WHERE current_date > date_trunc('month', current_date)::date
+          date_trunc('month', current_date - interval '1 month')::date as period_start,
+          (date_trunc('month', current_date) - interval '1 day')::date as period_end
+        WHERE date_trunc('month', current_date) != date_trunc('month', current_date - interval '1 day')
       ),
-      user_scores AS (
+      period_scores AS (
+        -- Calculate aggregated scores for the period
         SELECT 
           r.period,
           r.period_start::date,
           r.period_end::date,
           r.username,
-          r.points,
+          r.score as points,  -- Use the score directly from rankings
           COUNT(*) OVER (
-            PARTITION BY r.period, r.period_start::date, r.period_end::date, ROUND(r.points::numeric, 2)
-          ) as tied_count
+            PARTITION BY r.period, r.period_end::date, ROUND(r.score::numeric, 2)
+          ) as tied_count,
+          COUNT(*) OVER (
+            PARTITION BY r.period, r.period_end::date
+          ) as total_participants,
+          ROW_NUMBER() OVER (
+            PARTITION BY r.period, r.period_end::date
+            ORDER BY r.score DESC
+          ) as rank
         FROM rankings r
         INNER JOIN period_bounds pb ON 
           r.period = pb.period AND 
@@ -369,16 +377,18 @@ async function checkForTieBreakers() {
         )
       ),
       tied_groups AS (
+        -- Find groups of tied scores
         SELECT 
           period,
           period_start,
           period_end,
           ROUND(points::numeric, 2) as points,
           array_agg(username) as usernames,
-          COUNT(*) as tied_count
-        FROM user_scores
+          COUNT(*) as tied_count,
+          rank
+        FROM period_scores
         WHERE tied_count > 1
-        GROUP BY period, period_start, period_end, ROUND(points::numeric, 2)
+        GROUP BY period, period_start, period_end, ROUND(points::numeric, 2), rank
         HAVING COUNT(*) > 1
       )
       SELECT *
@@ -390,15 +400,19 @@ async function checkForTieBreakers() {
         AND tb.period_end::date = t.period_end
         AND ROUND(tb.points::numeric, 2) = t.points
       )
-      ORDER BY period_end DESC, points DESC`;
-
-    // Initialize new tie breakers - Remove the parameter since we're not using it
-    const ties = await client.query(tieCheckQuery);
+      ORDER BY period_end DESC, rank ASC`;
 
     // Add debug logging
+    console.log("Checking for tie breakers...");
+    const ties = await client.query(tieCheckQuery);
     console.log(`Found ${ties.rows.length} potential tie breakers`);
+    
+    // Log each potential tie for debugging
     ties.rows.forEach(tie => {
-      console.log(`Period: ${tie.period}, End: ${tie.period_end}, Points: ${tie.points}, Users: ${tie.usernames.join(', ')}`);
+      console.log(`Found tie for ${tie.period} ending ${tie.period_end}:
+        Points: ${tie.points}
+        Users: ${tie.usernames.join(', ')}
+        Rank: ${tie.rank}`);
     });
 
     // Rest of the function remains the same...

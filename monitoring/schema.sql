@@ -250,7 +250,7 @@ ADD COLUMN IF NOT EXISTS status VARCHAR(20)
 DEFAULT 'pending' 
 CHECK (status IN ('pending', 'active', 'completed'));
 
--- Drop and recreate the rankings view with period support
+-- Drop and recreate the rankings view with proper point references
 DROP MATERIALIZED VIEW IF EXISTS rankings;
 CREATE MATERIALIZED VIEW rankings AS
 WITH RECURSIVE periods AS (
@@ -366,13 +366,13 @@ SELECT
     ROUND(last_in_points::numeric, 1) as last_in_points_rounded
 FROM scored_entries;
 
--- Update indices for the rankings view
+-- Update indices to reference correct columns
 DROP INDEX IF EXISTS idx_rankings_user_date;
 CREATE UNIQUE INDEX idx_rankings_composite ON rankings(username, date, period);
 CREATE INDEX idx_rankings_period ON rankings(period, period_end);
 
--- Add new indices for historical tie breaker queries
-CREATE INDEX IF NOT EXISTS idx_rankings_period_points ON rankings(period, points);
+-- Update historical tie breaker indices to use base_points
+CREATE INDEX IF NOT EXISTS idx_rankings_period_points ON rankings(period, base_points);
 CREATE INDEX IF NOT EXISTS idx_rankings_period_end ON rankings(period_end);
 CREATE INDEX IF NOT EXISTS idx_tie_breakers_composite ON tie_breakers(period, period_end, points, status);
 

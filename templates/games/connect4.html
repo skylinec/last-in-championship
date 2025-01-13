@@ -19,7 +19,7 @@
             {% elif game.status == 'completed' %}
                 <div class="draw">It's a draw!</div>
             {% else %}
-                <div class="turn">Current Turn: {{ game.current_player }}</div>
+                <div class="turn">Current Turn: {{ game.game_state.current_player }}</div>
             {% endif %}
         </div>
     </div>
@@ -292,9 +292,9 @@ document.addEventListener('DOMContentLoaded', function() {
                     const disc = cell.querySelector('.disc');
                     if (disc) {
                         if (value === "{{ game.player1 }}") {
-                            disc.style.backgroundColor = '#ff4444';  // Red for player 1
+                            disc.style.backgroundColor = '#ff4444';
                         } else if (value === "{{ game.player2 }}") {
-                            disc.style.backgroundColor = '#ffeb3b';  // Yellow for player 2
+                            disc.style.backgroundColor = '#ffeb3b';
                         } else {
                             disc.style.backgroundColor = '';
                         }
@@ -302,29 +302,35 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
             });
 
-            // Update player states
+            // Update player states and current turn
+            const currentPlayer = data.state.current_player;
             document.querySelectorAll('.player').forEach(playerDiv => {
                 playerDiv.classList.remove('active');
-                if (playerDiv.textContent.includes(data.current_player)) {
+                if (playerDiv.textContent.includes(currentPlayer)) {
                     playerDiv.classList.add('active');
                 }
             });
+            
+            // Update turn indicator
+            const turnDiv = document.querySelector('.turn');
+            if (turnDiv) {
+                turnDiv.textContent = `Current Turn: ${currentPlayer}`;
+            }
 
-            // Handle winner or draw
-            if (data.winner) {
+            // Handle game completion
+            if (data.winner || data.state.winner) {
+                const winner = data.winner || data.state.winner;
                 setTimeout(() => {
-                    if (data.winner === 'draw') {
+                    if (winner === 'draw') {
                         alert("Game ended in a draw! A new game will start with reversed player order.");
-                        if (data.next_game) {
-                            window.location.href = `/games/${data.next_game}`;
-                        } else {
-                            window.location.reload();
-                        }
                     } else {
-                        alert(`${data.winner} wins!`);
-                        window.location.reload();
+                        alert(`${winner} wins!`);
                     }
+                    window.location.reload();
                 }, 100);
+            } else {
+                // Refresh page after each move
+                window.location.reload();
             }
         });
 

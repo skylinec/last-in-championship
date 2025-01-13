@@ -284,14 +284,12 @@ document.addEventListener('DOMContentLoaded', function() {
                 setTimeout(() => {
                     if (winner === 'draw') {
                         alert("Game ended in a draw! A new game will start with reversed player order.");
+                        window.location.reload();
                     } else {
                         alert(`${winner} wins!`);
+                        window.location.reload();
                     }
-                    window.location.reload();
                 }, 100);
-            } else {
-                // Refresh page after each move
-                window.location.reload();
             }
         });
 

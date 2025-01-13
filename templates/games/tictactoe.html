@@ -183,18 +183,21 @@ document.addEventListener('DOMContentLoaded', function() {
         reconnectionAttempts: 5,
         reconnectionDelay: 1000,
         reconnectionDelayMax: 5000,
-        timeout: 10000,
-        autoConnect: true
+        timeout: 20000,
+        autoConnect: true,
+        forceNew: true
     });
 
-    // Add connection event handlers
+    // Add better error handling and reconnection logic
+    socket.on('connect_error', (error) => {
+        console.error('Connection error:', error);
+        // Try to reconnect with polling if websocket fails
+        socket.io.opts.transports = ['polling', 'websocket'];
+    });
+
     socket.on('connect', () => {
         console.log('Connected to server');
         socket.emit('join_game', { game_id: {{ game.id }} });
-    });
-
-    socket.on('connect_error', (error) => {
-        console.error('Connection error:', error);
     });
 
     socket.on('connect_timeout', () => {
@@ -284,27 +287,42 @@ document.addEventListener('DOMContentLoaded', function() {
             });
         });
     }
-});
 
-function makeMove(pos) {
-    if (!pos && pos !== 0) return;  // Validate position
+    // Enhanced error handling for moves
+    async function makeMove(pos) {
+        if (!pos && pos !== 0) return;
 
-    fetch(`/games/{{ game.id }}/move`, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ 
-            move: parseInt(pos),
-            game_type: 'tictactoe'
-        })
-    })
-    .then(response => response.json())
-    .then(data => {
+        try {
+            const response = await fetch(`/games/{{ game.id }}/move`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                body: JSON.stringify({ 
+                    move: parseInt(pos),
+                    game_type: 'tictactoe'
+                }),
+                credentials: 'same-origin'
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+
+            const data = await response.json();
+            handleMoveResponse(data);
+            
+        } catch (error) {
+            console.error('Move error:', error);
+            alert('Error making move. Please try again.');
+        }
+    }
+
+    function handleMoveResponse(data) {
         if (data.success) {
             if (data.winner === 'draw') {
                 alert("Game ended in a draw! A new game will start with reversed player order.");
-                // Redirect to the new game
                 if (data.next_game) {
                     window.location.href = `/games/${data.next_game}`;
                 } else {
@@ -313,18 +331,12 @@ function makeMove(pos) {
             } else if (data.winner) {
                 alert(`${data.winner} wins!`);
                 window.location.reload();
-            } else {
-                window.location.reload();
             }
         } else {
             alert(data.message || 'Invalid move');
         }
-    })
-    .catch(error => {
-        console.error('Error:', error);
-        alert('Server error. Please try again.');
-    });
-}
+    }
+});
 </script>
 {% endif %}
 {% endblock %}

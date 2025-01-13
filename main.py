@@ -4298,8 +4298,8 @@ def make_move(game_id):
         if not game:
             return jsonify({"success": False, "message": "Game not found"}), 404
 
-        # Add game type to game state
-        game_state = game.game_state
+        # Add game type to game state if not present
+        game_state = game.game_state if isinstance(game.game_state, dict) else json.loads(game.game_state)
         game_state['game_type'] = game.game_type
 
         # Get move from request
@@ -4316,12 +4316,16 @@ def make_move(game_id):
             updated_state = apply_move(game_state, move, current_user)
             winner = check_winner(updated_state, game.game_type)
             
-            # Emit game update through WebSocket before database update
-            socketio.emit('game_update', {
-                'state': updated_state,
-                'winner': winner,
-                'current_player': updated_state.get('current_player')
-            }, room=f'game_{game_id}')
+            # Emit game update through WebSocket
+            try:
+                socketio.emit('game_update', {
+                    'game_id': game_id,
+                    'state': updated_state,
+                    'winner': winner,
+                    'current_player': updated_state.get('current_player')
+                }, room=f'game_{game_id}', namespace='/')
+            except Exception as ws_error:
+                app.logger.warning(f"WebSocket emit failed: {str(ws_error)}")
 
             if winner == 'draw':
                 app.logger.info(f"Game {game_id} ended in a draw")
@@ -4479,13 +4483,13 @@ CORS(app, resources={
 socketio = SocketIO(
     app,
     cors_allowed_origins="*",  # Be more permissive with origins
-    async_mode='threading',    # Change from eventlet to threading
+    async_mode='eventlet',    # Change from threading to eventlet
     logger=True,
     engineio_logger=True,
-    ping_timeout=10,
-    ping_interval=5,
-    always_connect=True,
-    transports=['websocket', 'polling']  # Allow both WebSocket and polling
+    ping_timeout=20,
+    ping_interval=25,
+    cookie=None,             # Disable session cookie
+    manage_session=False     # Don't manage sessions
 )
 
 @socketio.on('connect')

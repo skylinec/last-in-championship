@@ -22,7 +22,7 @@ services:
     command: ["gunicorn", "--bind", "0.0.0.0:9000", "main:app"]
     ports:
       - "${PORT:-9000}:9000"
-    
+
   db:
     image: postgres:14-alpine
     environment:
@@ -54,7 +54,6 @@ services:
       - prometheus_data:/prometheus
     command:
       - '--config.file=/etc/prometheus/prometheus.yml'
-      # - '--web.route-prefix=/prometheus'
     ports:
       - "9090:9090"
     depends_on:
@@ -107,14 +106,15 @@ services:
   mattermost:
     image: mattermost/mattermost-team-edition
     environment:
-      - MM_SQLSETTINGS_DRIVERNAME=sqlite3
-      - MM_SQLSETTINGS_DATASOURCE=/data/mattermost.db
+      - MM_SQLSETTINGS_DRIVERNAME=postgres
+      - MM_SQLSETTINGS_DATASOURCE=postgres://user:password@db:5432/mattermost?sslmode=disable
       - MM_SERVICESETTINGS_SITEURL=https://lic.mattdh.me/mattermost
     volumes:
       - mattermost_data:/mattermost/data
       - mattermost_logs:/mattermost/logs
       - mattermost_config:/mattermost/config
-      - mattermost_db:/data
+    depends_on:
+      - db
 
 volumes:
   postgres_data:
@@ -125,4 +125,3 @@ volumes:
   mattermost_logs:
   mattermost_config:
   bugzilla_db:
-  mattermost_db:

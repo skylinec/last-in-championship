@@ -384,3 +384,15 @@ CREATE TRIGGER trg_refresh_rankings
 
 -- Initial refresh of the rankings view
 REFRESH MATERIALIZED VIEW rankings;
+
+-- Create Mattermost DB
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT FROM pg_database WHERE datname = 'mattermost') THEN
+        CREATE DATABASE mattermost
+        WITH
+        OWNER = user  -- Replace 'user' with the appropriate owner if different
+        ENCODING = 'UTF8'
+        CONNECTION LIMIT = -1;
+    END IF;
+END $$;

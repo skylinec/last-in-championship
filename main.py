@@ -3904,18 +3904,16 @@ def is_valid_move(game_state, move):
         return False
         
     board = game_state.get('board', [])
-    game_type = game_state.get('game_type', '')
+    game_type = game_state.get('game_type', '')  # This should come from the game record, not state
     
     try:
-        position = int(move)
-        if game_type == 'tictactoe':
-            return 0 <= position < 9 and not board[position]
+        position = int(move)  # Convert move to integer
+        if game_type == 'tictactoe' or not game_type:  # Default to tictactoe if not specified
+            return 0 <= position < 9 and not board[position]  # Check if position is empty
         elif game_type == 'connect4':
-            # For Connect4, check if column is valid and not full
             col = position
             if not (0 <= col < 7):
                 return False
-            # Find first empty slot in column
             for row in range(5, -1, -1):
                 if not board[row * 7 + col]:
                     return True
@@ -3925,17 +3923,21 @@ def is_valid_move(game_state, move):
 
 def apply_move(game_state, move, player):
     """Apply move to game state"""
+    move = int(move)  # Ensure move is an integer
     if not is_valid_move(game_state, move):
         raise ValueError("Invalid move")
         
     board = game_state['board']
-    game_type = game_state.get('game_type', '')
+    
+    if 'game_type' not in game_state:  # Default to tictactoe
+        game_state['game_type'] = 'tictactoe'
+        
+    game_type = game_state['game_type']
     
     if game_type == 'tictactoe':
         board[move] = player
     else:  # Connect4
         col = move
-        # Find first empty slot in column
         for row in range(5, -1, -1):
             pos = row * 7 + col
             if not board[pos]:
@@ -4049,6 +4051,7 @@ def is_valid_board(board, game_type):
 def make_move(game_id):
     db = SessionLocal()
     try:
+        # Get game with type information
         game = db.execute(text("""
             SELECT g.*, t.status as tie_breaker_status
             FROM tie_breaker_games g
@@ -4057,23 +4060,28 @@ def make_move(game_id):
             FOR UPDATE
         """), {"game_id": game_id}).fetchone()
 
-        if not game or game.status != 'active':
-            return jsonify({"success": False, "message": "Game not available"}), 400
+        if not game:
+            return jsonify({"success": False, "message": "Game not found"}), 404
 
-        current_user = session.get('user')
-        if current_user != game.game_state.get('current_player'):
-            return jsonify({"success": False, "message": "Not your turn"}), 400
+        # Add game type to game state
+        game_state = game.game_state
+        game_state['game_type'] = game.game_type
 
+        # Get move from request
         move = request.json.get('move')
         if move is None:
             return jsonify({"success": False, "message": "No move provided"}), 400
 
+        current_user = session.get('user')
+        if current_user != game_state.get('current_player'):
+            return jsonify({"success": False, "message": "Not your turn"}), 400
+
         try:
             # Apply move and get updated state
-            updated_state = apply_move(game.game_state, move, current_user)
+            updated_state = apply_move(game_state, move, current_user)
             winner = check_winner(updated_state, game.game_type)
             
-            # Update database
+            # Update game in database
             db.execute(text("""
                 UPDATE tie_breaker_games 
                 SET game_state = :state,
@@ -4081,15 +4089,11 @@ def make_move(game_id):
                     status = CASE 
                         WHEN :winner IS NOT NULL THEN 'completed'
                         ELSE 'active'
-                    END,
-                    completed_at = CASE 
-                        WHEN :winner IS NOT NULL THEN NOW()
-                        ELSE NULL
                     END
                 WHERE id = :game_id
             """), {
                 "state": json.dumps(updated_state),
-                "winner": winner,
+                "winner": winner if winner != 'draw' else None,
                 "game_id": game_id
             })
 

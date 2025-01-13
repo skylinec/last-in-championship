@@ -354,27 +354,21 @@ async function checkForTieBreakers() {
           r.period_start::date,
           r.period_end::date,
           r.username,
-          r.score as points,  -- Use the score directly from rankings
+          r.points as points,  -- Changed from r.score to r.points
           COUNT(*) OVER (
-            PARTITION BY r.period, r.period_end::date, ROUND(r.score::numeric, 2)
+            PARTITION BY r.period, r.period_end::date, ROUND(r.points::numeric, 2)  -- Changed from r.score to r.points
           ) as tied_count,
           COUNT(*) OVER (
             PARTITION BY r.period, r.period_end::date
           ) as total_participants,
           ROW_NUMBER() OVER (
             PARTITION BY r.period, r.period_end::date
-            ORDER BY r.score DESC
+            ORDER BY r.points DESC  -- Changed from r.score to r.points
           ) as rank
         FROM rankings r
         INNER JOIN period_bounds pb ON 
           r.period = pb.period AND 
           r.period_end::date = pb.period_end
-        WHERE EXISTS (
-          SELECT 1 FROM entries e 
-          WHERE e.name = r.username 
-          AND e.date::date BETWEEN r.period_start AND r.period_end
-          AND e.status IN ('in-office', 'remote')
-        )
       ),
       tied_groups AS (
         -- Find groups of tied scores

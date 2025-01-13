@@ -3494,7 +3494,7 @@ def health_check():
 def tie_breakers():
     db = SessionLocal()
     try:
-        # Updated query to correctly fetch games for both players
+        # Modified query to properly fetch all relevant games
         tie_breakers = db.execute(text("""
             WITH tie_breakers_cte AS (
                 SELECT 
@@ -3520,12 +3520,7 @@ def tie_breakers():
                         'status', g.status,
                         'game_state', g.game_state,
                         'final_tiebreaker', g.final_tiebreaker
-                    )) FILTER (WHERE g.id IS NOT NULL AND (
-                        g.status = 'pending' OR 
-                        g.status = 'active' OR 
-                        g.player1 = :username OR 
-                        g.player2 = :username
-                    )) as games
+                    )) FILTER (WHERE g.id IS NOT NULL) as games
                 FROM tie_breakers t
                 LEFT JOIN tie_breaker_participants tp ON t.id = tp.tie_breaker_id
                 LEFT JOIN tie_breaker_games g ON t.id = g.tie_breaker_id
@@ -3535,21 +3530,27 @@ def tie_breakers():
             )
             SELECT * FROM tie_breakers_cte
             ORDER BY created_at DESC
-        """), {"username": session['user']}).fetchall()
+        """)).fetchall()
 
-        # Rest of the processing remains the same
         formatted_tie_breakers = []
         for tb in tie_breakers:
             tie_breaker_dict = dict(tb)
             
-            if tie_breaker_dict['games'] is None:
-                tie_breaker_dict['games'] = []
-            elif isinstance(tie_breaker_dict['games'], str):
-                tie_breaker_dict['games'] = json.loads(tie_breaker_dict['games'])
+            # Ensure games list is properly initialized
+            tie_breaker_dict['games'] = (
+                [] if tie_breaker_dict['games'] is None 
+                else json.loads(tie_breaker_dict['games'])
+                if isinstance(tie_breaker_dict['games'], str)
+                else tie_breaker_dict['games']
+            )
             
-            if isinstance(tie_breaker_dict['participants'], str):
-                tie_breaker_dict['participants'] = json.loads(tie_breaker_dict['participants'])
-                
+            # Ensure participants list is properly initialized
+            tie_breaker_dict['participants'] = (
+                json.loads(tie_breaker_dict['participants'])
+                if isinstance(tie_breaker_dict['participants'], str)
+                else tie_breaker_dict['participants']
+            )
+            
             formatted_tie_breakers.append(tie_breaker_dict)
 
         return render_template(
@@ -3557,58 +3558,13 @@ def tie_breakers():
             tie_breakers=formatted_tie_breakers,
             current_user=session['user']
         )
+        
     except Exception as e:
         app.logger.error(f"Error fetching tie breakers: {str(e)}")
         return render_template("error.html", 
                              error="Failed to load tie breakers",
                              details=str(e),
                              back_link=url_for('index'))
-    finally:
-        db.close()
-
-@app.route("/tie-breaker/<int:tie_id>/choose-game", methods=["POST"])
-@login_required
-def choose_game(tie_id):
-    # Renamed from /tie-breakers/ to /tie-breaker/ to fix routing issue
-    db = SessionLocal()
-    try:
-        game_choice = request.form.get('game_choice')
-        if game_choice not in ['tictactoe', 'connect4']:
-            return jsonify({"error": "Invalid game choice"}), 400
-
-        # Update participant's choice and ready status
-        db.execute(text("""
-            UPDATE tie_breaker_participants
-            SET game_choice = :choice, ready = true
-            WHERE tie_breaker_id = :tie_id
-            AND username = :username
-        """), {
-            "choice": game_choice,
-            "tie_id": tie_id,
-            "username": session['user']
-        })
-
-        # Check if all participants are ready
-        all_ready = db.execute(text("""
-            SELECT bool_and(ready) 
-            FROM tie_breaker_participants
-            WHERE tie_breaker_id = :tie_id
-        """), {"tie_id": tie_id}).scalar()
-
-        if all_ready:
-            # Create initial games
-            create_next_game(db, tie_id)
-            
-            # Update tie breaker status to in_progress only after games are created
-            db.execute(text("""
-                UPDATE tie_breakers
-                SET status = 'in_progress'
-                WHERE id = :tie_id
-                AND status = 'pending'
-            """), {"tie_id": tie_id})
-
-        db.commit()
-        return redirect(url_for('tie_breakers'))
     finally:
         db.close()
 

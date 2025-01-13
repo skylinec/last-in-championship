@@ -25,12 +25,14 @@
     </div>
     
     <div class="board">
-        {% for row in range(6) %}
+        {% for row in range(5, -1, -1) %}
             <div class="board-row">
                 {% for col in range(7) %}
                     {% set index = row * 7 + col %}
                     <div class="board-cell {% if not can_play %}view-only{% endif %}" 
                          data-col="{{ col }}"
+                         data-row="{{ row }}"
+                         data-index="{{ index }}"
                          data-value="{{ game.game_state.board[index] or '' }}">
                         <div class="disc"></div>
                     </div>
@@ -285,18 +287,25 @@ document.addEventListener('DOMContentLoaded', function() {
         socket.on('game_update', function(data) {
             // Update the board
             const cells = document.querySelectorAll('.board-cell');
+            const indexMap = new Map();
+            
+            // Create mapping of visual positions to data indices
+            cells.forEach(cell => {
+                const index = parseInt(cell.dataset.index);
+                indexMap.set(index, cell);
+            });
+            
+            // Update cells using the mapping
             data.state.board.forEach((value, index) => {
-                const cell = cells[index];
+                const cell = indexMap.get(index);
                 if (cell) {
-                    // Update data attribute
                     cell.dataset.value = value || '';
-                    // Update disc color
                     const disc = cell.querySelector('.disc');
                     if (disc) {
                         if (value === data.state.player1) {
-                            disc.style.backgroundColor = '#ff4444';  // Red for player 1
+                            disc.style.backgroundColor = '#ff4444';
                         } else if (value === data.state.player2) {
-                            disc.style.backgroundColor = '#ffeb3b';  // Yellow for player 2
+                            disc.style.backgroundColor = '#ffeb3b';
                         } else {
                             disc.style.backgroundColor = '';
                         }

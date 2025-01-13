@@ -10,14 +10,17 @@
         <ul>
             <li>A week or month has completed</li>
             <li>Two or more players have exactly the same score</li>
-            <li>The tied players had at least one day of attendance during that period</li>
+            <li>The tied score occurs in either Early Bird or Last-In mode</li>
         </ul>
     </div>
 
     {% for tie in tie_breakers %}
-    <div class="tie-breaker-card {{ tie.status }}">
+    <div class="tie-breaker-card {{ tie.status }} {{ tie.mode }}">
         <div class="tie-header">
-            <h3>{{ tie.period|title }} Tie - {{ tie.period_end|format_date }}</h3>
+            <h3>
+                {{ tie.period|title }} Tie - {{ tie.period_end|format_date }}
+                <span class="mode-badge">{{ tie.mode|replace('-', ' ')|title }}</span>
+            </h3>
             <span class="points">{{ tie.points }} points</span>
             <span class="status-badge">{{ tie.status|title }}</span>
         </div>
@@ -100,7 +103,7 @@
     </div>
     {% else %}
     <div class="no-tiebreakers">
-        <p>No tie breakers available. Tie breakers will appear here when two or more players have the same score at the end of a week or month.</p>
+        <p>No tie breakers available. Tie breakers will appear here when two or more players have the same score at the end of a week or month in either Early Bird or Last-In mode.</p>
     </div>
     {% endfor %}
 </div>
@@ -252,6 +255,23 @@
 .info-box li {
     margin: 5px 0;
     color: #666;
+}
+
+.mode-badge {
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 0.9em;
+    margin-left: 10px;
+}
+
+.early-bird .mode-badge {
+    background: #4CAF50;
+    color: white;
+}
+
+.last-in .mode-badge {
+    background: #FF9800;
+    color: white;
 }
 </style>
 {% endblock %}

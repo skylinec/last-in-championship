@@ -334,7 +334,7 @@ async function checkForTieBreakers() {
 
     const tieCheckQuery = `
       WITH period_bounds AS (
-        -- Get completed periods that match the materialized view
+        -- Get last completed week and month
         SELECT 'weekly' as period,
           date_trunc('week', current_date - interval '1 week')::date as period_start,
           (date_trunc('week', current_date - interval '1 week') + interval '6 days')::date as period_end
@@ -353,35 +353,52 @@ async function checkForTieBreakers() {
           AND period_end = (date_trunc('month', current_date - interval '1 month') + interval '1 month - 1 day')::date
         )
       ),
-      period_scores AS (
-        -- Get scores for completed periods only
+      early_bird_scores AS (
+        -- Calculate early-bird scores
         SELECT 
           r.period,
           r.period_start::date,
           r.period_end::date,
           r.username,
-          ROUND(r.points::numeric, 1) as points,
+          ROUND(r.early_bird_points::numeric, 1) as points,
+          'early-bird' as mode,
           COUNT(*) OVER (
-            PARTITION BY r.period, r.period_end::date, ROUND(r.points::numeric, 1)
+            PARTITION BY r.period, r.period_end::date, ROUND(r.early_bird_points::numeric, 1)
           ) as tied_count,
-          COUNT(*) OVER (
-            PARTITION BY r.period, r.period_end::date
-          ) as total_participants,
           ROW_NUMBER() OVER (
             PARTITION BY r.period, r.period_end::date
-            ORDER BY r.points DESC
+            ORDER BY r.early_bird_points DESC
           ) as rank
         FROM rankings r
         INNER JOIN period_bounds pb ON 
           r.period = pb.period AND 
           r.period_end::date = pb.period_end
-        -- Only include participants with attendance
-        WHERE EXISTS (
-          SELECT 1 FROM entries e 
-          WHERE e.name = r.username 
-          AND e.date::date BETWEEN r.period_start AND r.period_end
-          AND e.status IN ('in-office', 'remote')
-        )
+      ),
+      last_in_scores AS (
+        -- Calculate last-in scores
+        SELECT 
+          r.period,
+          r.period_start::date,
+          r.period_end::date,
+          r.username,
+          ROUND(r.last_in_points::numeric, 1) as points,
+          'last-in' as mode,
+          COUNT(*) OVER (
+            PARTITION BY r.period, r.period_end::date, ROUND(r.last_in_points::numeric, 1)
+          ) as tied_count,
+          ROW_NUMBER() OVER (
+            PARTITION BY r.period, r.period_end::date
+            ORDER BY r.last_in_points DESC
+          ) as rank
+        FROM rankings r
+        INNER JOIN period_bounds pb ON 
+          r.period = pb.period AND 
+          r.period_end::date = pb.period_end
+      ),
+      combined_scores AS (
+        SELECT * FROM early_bird_scores
+        UNION ALL
+        SELECT * FROM last_in_scores
       ),
       tied_groups AS (
         SELECT 
@@ -389,12 +406,13 @@ async function checkForTieBreakers() {
           period_start,
           period_end,
           points,
+          mode,
           array_agg(username) as usernames,
           COUNT(*) as tied_count,
           rank
-        FROM period_scores
+        FROM combined_scores
         WHERE tied_count > 1
-        GROUP BY period, period_start, period_end, points, rank
+        GROUP BY period, period_start, period_end, points, mode, rank
         HAVING COUNT(*) > 1
       )
       SELECT *
@@ -404,7 +422,8 @@ async function checkForTieBreakers() {
         FROM tie_breakers tb
         WHERE tb.period = t.period
         AND tb.period_end::date = t.period_end
-        AND ROUND(tb.points::numeric, 1) = ROUND(t.points::numeric, 1)
+        AND tb.mode = t.mode
+        AND ROUND(tb.points::numeric, 1) = t.points
       )
       ORDER BY period_end DESC, rank ASC`;
 
@@ -435,15 +454,17 @@ async function checkForTieBreakers() {
               period_start,
               period_end,
               points,
+              mode,
               status
-            ) VALUES ($1, $2, $3, $4, 'pending')
-            ON CONFLICT (period, period_start, period_end, points) DO NOTHING
+            ) VALUES ($1, $2, $3, $4, $5, 'pending')
+            ON CONFLICT (period, period_start, period_end, points, mode) DO NOTHING
             RETURNING id
           `, [
             tie.period,
             tie.period_start,
             tie.period_end,
-            tie.points
+            tie.points,
+            tie.mode
           ]);
           
           if (result.rows[0]) {

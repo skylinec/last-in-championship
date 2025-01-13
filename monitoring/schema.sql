@@ -76,10 +76,20 @@ CREATE TABLE tie_breakers (
     resolved_at TIMESTAMP
 );
 
+-- Alter tie_breakers table to add mode column
+ALTER TABLE tie_breakers 
+ADD COLUMN IF NOT EXISTS mode VARCHAR(20) CHECK (mode IN ('early-bird', 'last-in'));
+
 -- Add unique constraint to prevent duplicate tie breakers
 ALTER TABLE tie_breakers 
+DROP CONSTRAINT IF EXISTS tie_breakers_unique_period;
+
+ALTER TABLE tie_breakers 
 ADD CONSTRAINT tie_breakers_unique_period 
-UNIQUE (period, period_start, period_end, points);
+UNIQUE (period, period_start, period_end, points, mode);
+
+-- Add index for mode queries
+CREATE INDEX IF NOT EXISTS idx_tie_breakers_mode ON tie_breakers(mode);
 
 -- Modify the tie_breakers table constraints
 ALTER TABLE tie_breakers 

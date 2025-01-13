@@ -3827,15 +3827,21 @@ def apply_move(game_state, move, player, game_type):
         "timestamp": datetime.now().isoformat()
     })
     
-    # Update current player
-    current_player = game_state['current_player']
-    next_player = moves[0]['player'] if current_player == moves[1]['player'] else moves[1]['player']
+    # Update current player - Fixed logic to handle initial moves
+    if len(moves) >= 2:
+        current_player = game_state['current_player']
+        next_player = moves[0]['player'] if current_player == moves[1]['player'] else moves[1]['player']
+    else:
+        # For the first move, just switch to the other player
+        next_player = game_state.get('player2') if player == game_state.get('player1') else game_state.get('player1')
     
     return {
         "board": board,
         "moves": moves,
         "current_player": next_player
     }
+
+# ...existing code...
 
 def check_winner(game_state, game_type):
     """Check for winner based on game type"""
@@ -3860,6 +3866,9 @@ def check_winner(game_state, game_type):
             for col in range(4):
                 idx = row * 7 + col
                 if (board[idx] is not None and
+                    board[idx+1] is not None and
+                    board[idx+2] is not None and
+                    board[idx+3] is not None and
                     board[idx] == board[idx+1] == board[idx+2] == board[idx+3]):
                     return board[idx]
         
@@ -3868,6 +3877,9 @@ def check_winner(game_state, game_type):
             for col in range(7):
                 idx = row * 7 + col
                 if (board[idx] is not None and
+                    board[idx+7] is not None and
+                    board[idx+14] is not None and
+                    board[idx+21] is not None and
                     board[idx] == board[idx+7] == board[idx+14] == board[idx+21]):
                     return board[idx]
         
@@ -3876,6 +3888,9 @@ def check_winner(game_state, game_type):
             for col in range(4):
                 idx = row * 7 + col
                 if (board[idx] is not None and
+                    board[idx+8] is not None and
+                    board[idx+16] is not None and
+                    board[idx+24] is not None and
                     board[idx] == board[idx+8] == board[idx+16] == board[idx+24]):
                     return board[idx]
         
@@ -3884,6 +3899,9 @@ def check_winner(game_state, game_type):
             for col in range(3, 7):
                 idx = row * 7 + col
                 if (board[idx] is not None and
+                    board[idx+6] is not None and
+                    board[idx+12] is not None and
+                    board[idx+18] is not None and
                     board[idx] == board[idx+6] == board[idx+12] == board[idx+18]):
                     return board[idx]
     

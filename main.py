@@ -24,6 +24,12 @@ import random
 from functools import lru_cache
 from prometheus_client import Counter
 
+from flask_socketio import SocketIO, emit, join_room, leave_room
+from flask_cors import CORS
+import eventlet
+
+eventlet.monkey_patch()
+
 # Add new metrics
 CACHE_HITS = Counter('cache_hits_total', 'Cache hit count', ['function'])
 CACHE_MISSES = Counter('cache_misses_total', 'Cache miss count', ['function'])
@@ -4415,9 +4421,7 @@ def calculate_streak_for_date(username, target_date, db):
 # ...existing code...
 
 # Add WebSocket support for real-time game updates
-from flask_socketio import SocketIO, emit, join_room, leave_room
-from flask_cors import CORS
-import eventlet
+
 
 # After app creation, before route definitions:
 CORS(app, resources={
@@ -4431,8 +4435,6 @@ CORS(app, resources={
         "allow_headers": ["Content-Type"]
     }
 })
-
-eventlet.monkey_patch()
 
 # Initialize Socket.IO with optimized settings
 socketio = SocketIO(

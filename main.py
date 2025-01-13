@@ -3280,7 +3280,7 @@ def calculate_streak_for_date(
             Entry.name == name,
             Entry.status.in_(['in-office', 'remote']),
             Entry.date <= target_date.isoformat()
-        ).order_by(
+        ). order_by(
             Entry.date.desc()
         ).all()
         
@@ -4470,10 +4470,15 @@ socketio = SocketIO(
     engineio_logger=True,
     transports=['websocket', 'polling'],
     max_http_buffer_size=1000000,
+    cookie=None,  # Disable Socket.IO cookie to prevent conflicts
     transport_options={
         'websocket': {
             'pingTimeout': 60000,
-            'pingInterval': 25000
+            'pingInterval': 25000,
+            'maxPayload': 1000000,
+            'perMessageDeflate': True,
+            'httpCompression': True,
+            'origins': '*'
         },
         'polling': {
             'timeout': 60000
@@ -4481,43 +4486,84 @@ socketio = SocketIO(
     }
 )
 
+# Add WebSocket error handling and recovery
+websocket_connections = {}
+
 @socketio.on('connect')
 def on_connect():
-    """Handle client connection with better error handling"""
+    """Enhanced connection handler with retry logic"""
     try:
-        app.logger.info(f"Client connecting from {request.origin}")
         if not session.get('user'):
             app.logger.warning("Unauthenticated connection attempt")
             return False
+
+        app.logger.info(f"Client connecting - User: {session['user']}, Transport: {request.args.get('transport')}")
         
-        # Store session info
-        session['socket_id'] = request.sid
+        # Store connection info
+        websocket_connections[request.sid] = {
+            'user': session['user'],
+            'connected_at': datetime.now(),
+            'transport': request.args.get('transport'),
+            'reconnect_count': 0
+        }
+        
+        # Send confirmation
+        emit('connected', {'status': 'ok', 'sid': request.sid})
         return True
+
     except Exception as e:
         app.logger.error(f"Connection error: {str(e)}")
         return False
 
-@socketio.on('error')
-def on_error(error):
-    """Handle Socket.IO errors"""
-    app.logger.error(f"SocketIO error: {str(error)}")
-
-@socketio.on('connect_error')
-def handle_connect_error(error):
-    """Handle connection errors"""
-    app.logger.error(f"Connection error: {str(error)}")
-    # Attempt to reconnect via polling if websocket fails
-    return {'transports': ['polling']}
-
 @socketio.on('disconnect')
 def on_disconnect():
-    """Handle client disconnection"""
+    """Enhanced disconnection handler with cleanup"""
     try:
-        if 'socket_id' in session:
-            app.logger.info(f"Client {session['socket_id']} disconnected")
-            session.pop('socket_id', None)
+        conn_info = websocket_connections.get(request.sid)
+        if conn_info:
+            app.logger.info(
+                f"Client disconnected - User: {conn_info['user']}, "
+                f"Duration: {datetime.now() - conn_info['connected_at']}"
+            )
+            websocket_connections.pop(request.sid, None)
+            
+        # Leave all rooms
+        if hasattr(request, 'rooms'):
+            for room in list(request.rooms):
+                leave_room(room)
+                
     except Exception as e:
         app.logger.error(f"Disconnect error: {str(e)}")
+
+@socketio.on('error')
+def on_error(error):
+    """Handle Socket.IO errors with reconnection logic"""
+    try:
+        conn_info = websocket_connections.get(request.sid)
+        if conn_info:
+            conn_info['reconnect_count'] += 1
+            app.logger.error(
+                f"SocketIO error - User: {conn_info['user']}, "
+                f"Reconnect count: {conn_info['reconnect_count']}, "
+                f"Error: {str(error)}"
+            )
+            
+            # Force transport fallback if needed
+            if conn_info['reconnect_count'] >= 3 and conn_info['transport'] == 'websocket':
+                emit('transport_fallback', {'transport': 'polling'})
+                
+    except Exception as e:
+        app.logger.error(f"Error handler failed: {str(e)}")
+
+@socketio.on('ping')
+def handle_ping():
+    """Keep connection alive"""
+    try:
+        conn_info = websocket_connections.get(request.sid)
+        if conn_info:
+            emit('pong', {'timestamp': datetime.now().isoformat()})
+    except Exception as e:
+        app.logger.error(f"Ping handler error: {str(e)}")
 
 @socketio.on('join_game')
 def handle_join_game(data):

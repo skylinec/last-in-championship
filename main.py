@@ -4460,21 +4460,23 @@ def add_security_headers(response):
 socketio = SocketIO(
     app,
     async_mode='gevent',
-    cors_allowed_origins="*", 
-    ping_timeout=60,  # Increased from 20
+    cors_allowed_origins=["http://localhost:9000", "https://lic.mattdh.me"],
+    ping_timeout=60,
     ping_interval=25,
+    path='/socket.io',
+    always_connect=True,
+    manage_session=True,
     logger=True,
     engineio_logger=True,
-    path='/socket.io',  # Explicit path
-    always_connect=True,  # Ensure consistent connections
-    manage_session=False,  # Let Flask handle sessions
-    upgrade_logger=True,  # Log upgrade attempts
-    max_http_buffer_size=1000000,  # Increased buffer size
-    # Add transport options
-    transports=['polling', 'websocket'],
+    transports=['websocket', 'polling'],
+    max_http_buffer_size=1000000,
     transport_options={
+        'websocket': {
+            'pingTimeout': 60000,
+            'pingInterval': 25000
+        },
         'polling': {
-            'timeout': 60  # Match ping timeout
+            'timeout': 60000
         }
     }
 )
@@ -4529,14 +4531,24 @@ def handle_leave_game(data):
     leave_room(f"game_{game_id}")
     
 # Add error handling for WebSocket events
+@socketio.on_error
+def error_handler(e):
+    """Handle all SocketIO errors"""
+    app.logger.error(f"SocketIO error: {str(e)}")
+    return {'error': str(e)}
+
 @socketio.on_error_default
 def default_error_handler(e):
-    print(f"SocketIO error: {str(e)}")
-    return {"error": str(e)}
+    """Handle unhandled SocketIO errors"""
+    app.logger.error(f"Unhandled SocketIO error: {str(e)}")
+    return {'error': str(e)}
 
 @socketio.on('connect_error')
 def handle_connect_error(error):
-    print(f"Connection error: {str(error)}")
+    """Handle connection errors with proper logging"""
+    app.logger.error(f"SocketIO connection error: {str(error)}")
+    # Attempt to fallback to polling if websocket fails
+    return {'transports': ['polling']}
 
 def notify_game_update(game_id, game_state, winner=None):
     """Notify players of game state changes"""
@@ -4607,14 +4619,17 @@ def reset_streaks():
         db.close()
 
 if __name__ == "__main__":
-    # ...existing code...
+    debug_mode = os.getenv('FLASK_ENV') == 'development'
+    
     socketio.run(
         app,
         host='0.0.0.0',
-        port=9000,
-        debug=True,
-        allow_unsafe_werkzeug=True,  # Add this for development
-        log_output=True
+        port=int(os.getenv('PORT', '9000')),
+        debug=debug_mode,
+        use_reloader=debug_mode,
+        log_output=True,
+        ssl_context=None,  # Add SSL in production via Nginx
+        allow_unsafe_werkzeug=True if debug_mode else False
     )
 
 @app.route("/games/<int:game_id>/reset", methods=["POST"])

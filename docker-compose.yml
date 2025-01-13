@@ -9,6 +9,9 @@ services:
       - FLASK_ENV=production
       - SECRET_KEY=${SECRET_KEY}
       - DATABASE_URL=postgresql://user:password@db:5432/championship
+      - WS_PING_INTERVAL=25
+      - WS_PING_TIMEOUT=60
+      - SESSION_TYPE=sqlalchemy
     depends_on:
       db:
         condition: service_healthy
@@ -19,7 +22,14 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
-    command: ["gunicorn", "--bind", "0.0.0.0:9000", "--workers", "4", "-k", "gevent", "--timeout", "120", "main:app"]
+    command: ["gunicorn", 
+             "--bind", "0.0.0.0:9000",
+             "--worker-class", "geventwebsocket.gunicorn.workers.GeventWebSocketWorker",
+             "--workers", "4",
+             "--timeout", "120",
+             "--keep-alive", "5",
+             "--log-level", "info",
+             "main:app"]
     ports:
       - "${PORT:-9000}:9000"
 

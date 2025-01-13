@@ -3494,7 +3494,7 @@ def health_check():
 def tie_breakers():
     db = SessionLocal()
     try:
-        # Fixed query to properly include games with correct fields
+        # Updated query to correctly fetch game information
         tie_breakers = db.execute(text("""
             WITH tie_breakers_cte AS (
                 SELECT 
@@ -3516,7 +3516,8 @@ def tie_breakers():
                         'id', g.id,
                         'game_type', g.game_type,
                         'player1', g.player1,
-                        'player2', g.status,
+                        'player2', g.player2,
+                        'status', g.status,
                         'game_state', g.game_state,
                         'final_tiebreaker', g.final_tiebreaker
                     )) FILTER (WHERE g.id IS NOT NULL) as games
@@ -3524,17 +3525,43 @@ def tie_breakers():
                 LEFT JOIN tie_breaker_participants tp ON t.id = tp.tie_breaker_id
                 LEFT JOIN tie_breaker_games g ON t.id = g.tie_breaker_id
                 WHERE t.status != 'completed'
-                GROUP BY t.id
+                GROUP BY t.id, t.period, t.period_start, t.period_end, t.points, 
+                         t.status, t.created_at, t.resolved_at
             )
             SELECT * FROM tie_breakers_cte
             ORDER BY created_at DESC
         """)).fetchall()
 
+        # Convert row proxy to dict and process the results
+        formatted_tie_breakers = []
+        for tb in tie_breakers:
+            tie_breaker_dict = dict(tb)
+            
+            # Ensure games is a list and not None
+            if tie_breaker_dict['games'] is None:
+                tie_breaker_dict['games'] = []
+            
+            # Convert participants from string to list if needed
+            if isinstance(tie_breaker_dict['participants'], str):
+                tie_breaker_dict['participants'] = json.loads(tie_breaker_dict['participants'])
+            
+            # Convert games from string to list if needed
+            if isinstance(tie_breaker_dict['games'], str):
+                tie_breaker_dict['games'] = json.loads(tie_breaker_dict['games'])
+            
+            formatted_tie_breakers.append(tie_breaker_dict)
+
         return render_template(
             "tie_breakers.html",
-            tie_breakers=tie_breakers,
+            tie_breakers=formatted_tie_breakers,
             current_user=session['user']
         )
+    except Exception as e:
+        app.logger.error(f"Error fetching tie breakers: {str(e)}")
+        return render_template("error.html", 
+                             error="Failed to load tie breakers",
+                             details=str(e),
+                             back_link=url_for('index'))
     finally:
         db.close()
 

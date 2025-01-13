@@ -67,13 +67,11 @@
                             {% endif %}
                         </div>
                     {% endif %}
-                    {% if game.final_tiebreaker %}
-                        <div class="final-tiebreaker">
-                            <h4>Final Tie-Breaker Game</h4>
-                            <!-- ... rest of game display code ... -->
-                        </div>
-                    {% endif %}
                 {% endfor %}
+
+                {% if not tie.games %}
+                    <p class="no-games">No active games available.</p>
+                {% endif %}
             </div>
         {% endif %}
     </div>

@@ -4143,7 +4143,7 @@ def apply_move(game_state, move, player):
 # Add after apply_move function and before make_move route
 def check_line(board, start, step, length, player):
     """Check if a line contains a win for the given player"""
-    return all(board[start + i * step] == player for i in range(length))
+    return all(board[start + i * step] == player for i in length)
 
 def check_tictactoe_winner(board, player):
     """Check if player has won in tic-tac-toe"""
@@ -4316,6 +4316,13 @@ def make_move(game_id):
             updated_state = apply_move(game_state, move, current_user)
             winner = check_winner(updated_state, game.game_type)
             
+            # Emit game update through WebSocket before database update
+            socketio.emit('game_update', {
+                'state': updated_state,
+                'winner': winner,
+                'current_player': updated_state.get('current_player')
+            }, room=f'game_{game_id}')
+
             if winner == 'draw':
                 app.logger.info(f"Game {game_id} ended in a draw")
                 # Create new game with same players

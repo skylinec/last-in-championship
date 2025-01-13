@@ -202,23 +202,72 @@
 </style>
 
 {% if can_play and game.status == 'active' %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    if ({{ can_play|tojson }} && '{{ game.status }}' === 'active') {
-        // Add click handlers to columns instead of cells
-        const columns = Array.from(Array(7).keys());
-        columns.forEach(col => {
-            const cells = document.querySelectorAll(`.board-cell[data-col="${col}"]`);
-            cells.forEach(cell => {
-                cell.addEventListener('click', function(e) {
-                    e.preventDefault();
-                    if (isValidMove(col)) {
-                        makeMove(col);
+    // Connect to WebSocket server
+    const socket = io();
+    
+    // Join the game room
+    socket.emit('join_game', { game_id: {{ game.id }} });
+    
+    // Listen for game updates
+    socket.on('game_update', function(data) {
+        // Update the board
+        const cells = document.querySelectorAll('.board-cell');
+        data.state.board.forEach((value, index) => {
+            const cell = cells[index];
+            if (cell) {
+                cell.dataset.value = value || '';
+                const disc = cell.querySelector('.disc');
+                if (disc) {
+                    if (value === "{{ game.player1 }}") {
+                        disc.style.backgroundColor = '#ff4444';  // Red for player 1
+                    } else if (value === "{{ game.player2 }}") {
+                        disc.style.backgroundColor = '#ffeb3b';  // Yellow for player 2
+                    } else {
+                        disc.style.backgroundColor = '';
                     }
-                });
+                }
+            }
+        });
+        
+        // Update turn indicator
+        const turnDiv = document.querySelector('.turn');
+        if (turnDiv) {
+            turnDiv.textContent = `Current Turn: ${data.current_player}`;
+        }
+        
+        // Check for winner
+        if (data.winner) {
+            if (data.winner === 'draw') {
+                alert("Game ended in a draw! A new game will start with reversed player order.");
+                window.location.reload();
+            } else {
+                alert(`${data.winner} wins!`);
+                window.location.reload();
+            }
+        }
+    });
+    
+    // Clean up on page unload
+    window.addEventListener('beforeunload', function() {
+        socket.emit('leave_game', { game_id: {{ game.id }} });
+    });
+    
+    // Add click handlers to columns instead of cells
+    const columns = Array.from(Array(7).keys());
+    columns.forEach(col => {
+        const cells = document.querySelectorAll(`.board-cell[data-col="${col}"]`);
+        cells.forEach(cell => {
+            cell.addEventListener('click', function(e) {
+                e.preventDefault();
+                if (isValidMove(col)) {
+                    makeMove(col);
+                }
             });
         });
-    }
+    });
 });
 
 function isValidMove(col) {

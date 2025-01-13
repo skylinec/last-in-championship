@@ -131,45 +131,58 @@
 {% if can_play and game.status == 'active' %}
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    const cells = document.querySelectorAll('.board-cell');
-    cells.forEach(cell => {
-        cell.addEventListener('click', function() {
-            if (!this.textContent.trim()) {
-                makeMove(this.dataset.pos);
-            }
+    if ({{ can_play|tojson }} && '{{ game.status }}' === 'active') {
+        const cells = document.querySelectorAll('.board-cell');
+        cells.forEach(cell => {
+            cell.addEventListener('click', function(e) {
+                e.preventDefault();  // Prevent any default action
+                if (!this.dataset.value) {  // Check if cell is empty
+                    makeMove(this.dataset.pos);
+                }
+            });
         });
-    });
+    }
 });
 
 function makeMove(pos) {
-    fetch(`/tic-tac-toe/move`, {
+    if (!pos && pos !== 0) return;  // Validate position
+
+    fetch(`/games/{{ game.id }}/move`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ pos })
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRF-Token': '{{ csrf_token }}'  // Add CSRF protection
+        },
+        body: JSON.stringify({ 
+            move: parseInt(pos),
+            game_type: 'tictactoe'
+        })
     })
-    .then(response => response.json())
+    .then(response => {
+        if (!response.ok) {
+            throw new Error('Network response was not ok');
+        }
+        return response.json();
+    })
     .then(data => {
         if (data.success) {
             window.location.reload();
         } else {
-            alert(data.message);
+            alert(data.message || 'Invalid move');
         }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('Failed to make move. Please try again.');
     });
 }
 
-function resetGame() {
-    fetch(`/tic-tac-toe/reset`, {
-        method: 'POST'
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            window.location.reload();
-        } else {
-            alert(data.message);
-        }
-    });
-}
+// Auto-refresh for spectators
+{% if not can_play and game.status == 'active' %}
+setInterval(() => {
+    window.location.reload();
+}, 5000);
+{% endif %}
 </script>
 {% endif %}
 {% endblock %}

@@ -346,7 +346,8 @@ async function checkForTieBreakers() {
           END as week_start,
           date_trunc('month', e.date::date)::date as month_start
         FROM entries e
-        WHERE e.date::date >= CASE 
+        WHERE e.status IN ('in-office', 'remote')  -- Only count actual attendance
+        AND e.date::date >= CASE 
           WHEN $1 = true THEN (CURRENT_DATE - INTERVAL '7 days')::date
           ELSE (SELECT monitoring_start_date FROM settings LIMIT 1)::date
         END
@@ -358,7 +359,13 @@ async function checkForTieBreakers() {
           period_end::date,
           points,
           array_agg(username) as usernames,
-          COUNT(*) as tied_count
+          COUNT(*) as tied_count,
+          SUM(CASE WHEN EXISTS (
+            SELECT 1 FROM entries e 
+            WHERE e.name = r.username 
+            AND e.date::date BETWEEN r.period_start AND r.period_end
+            AND e.status IN ('in-office', 'remote')
+          ) THEN 1 ELSE 0 END) as users_with_attendance
         FROM rankings r
         WHERE EXISTS (
           SELECT 1 FROM period_entries pe
@@ -368,7 +375,13 @@ async function checkForTieBreakers() {
         AND period IN ('weekly', 'monthly')
         AND period_end::date < CURRENT_DATE
         GROUP BY period, period_start, period_end, points
-        HAVING COUNT(*) > 1
+        HAVING COUNT(*) > 1 
+        AND SUM(CASE WHEN EXISTS (
+          SELECT 1 FROM entries e 
+          WHERE e.name = r.username 
+          AND e.date::date BETWEEN r.period_start AND r.period_end
+          AND e.status IN ('in-office', 'remote')
+        ) THEN 1 ELSE 0 END) > 1  -- Ensure at least 2 users have attendance
       )
       SELECT *
       FROM tied_rankings tr

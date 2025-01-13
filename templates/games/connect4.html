@@ -163,49 +163,89 @@
 {% if can_play and game.status == 'active' %}
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    const cells = document.querySelectorAll('.board-cell');
-    cells.forEach(cell => {
-        if (!cell.dataset.value) {
-            cell.addEventListener('click', function() {
-                makeMove(parseInt(cell.dataset.col));
+    if ({{ can_play|tojson }} && '{{ game.status }}' === 'active') {
+        // Add click handlers to columns instead of cells
+        const columns = Array.from(Array(7).keys());
+        columns.forEach(col => {
+            const cells = document.querySelectorAll(`.board-cell[data-col="${col}"]`);
+            cells.forEach(cell => {
+                cell.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    if (isValidMove(col)) {
+                        makeMove(col);
+                    }
+                });
             });
-        }
-    });
+        });
+    }
 });
 
+function isValidMove(col) {
+    // Check if column has empty spaces
+    const cells = document.querySelectorAll(`.board-cell[data-col="${col}"]`);
+    return Array.from(cells).some(cell => !cell.dataset.value);
+}
+
 function makeMove(col) {
+    if (col === undefined || col < 0 || col > 6) return;  // Validate column
+
     fetch(`/games/{{ game.id }}/move`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ move: col })
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRF-Token': '{{ csrf_token }}'  // Add CSRF protection
+        },
+        body: JSON.stringify({ 
+            move: parseInt(col),
+            game_type: 'connect4'
+        })
     })
-    .then(response => response.json())
+    .then(response => {
+        if (!response.ok) {
+            throw new Error('Network response was not ok');
+        }
+        return response.json();
+    })
     .then(data => {
         if (data.success) {
             window.location.reload();
         } else {
             alert(data.message || 'Invalid move');
         }
-    });
-}
-
-function resetGame() {
-    fetch(`/games/{{ game.id }}/reset`, {
-        method: 'POST'
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            window.location.reload();
-        } else {
-            alert(data.message || 'Failed to reset game');
-        }
     })
     .catch(error => {
         console.error('Error:', error);
-        alert('Failed to reset game');
+        alert('Failed to make move. Please try again.');
     });
 }
+
+// Preview move on hover
+document.querySelectorAll('.board-cell').forEach(cell => {
+    cell.addEventListener('mouseenter', function() {
+        if ({{ can_play|tojson }} && '{{ game.status }}' === 'active') {
+            const col = this.dataset.col;
+            if (isValidMove(col)) {
+                document.querySelectorAll(`.board-cell[data-col="${col}"]`).forEach(c => {
+                    c.style.backgroundColor = 'rgba(0,0,0,0.1)';
+                });
+            }
+        }
+    });
+
+    cell.addEventListener('mouseleave', function() {
+        const col = this.dataset.col;
+        document.querySelectorAll(`.board-cell[data-col="${col}"]`).forEach(c => {
+            c.style.backgroundColor = '';
+        });
+    });
+});
+
+// Auto-refresh for spectators
+{% if not can_play and game.status == 'active' %}
+setInterval(() => {
+    window.location.reload();
+}, 5000);
+{% endif %}
 </script>
 {% endif %}
 {% endblock %}

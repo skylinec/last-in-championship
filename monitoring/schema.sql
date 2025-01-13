@@ -117,6 +117,67 @@ CREATE TRIGGER trg_check_final_tiebreaker
     FOR EACH ROW
     EXECUTE FUNCTION check_final_tiebreaker();
 
+-- Add cascading constraint to tie breaker references
+ALTER TABLE tie_breaker_participants
+    DROP CONSTRAINT IF EXISTS tie_breaker_participants_tie_breaker_id_fkey,
+    ADD CONSTRAINT tie_breaker_participants_tie_breaker_id_fkey
+        FOREIGN KEY (tie_breaker_id)
+        REFERENCES tie_breakers(id)
+        ON DELETE CASCADE;
+
+-- Add date validation constraints
+ALTER TABLE tie_breakers
+    ADD CONSTRAINT tie_breakers_dates_check
+        CHECK (period_start <= period_end),
+    ADD CONSTRAINT tie_breakers_future_check
+        CHECK (period_end <= CURRENT_TIMESTAMP);
+
+-- Add auto-cleanup function for expired tie breakers
+CREATE OR REPLACE FUNCTION cleanup_expired_tie_breakers() RETURNS void AS $$
+BEGIN
+    UPDATE tie_breakers
+    SET status = 'completed',
+        resolved_at = CURRENT_TIMESTAMP
+    WHERE status = 'pending'
+    AND created_at < CURRENT_TIMESTAMP - INTERVAL '24 hours';
+END;
+$$ LANGUAGE plpgsql;
+
+-- Add additional performance indexes
+CREATE INDEX IF NOT EXISTS idx_tie_breakers_created_at ON tie_breakers(created_at);
+CREATE INDEX IF NOT EXISTS idx_tie_breakers_resolved_at ON tie_breakers(resolved_at);
+CREATE INDEX IF NOT EXISTS idx_tie_breaker_participants_ready 
+    ON tie_breaker_participants(ready) 
+    WHERE ready = false;
+CREATE INDEX IF NOT EXISTS idx_tie_breaker_games_active 
+    ON tie_breaker_games(status, created_at) 
+    WHERE status = 'active';
+
+-- Add better error handling for tie breaker state changes
+CREATE OR REPLACE FUNCTION validate_tie_breaker_state_change()
+RETURNS TRIGGER AS $$
+BEGIN
+    IF OLD.status = 'completed' AND NEW.status != 'completed' THEN
+        RAISE EXCEPTION 'Cannot change status of completed tie breaker';
+    END IF;
+
+    IF OLD.status = 'pending' AND NEW.status = 'completed' AND 
+       NOT EXISTS (
+           SELECT 1 FROM tie_breaker_participants
+           WHERE tie_breaker_id = NEW.id AND winner = true
+       ) THEN
+        RAISE EXCEPTION 'Cannot complete tie breaker without winner';
+    END IF;
+
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trg_validate_tie_breaker_state
+    BEFORE UPDATE ON tie_breakers
+    FOR EACH ROW
+    EXECUTE FUNCTION validate_tie_breaker_state_change();
+
 ------------------------------------------
 -- SECTION 4: SETTINGS
 ------------------------------------------
@@ -309,6 +370,15 @@ CREATE INDEX idx_tie_breakers_period_end ON tie_breakers(period_end);
 CREATE INDEX idx_tie_breakers_points ON tie_breakers(points);
 CREATE INDEX idx_tie_breakers_status ON tie_breakers(status);
 CREATE INDEX idx_tie_breakers_period_range ON tie_breakers(period_start, period_end);
+
+CREATE INDEX IF NOT EXISTS idx_tie_breakers_created_at ON tie_breakers(created_at);
+CREATE INDEX IF NOT EXISTS idx_tie_breakers_resolved_at ON tie_breakers(resolved_at);
+CREATE INDEX IF NOT EXISTS idx_tie_breaker_participants_ready 
+    ON tie_breaker_participants(ready) 
+    WHERE ready = false;
+CREATE INDEX IF NOT EXISTS idx_tie_breaker_games_active 
+    ON tie_breaker_games(status, created_at) 
+    WHERE status = 'active';
 
 ------------------------------------------
 -- SECTION 7: VIEWS AND FUNCTIONS

@@ -300,6 +300,44 @@ daily_scores AS (
     FROM entries e
     JOIN periods p ON e.date::date = p.date
     WHERE e.status IN ('in-office', 'remote')
+),
+scored_entries AS (
+    SELECT 
+        username,
+        date,
+        period,
+        period_start,
+        period_end,
+        -- Early Bird scoring
+        SUM(base_points + (
+            CASE 
+                WHEN early_position = 1 THEN 
+                    total_entries * (SELECT late_bonus FROM settings LIMIT 1)
+                ELSE 0
+            END
+        )) OVER (
+            PARTITION BY username, period, period_start
+            ORDER BY date
+            ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+        ) as early_bird_points,
+        -- Last In scoring
+        SUM(base_points + (
+            CASE 
+                WHEN late_position = 1 THEN 
+                    total_entries * (SELECT late_bonus FROM settings LIMIT 1)
+                ELSE 0
+            END
+        )) OVER (
+            PARTITION BY username, period, period_start
+            ORDER BY date
+            ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+        ) as last_in_points,
+        -- Used for proper point tracking in each mode
+        early_position,
+        late_position,
+        total_entries,
+        base_points
+    FROM daily_scores
 )
 SELECT 
     username,
@@ -307,31 +345,16 @@ SELECT
     period,
     period_start,
     period_end,
-    -- Early Bird scoring
-    SUM(base_points + (
-        CASE 
-            WHEN early_position = 1 THEN 
-                total_entries * (SELECT late_bonus FROM settings LIMIT 1)
-            ELSE 0
-        END
-    )) OVER (
-        PARTITION BY username, period, period_start
-        ORDER BY date
-        ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
-    ) as early_bird_points,
-    -- Last In scoring
-    SUM(base_points + (
-        CASE 
-            WHEN late_position = 1 THEN 
-                total_entries * (SELECT late_bonus FROM settings LIMIT 1)
-            ELSE 0
-        END
-    )) OVER (
-        PARTITION BY username, period, period_start
-        ORDER BY date
-        ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
-    ) as last_in_points
-FROM daily_scores;
+    early_bird_points,
+    last_in_points,
+    early_position,
+    late_position,
+    total_entries,
+    base_points,
+    -- Pre-calculate points for both modes rounded to 1 decimal
+    ROUND(early_bird_points::numeric, 1) as early_bird_points_rounded,
+    ROUND(last_in_points::numeric, 1) as last_in_points_rounded
+FROM scored_entries;
 
 -- Update indices for the rankings view
 DROP INDEX IF EXISTS idx_rankings_user_date;

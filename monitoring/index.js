@@ -334,55 +334,46 @@ async function checkForTieBreakers() {
 
     const tieCheckQuery = `
       WITH period_bounds AS (
-        -- Get completed weeks and months from rankings
-        SELECT DISTINCT period, period_start, period_end
+        SELECT period, period_start, period_end
         FROM rankings r
         WHERE period IN ('weekly', 'monthly')
           AND period_end < CURRENT_DATE
-          AND EXISTS (
-            -- Only include periods where there was attendance
-            SELECT 1 FROM entries e 
-            WHERE e.date BETWEEN r.period_start AND r.period_end
-          )
+          GROUP BY period, period_start, period_end
       ),
       early_bird_scores AS (
-        -- Calculate early-bird scores
         SELECT 
           r.period,
           r.period_start::date,
           r.period_end::date,
           r.username,
-          ROUND(r.early_bird_points::numeric, 1) as points,
+          r.early_bird_points_rounded as points,
           'early-bird' as mode
         FROM rankings r
         INNER JOIN period_bounds pb ON 
           r.period = pb.period AND 
           r.period_end::date = pb.period_end
-        -- Only include users who had attendance in this period
         WHERE EXISTS (
           SELECT 1 FROM entries e 
-          WHERE e.name = r.username
+          WHERE e.name = r.username 
           AND e.date BETWEEN r.period_start AND r.period_end
           AND e.status IN ('in-office', 'remote')
         )
       ),
       last_in_scores AS (
-        -- Calculate last-in scores
         SELECT 
           r.period,
           r.period_start::date,
           r.period_end::date,
           r.username,
-          ROUND(r.last_in_points::numeric, 1) as points,
+          r.last_in_points_rounded as points,
           'last-in' as mode
         FROM rankings r
         INNER JOIN period_bounds pb ON 
           r.period = pb.period AND 
           r.period_end::date = pb.period_end
-        -- Only include users who had attendance in this period
         WHERE EXISTS (
           SELECT 1 FROM entries e 
-          WHERE e.name = r.username
+          WHERE e.name = r.username 
           AND e.date BETWEEN r.period_start AND r.period_end
           AND e.status IN ('in-office', 'remote')
         )

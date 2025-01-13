@@ -334,24 +334,16 @@ async function checkForTieBreakers() {
 
     const tieCheckQuery = `
       WITH period_bounds AS (
-        -- Get last completed week and month
-        SELECT 'weekly' as period,
-          date_trunc('week', current_date - interval '1 week')::date as period_start,
-          (date_trunc('week', current_date - interval '1 week') + interval '6 days')::date as period_end
-        WHERE EXISTS (
-          SELECT 1 FROM rankings 
-          WHERE period = 'weekly'
-          AND period_end = (date_trunc('week', current_date - interval '1 week') + interval '6 days')::date
-        )
-        UNION ALL
-        SELECT 'monthly' as period,
-          date_trunc('month', current_date - interval '1 month')::date as period_start,
-          (date_trunc('month', current_date - interval '1 month') + interval '1 month - 1 day')::date as period_end
-        WHERE EXISTS (
-          SELECT 1 FROM rankings 
-          WHERE period = 'monthly'
-          AND period_end = (date_trunc('month', current_date - interval '1 month') + interval '1 month - 1 day')::date
-        )
+        -- Get completed weeks and months from rankings
+        SELECT DISTINCT period, period_start, period_end
+        FROM rankings r
+        WHERE period IN ('weekly', 'monthly')
+          AND period_end < CURRENT_DATE
+          AND EXISTS (
+            -- Only include periods where there was attendance
+            SELECT 1 FROM entries e 
+            WHERE e.date BETWEEN r.period_start AND r.period_end
+          )
       ),
       early_bird_scores AS (
         -- Calculate early-bird scores
@@ -361,18 +353,18 @@ async function checkForTieBreakers() {
           r.period_end::date,
           r.username,
           ROUND(r.early_bird_points::numeric, 1) as points,
-          'early-bird' as mode,
-          COUNT(*) OVER (
-            PARTITION BY r.period, r.period_end::date, ROUND(r.early_bird_points::numeric, 1)
-          ) as tied_count,
-          ROW_NUMBER() OVER (
-            PARTITION BY r.period, r.period_end::date
-            ORDER BY r.early_bird_points DESC
-          ) as rank
+          'early-bird' as mode
         FROM rankings r
         INNER JOIN period_bounds pb ON 
           r.period = pb.period AND 
           r.period_end::date = pb.period_end
+        -- Only include users who had attendance in this period
+        WHERE EXISTS (
+          SELECT 1 FROM entries e 
+          WHERE e.name = r.username
+          AND e.date BETWEEN r.period_start AND r.period_end
+          AND e.status IN ('in-office', 'remote')
+        )
       ),
       last_in_scores AS (
         -- Calculate last-in scores
@@ -382,18 +374,18 @@ async function checkForTieBreakers() {
           r.period_end::date,
           r.username,
           ROUND(r.last_in_points::numeric, 1) as points,
-          'last-in' as mode,
-          COUNT(*) OVER (
-            PARTITION BY r.period, r.period_end::date, ROUND(r.last_in_points::numeric, 1)
-          ) as tied_count,
-          ROW_NUMBER() OVER (
-            PARTITION BY r.period, r.period_end::date
-            ORDER BY r.last_in_points DESC
-          ) as rank
+          'last-in' as mode
         FROM rankings r
         INNER JOIN period_bounds pb ON 
           r.period = pb.period AND 
           r.period_end::date = pb.period_end
+        -- Only include users who had attendance in this period
+        WHERE EXISTS (
+          SELECT 1 FROM entries e 
+          WHERE e.name = r.username
+          AND e.date BETWEEN r.period_start AND r.period_end
+          AND e.status IN ('in-office', 'remote')
+        )
       ),
       combined_scores AS (
         SELECT * FROM early_bird_scores
@@ -401,6 +393,7 @@ async function checkForTieBreakers() {
         SELECT * FROM last_in_scores
       ),
       tied_groups AS (
+        -- Find groups of tied scores
         SELECT 
           period,
           period_start,
@@ -408,11 +401,9 @@ async function checkForTieBreakers() {
           points,
           mode,
           array_agg(username) as usernames,
-          COUNT(*) as tied_count,
-          rank
+          COUNT(*) as tied_count
         FROM combined_scores
-        WHERE tied_count > 1
-        GROUP BY period, period_start, period_end, points, mode, rank
+        GROUP BY period, period_start, period_end, points, mode
         HAVING COUNT(*) > 1
       )
       SELECT *
@@ -425,7 +416,7 @@ async function checkForTieBreakers() {
         AND tb.mode = t.mode
         AND ROUND(tb.points::numeric, 1) = t.points
       )
-      ORDER BY period_end DESC, rank ASC`;
+      ORDER BY period_end DESC, points DESC`;
 
     // Add debug logging
     console.log("Checking for tie breakers...");

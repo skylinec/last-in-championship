@@ -4350,22 +4350,27 @@ def make_move(game_id):
         })
 
         # Handle game completion
-        if winner:
-            # Check if it was a draw
-            if winner == 'draw':
-                # Create a new game with reversed players
-                create_next_game_after_draw(
-                    db, 
-                    game.tie_breaker_id,
-                    game.game_type,
-                    game.player1,
-                    game.player2
-                )
-            else:
-                # Check if tie breaker is complete
-                check_tie_breaker_completion(db, game.tie_breaker_id)
+        try:
+            # Handle game completion
+            if winner:
+                if winner == 'draw':
+                    create_next_game_after_draw(
+                        db, 
+                        game.tie_breaker_id,
+                        game.game_type,
+                        game.player1,
+                        game.player2
+                    )
+                else:
+                    check_tie_breaker_completion(db, game.tie_breaker_id)
 
-        db.commit()
+            db.commit()
+        except Exception as e:
+            db.rollback()
+            app.logger.error(f"Error making move: {str(e)}", exc_info=True)
+            app.logger.error(f"Game state: {game.game_state}")  # Add this
+            app.logger.error(f"Move data: {request.json}")      # Add this
+            return jsonify({"success": False, "message": str(e)}), 500  # Return actual error
 
         # Prepare response
         response = {

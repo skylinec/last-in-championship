@@ -337,196 +337,64 @@ multiply points by 1.5</pre>
                 <h3>Position Bonus System</h3>
                 <div id="lastInInfo">
                     <h4>Last-In Championship Mode</h4>
-                    <p>Points increase with later arrival times:</p>
-                    <ul>
-                        <li>Last person to arrive gets maximum bonus (position × {{ settings.late_bonus }})</li>
-                        <li>Earlier arrivals get progressively smaller bonuses</li>
-                        <li>First arrival gets minimum position bonus</li>
-                    </ul>
+                    <p>Last person to arrive gets maximum bonus (position × {{ settings.late_bonus }}), decreasing for earlier arrivals.</p>
                 </div>
                 <div id="earlyBirdInfo" style="display: none;">
                     <h4>Early Bird Mode</h4>
-                    <p>Points increase with earlier arrival times:</p>
-                    <ul>
-                        <li>First person to arrive gets maximum bonus (position × {{ settings.late_bonus }})</li>
-                        <li>Later arrivals get progressively smaller bonuses</li>
-                        <li>Last arrival gets minimum position bonus</li>
-                    </ul>
+                    <p>First person to arrive gets maximum bonus (position × {{ settings.late_bonus }}), decreasing for later arrivals.</p>
                 </div>
             </div>
 
             <div class="example-box">
-                <h4>Base Points</h4>
-                <ul>
-                    <li>In-office: {{ settings.points.in_office }} points</li>
-                    <li>Remote work: {{ settings.points.remote }} points</li>
-                    <li>Sick leave: {{ settings.points.sick }} points</li>
-                    <li>Annual leave: {{ settings.points.leave }} points</li>
-                </ul>
+                <h4>Base Points & Position Bonuses</h4>
+                <table class="example-table">
+                    <tr><th>Status</th><th>Points</th></tr>
+                    {% for status in ['in_office', 'remote', 'sick', 'leave'] %}
+                    <tr>
+                        <td>{{ status|replace('_', ' ')|title }}</td>
+                        <td>{{ settings.points[status] }}</td>
+                    </tr>
+                    {% endfor %}
+                    <tr><td>Position Bonus</td><td>position × {{ settings.late_bonus }}</td></tr>
+                </table>
             </div>
 
+            {% if settings.enable_streaks or settings.enable_tiebreakers %}
             <div class="example-box">
-                <h4>Example Calculations</h4>
-                <div id="lastInExample">
-                    <h5>Last-In Mode Example (5 people)</h5>
-                    <table class="example-table">
-                        <tr><th>Position</th><th>Calculation</th><th>Total</th></tr>
-                        <tr>
-                            <td>Last (5th)</td>
-                            <td>{{ settings.points.in_office }} + (5 × {{ settings.late_bonus }})</td>
-                            <td>{{ settings.points.in_office + (5 * settings.late_bonus) }}</td>
-                        </tr>
-                        <tr>
-                            <td>First</td>
-                            <td>{{ settings.points.in_office }} + (1 × {{ settings.late_bonus }})</td>
-                            <td>{{ settings.points.in_office + settings.late_bonus }}</td>
-                        </tr>
-                    </table>
-                </div>
-                <div id="earlyBirdExample" style="display: none;">
-                    <h5>Early Bird Mode Example (5 people)</h5>
-                    <table class="example-table">
-                        <tr><th>Position</th><th>Calculation</th><th>Total</th></tr>
-                        <tr>
-                            <td>First</td>
-                            <td>{{ settings.points.in_office }} + (5 × {{ settings.late_bonus }})</td>
-                            <td>{{ settings.points.in_office + (5 * settings.late_bonus) }}</td>
-                        </tr>
-                        <tr>
-                            <td>Last (5th)</td>
-                            <td>{{ settings.points.in_office }} + (1 × {{ settings.late_bonus }})</td>
-                            <td>{{ settings.points.in_office + settings.late_bonus }}</td>
-                        </tr>
-                    </table>
-                </div>
-            </div>
-
-            <!-- Replace existing streak explanation with updated one -->
-            {% if settings.enable_streaks %}
-            <div class="example-box streak-explanation">
-                <h4>Streak System {% if settings.enable_tiebreakers %}& Tie Breakers{% endif %}</h4>
-                <p>The streak system and tie breakers affect scores differently based on the mode:</p>
-                
-                <div class="mode-specific">
-                    <h5>Early Bird Mode</h5>
+                <h4>Bonus Systems</h4>
+                {% if settings.enable_streaks %}
+                <div class="bonus-section">
+                    <h5>Streak Bonuses</h5>
+                    <p>Bonuses are {{ settings.streak_multiplier }} points per consecutive day:</p>
                     <ul>
-                        <li>Streaks add {{ settings.streak_multiplier }} points per day (rewards consistent earliness)</li>
-                        {% if settings.enable_tiebreakers %}
-                        <li>Tie breaker wins add {{ settings.tiebreaker_points }} points (rewards winning early competitions)</li>
-                        {% endif %}
-                    </ul>
-                    
-                    <h5>Last-In Mode</h5>
-                    <ul>
-                        <li>Streaks subtract {{ settings.streak_multiplier }} points per day (penalizes consistent lateness)</li>
-                        {% if settings.enable_tiebreakers %}
-                        <li>Tie breaker wins remove {{ settings.tiebreaker_points }} points (penalizes winning late competitions)</li>
-                        {% endif %}
+                        <li>Early Bird: +{{ settings.streak_multiplier }} × streak days</li>
+                        <li>Last-In: -{{ settings.streak_multiplier }} × streak days</li>
                     </ul>
                 </div>
-                
-                <div class="streak-example">
-                    <h5>Example Calculations</h5>
-                    <table class="example-table">
-                        <tr>
-                            <th>Mode</th>
-                            <th>Streak</th>
-                            <th>Effect on Score</th>
-                        </tr>
-                        <tr>
-                            <td>Early Bird</td>
-                            <td>3 days</td>
-                            <td>+{{ 3 * settings.streak_multiplier }} points</td>
-                        </tr>
-                        <tr>
-                            <td>Last-In</td>
-                            <td>3 days</td>
-                            <td>-{{ 3 * settings.streak_multiplier }} points</td>
-                        </tr>
-                    </table>
-                </div>
+                {% endif %}
 
-                <div class="streak-rules">
-                    <h5>Streak Rules</h5>
+                {% if settings.enable_tiebreakers %}
+                <div class="bonus-section">
+                    <h5>Tie Breakers</h5>
+                    <p>{{ settings.tiebreaker_points }} points per win:</p>
                     <ul>
-                        <li>Weekend days don't break streaks</li>
-                        <li>Both office and remote work count</li>
-                        <li>Sick days or annual leave break the streak</li>
-                        <li>Maximum gap allowed is 3 days (for weekends)</li>
-                        <li>Streak bonuses only affect scores up to the day being viewed</li>
-                        <li>Future attendance cannot affect past scores</li>
-                        <li>In Last-In mode, staying consistently late increases points</li>
-                        <li>In Early Bird mode, staying consistently early reduces points</li>
+                        <li>Early Bird: +{{ settings.tiebreaker_points }} points</li>
+                        <li>Last-In: -{{ settings.tiebreaker_points }} points</li>
                     </ul>
+                    <p>Expires after {{ settings.tiebreaker_expiry }} hours{% if settings.auto_resolve_tiebreakers %} with random resolution{% endif %}</p>
                 </div>
-
-                <!-- ...rest of existing streak box content... -->
+                {% endif %}
             </div>
             {% endif %}
 
             <div class="example-box">
-                <h4>Tie Breaker System</h4>
-                {% if settings.enable_tiebreakers %}
-                <p>When players are tied for points at the end of a period:</p>
-                <ul>
-                    <li>Players must choose their preferred game type (Tic-tac-toe or Connect 4)</li>
-                    <li>Games become available for tied players to join and play against each other</li>
-                    <li>Players can join and play games asynchronously at their convenience</li>
-                    <li>Multiple games can be in progress simultaneously</li>
-                    <li>Games become active when both players have joined</li>
-                    <li>Winners receive {{ settings.tiebreaker_points|default(5) }} additional points</li>
-                    <li>Points are awarded differently based on championship mode:
-                        <ul>
-                            <li>Last-In Mode: Points are subtracted (penalizes winning late competitions)</li>
-                            <li>Early Bird Mode: Points are added (rewards winning early competitions)</li>
-                        </ul>
-                    </li>
-                    <li>Tie breakers expire after {{ settings.tiebreaker_expiry|default(24) }} hours</li>
-                    {% if settings.auto_resolve_tiebreakers %}
-                    <li>Expired tie breakers are automatically resolved randomly</li>
-                    {% else %}
-                    <li>When Auto-Resolve is disabled:
-                        <ul>
-                            <li>Tie breakers will appear for all previous periods since monitoring start date</li>
-                            <li>Games can still be played after expiry until completed</li>
-                            <li>Winners must be determined through gameplay</li>
-                        </ul>
-                    </li>
-                    {% endif %}
-                </ul>
-                {% else %}
-                <p>Tie breaker system is currently disabled</p>
-                {% endif %}
-            </div>
-
-        </div>
-
-        <div class="example-box">
-            <h4>Schedule and Working Days</h4>
-            <ul>
-                <li>Default shift length: {{ settings.points.shift_length|default(9) }} hours</li>
-                <li>Points are only calculated for designated working days</li>
-                <li>Working days can be configured per user</li>
-                <li>Non-working days don't affect streaks</li>
-                <li>Remote work and office attendance only count on working days</li>
-            </ul>
-        </div>
-        <div class="example-box">
-                <h4>Working Hours and Schedules</h4>
-                <ul>
-                    <li>Default shift length: {{ settings.points.shift_length|default(9) }} hours</li>
-                    <li>Custom shift lengths can be set per weekday</li>
-                    <li>Start times affect late arrival calculations</li>
-                    <li>Timeline visualization reflects day-specific schedules</li>
-                </ul>
-                
-                <h5>Current Daily Schedules:</h5>
+                <h4>Schedule Configuration</h4>
                 <table class="example-table">
                     <tr>
                         <th>Day</th>
                         <th>Hours</th>
-                        <th>Start Time</th>
-                        <th>End Time</th>
+                        <th>Start</th>
+                        <th>End</th>
                     </tr>
                     {% for day in ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'] %}
                     {% set shift = settings.points.get('daily_shifts', {}).get(day|lower, {'hours': settings.points.shift_length|default(9), 'start': '09:00'}) %}
@@ -539,7 +407,9 @@ multiply points by 1.5</pre>
                     {% endfor %}
                 </table>
             </div>
+        </div>
     </div>
+
 </div>
 
 <style>

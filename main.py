@@ -3494,7 +3494,7 @@ def health_check():
 def tie_breakers():
     db = SessionLocal()
     try:
-        # Updated query to correctly fetch game information
+        # Updated query to correctly fetch games for both players
         tie_breakers = db.execute(text("""
             WITH tie_breakers_cte AS (
                 SELECT 
@@ -3520,7 +3520,12 @@ def tie_breakers():
                         'status', g.status,
                         'game_state', g.game_state,
                         'final_tiebreaker', g.final_tiebreaker
-                    )) FILTER (WHERE g.id IS NOT NULL) as games
+                    )) FILTER (WHERE g.id IS NOT NULL AND (
+                        g.status = 'pending' OR 
+                        g.status = 'active' OR 
+                        g.player1 = :username OR 
+                        g.player2 = :username
+                    )) as games
                 FROM tie_breakers t
                 LEFT JOIN tie_breaker_participants tp ON t.id = tp.tie_breaker_id
                 LEFT JOIN tie_breaker_games g ON t.id = g.tie_breaker_id
@@ -3530,25 +3535,21 @@ def tie_breakers():
             )
             SELECT * FROM tie_breakers_cte
             ORDER BY created_at DESC
-        """)).fetchall()
+        """), {"username": session['user']}).fetchall()
 
-        # Convert row proxy to dict and process the results
+        # Rest of the processing remains the same
         formatted_tie_breakers = []
         for tb in tie_breakers:
             tie_breaker_dict = dict(tb)
             
-            # Ensure games is a list and not None
             if tie_breaker_dict['games'] is None:
                 tie_breaker_dict['games'] = []
-            
-            # Convert participants from string to list if needed
-            if isinstance(tie_breaker_dict['participants'], str):
-                tie_breaker_dict['participants'] = json.loads(tie_breaker_dict['participants'])
-            
-            # Convert games from string to list if needed
-            if isinstance(tie_breaker_dict['games'], str):
+            elif isinstance(tie_breaker_dict['games'], str):
                 tie_breaker_dict['games'] = json.loads(tie_breaker_dict['games'])
             
+            if isinstance(tie_breaker_dict['participants'], str):
+                tie_breaker_dict['participants'] = json.loads(tie_breaker_dict['participants'])
+                
             formatted_tie_breakers.append(tie_breaker_dict)
 
         return render_template(
@@ -3660,7 +3661,7 @@ def create_next_game(db, tie_id):
                 "moves": [],
                 "current_player": player,
                 "player1": player,
-                "player2": pair.player2 if player == pair.player1 else pair.player1
+                "player2": pair.player2 if player == pair.player1 else pair.player2
             }
             
             try:
@@ -3684,7 +3685,7 @@ def create_next_game(db, tie_id):
                     "tie_id": tie_id,
                     "game_type": game_choice,
                     "player1": player,
-                    "player2": pair.player2 if player == pair.player1 else pair.player1,
+                    "player2": pair.player2 if player == pair.player1 else pair.player2,
                     "initial_state": json.dumps(initial_state)
                 })
             except Exception as e:

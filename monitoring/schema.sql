@@ -340,9 +340,9 @@ SELECT
     ROUND(last_in_points::numeric, 1) as last_in_points_rounded
 FROM scored_entries;
 
--- Add new unique index for concurrent refresh (must be first)
+-- Replace the problematic unique index with a more specific one
 CREATE UNIQUE INDEX idx_rankings_unique_refresh 
-ON rankings(username, date, period, period_start, period_end);
+ON rankings(username, date, period, period_start, period_end, early_bird_points);
 
 -- Other indices can remain but should come after
 CREATE INDEX idx_rankings_period ON rankings(period, period_end);
@@ -389,9 +389,11 @@ BEGIN
     -- Attempt concurrent refresh first
     BEGIN
         REFRESH MATERIALIZED VIEW CONCURRENTLY rankings;
-    EXCEPTION WHEN OTHERS THEN
-        -- Fall back to regular refresh if concurrent fails
-        REFRESH MATERIALIZED VIEW rankings;
+    EXCEPTION 
+        WHEN OTHERS THEN
+            -- Log the error and fall back to regular refresh
+            RAISE NOTICE 'Concurrent refresh failed, falling back to regular refresh';
+            REFRESH MATERIALIZED VIEW rankings;
     END;
     RETURN NULL;
 END;

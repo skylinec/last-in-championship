@@ -2336,32 +2336,51 @@ def update_user_streak(username, attendance_date):
         db.close()
 
 def generate_streaks():
-    """
-    Legacy method kept for fallback but logs warning.
-    Streaks are now primarily managed by the monitoring container.
-    """
-    app.logger.warning("generate_streaks() called directly. Streaks are now managed by monitoring container.")
+    """Generate user streaks properly"""
+    app.logger.info("Generating streaks...")
     db = SessionLocal()
     try:
-        # Only generate if no recent update (within last 5 minutes)
-        latest_streak = db.query(UserStreak).order_by(UserStreak.last_attendance.desc()).first()
-        if latest_streak and latest_streak.last_attendance:
-            if datetime.now() - latest_streak.last_attendance < timedelta(minutes=5):
-                app.logger.info("Skipping streak generation - recent update exists")
-                return
+        # Get settings
+        settings = db.query(Settings).first()
+        if not settings or not settings.enable_streaks:
+            return
+            
+        today = datetime.now().date()
         
-        # Call original streak generation logic
-        _generate_streaks_impl(db)
+        # Get all users with recent activity
+        active_users = db.query(Entry.name).distinct().filter(
+            Entry.date >= (today - timedelta(days=30)).isoformat()
+        ).all()
+        
+        for user_tuple in active_users:
+            username = user_tuple[0]
+            current_streak = calculate_streak_for_date(username, today)
+            
+            # Update or create streak record
+            streak = db.query(UserStreak).filter_by(username=username).first()
+            if streak:
+                if current_streak > 0:  # Only update if there's an active streak
+                    streak.current_streak = current_streak
+                    streak.last_attendance = datetime.now()
+                    streak.max_streak = max(streak.max_streak, current_streak)
+                else:
+                    streak.current_streak = 0  # Reset expired streak
+            else:
+                streak = UserStreak(
+                    username=username,
+                    current_streak=current_streak,
+                    max_streak=current_streak,
+                    last_attendance=datetime.now() if current_streak > 0 else None
+                )
+                db.add(streak)
+        
+        db.commit()
         
     except Exception as e:
         db.rollback()
         app.logger.error(f"Error generating streaks: {str(e)}")
     finally:
         db.close()
-
-def _generate_streaks_impl(db):
-    """Implementation of streak generation, kept for fallback"""
-    # ... existing streak generation code ...
 
 def calculate_scores(data, period, current_date):
     """Calculate scores with proper handling of early-bird/last-in modes"""
@@ -3260,7 +3279,6 @@ def calculate_streak_for_date(
     Args:
         name: User's name
         target_date: Target date to calculate streak until
-        db: Database session
     
     Returns:
         int: Current streak count
@@ -3274,46 +3292,77 @@ def calculate_streak_for_date(
         target_date = (datetime.strptime(target_date, '%Y-%m-%d').date() 
                       if isinstance(target_date, str) else target_date)
         
-        entries = db.query(
-            Entry.date
-        ).filter(
+        # Get settings for working days
+        settings = db.query(Settings).first()
+        if not settings:
+            return 0
+            
+        # Get user's working days
+        working_days = settings.points.get('working_days', {}).get(name, ['mon', 'tue', 'wed', 'thu', 'fri'])
+        
+        # Get recent entries up to target date, ordered by date descending
+        entries = db.query(Entry).filter(
             Entry.name == name,
             Entry.status.in_(['in-office', 'remote']),
             Entry.date <= target_date.isoformat()
-        ). order_by(
+        ).order_by(
             Entry.date.desc()
         ).all()
         
         if not entries:
             return 0
-            
-        streak = 1
-        last_date = datetime.strptime(entries[0].date, "%Y-%m-%d").date()
         
-        dates = [datetime.strptime(entry.date, "%Y-%m-%d").date() 
-                for entry in entries[1:]]
-                
-        for entry_date in dates:
+        streak = 0
+        last_date = datetime.strptime(entries[0].date, '%Y-%m-%d').date()
+        
+        # Check if the first entry is the target date
+        if last_date == target_date:
+            streak = 1
+        else:
+            return 0  # If most recent entry isn't target date, no active streak
+        
+        # Process remaining entries
+        for entry in entries[1:]:
+            entry_date = datetime.strptime(entry.date, '%Y-%m-%d').date()
             days_between = (last_date - entry_date).days
             
-            if days_between > MAX_WEEKEND_GAP:
+            # Check if dates are consecutive working days
+            current_date = last_date
+            working_day_count = 0
+            non_working_day_count = 0
+            
+            for _ in range(days_between):
+                current_date -= timedelta(days=1)
+                day_name = current_date.strftime('%a').lower()
+                
+                if day_name in working_days:
+                    working_day_count += 1
+                else:
+                    non_working_day_count += 1
+                    
+            # Break streak if there are missed working days
+            if working_day_count > 1:  # More than one working day gap
                 break
                 
-            if days_between > 1:
-                weekend_days = {
-                    (last_date - timedelta(days=d)).weekday()
-                    for d in range(1, days_between)
-                }
-                if not weekend_days.issubset({5, 6}):  # Saturday and Sunday
-                    break
+            if working_day_count == 1:
+                # Found next working day, continue streak
                 streak += 1
                 last_date = entry_date
-            
+            elif working_day_count == 0 and non_working_day_count <= 3:
+                # Only weekend/non-working days between, continue streak
+                streak += 1
+                last_date = entry_date
+            else:
+                # Gap too large, break streak
+                break
+        
         return streak
         
     except Exception as e:
         app.logger.error(f"Error calculating streak: {str(e)}")
         return 0
+    finally:
+        db.close()
 
 @app.route("/missing-entries")
 @login_required

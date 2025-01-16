@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta
 import random
-from main import SessionLocal, Entry, Settings, init_settings, app
+from main_old import SessionLocal, Entry, Settings, init_settings, app
 import uuid
 
 def generate_demo_data():

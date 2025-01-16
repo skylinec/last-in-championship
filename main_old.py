@@ -4980,10 +4980,6 @@ def join_game(game_id):
     finally:
         db.close()
 
-# ...existing code...
-
-# ...existing code...
-
 def get_working_days_for_period(db, start_date, end_date):
     """Get all working days in a period accounting for user-specific schedules"""
     try:

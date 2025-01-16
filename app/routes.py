@@ -1709,39 +1709,27 @@ def day_rankings(date=None):
     
     data = load_data()
     settings = load_settings()
-    # Change default to 'last_in' to match global setting
     mode = request.args.get('mode', 'last_in')
-    if mode not in ['last_in', 'early_bird']:
-        app.logger.warning(f"Invalid mode provided: {mode}, defaulting to last-in")
-        mode = 'last_in'
     
-    # Get entries for the specified date and sort by time
-    day_entries = [e for e in data if e["date"] == date]
-    day_entries.sort(key=lambda x: datetime.strptime(x["time"], "%H:%M"))
+    today_entries = [e for e in data if e["date"] == date]
+    today_entries.sort(key=lambda x: datetime.strptime(x["time"], "%H:%M"))
     
-    # Get shift length based on the day
-    weekday = datetime.strptime(date, '%Y-%m-%d').strftime('%A').lower()
-    day_shift = settings["points"].get("daily_shifts", {}).get(weekday, {
-        "hours": settings["points"].get("shift_length", 9),
-        "start": "09:00"
-    })
-    
-    shift_length_hours = float(day_shift["hours"])
-    shift_length_minutes = int(shift_length_hours * 60)
-    shift_start = datetime.strptime(day_shift["start"], "%H:%M")
-    start_hour = shift_start.hour
-    start_minute = shift_start.minute
-    
-    # Calculate points and prepare rankings
     rankings = []
-    total_entries = len(day_entries)
-    for position, entry in enumerate(day_entries, 1):
+    total_entries = len(today_entries)
+    for position, entry in enumerate(today_entries, 1):
         scores = calculate_daily_score(entry, settings, position, total_entries, mode)
+        
         entry_time = datetime.strptime(entry["time"], "%H:%M")
         entry_date = datetime.strptime(entry["date"], "%Y-%m-%d")
         
-        # Use day-specific shift length
-        shift_length = shift_length_minutes
+        weekday = entry_date.strftime('%A').lower()
+        day_shift = settings["points"].get("daily_shifts", {}).get(weekday, {
+            "hours": settings["points"].get("shift_length", 9),
+            "start": "09:00"
+        })
+        
+        shift_length_hours = float(day_shift["hours"])
+        shift_length = int(shift_length_hours * 60)
         end_time = entry_time + timedelta(minutes=shift_length)
         
         rankings.append({
@@ -1752,13 +1740,24 @@ def day_rankings(date=None):
             "shift_hours": shift_length_hours,
             "end_time": end_time.strftime('%H:%M'),
             "status": entry["status"],
-            "points": scores["last_in"] if mode == 'last-in' else scores["early_bird"]
+            "points": scores["last_in"] if mode == 'last_in' else scores["early_bird"]
         })
     
     # Sort by points descending
     rankings.sort(key=lambda x: x["points"], reverse=True)
     
-    # Calculate earliest and latest hours from the actual data
+    # Get shift length based on the day
+    weekday = datetime.strptime(date, '%Y-%m-%d').strftime('%A').lower()
+    day_shift = settings["points"].get("daily_shifts", {}).get(weekday, {
+        "hours": settings["points"].get("shift_length", 9),
+        "start": "09:00"
+    })
+    
+    shift_start = datetime.strptime(day_shift["start"], "%H:%M")
+    start_hour = shift_start.hour
+    start_minute = shift_start.minute
+    
+    # Calculate earliest and latest hours from actual data
     all_times = []
     for rank in rankings:
         if rank.get('time'):

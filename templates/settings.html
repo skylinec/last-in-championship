@@ -244,17 +244,25 @@
             
             <!-- Position Scoring System -->
             <div class="scoring-section">
-                <h3>Position Scoring</h3>
-                <p>Both modes use the same underlying position numbers but calculate scores inversely:</p>
+                <h3>Position Scoring System</h3>
+                <p>The scoring system uses a single unified calculation that inverts based on mode:</p>
                 <ul>
-                    <li><strong>Last-In Mode:</strong> Position × {{ settings.late_bonus }} points
-                        <br><small>Example: 5th person gets 5 × {{ settings.late_bonus }} points</small>
+                    <li><strong>Base Points:</strong> 
+                        <ul>
+                            <li>Office: {{ settings.points.in_office }} points</li>
+                            <li>Remote: {{ settings.points.remote }} points</li>
+                        </ul>
                     </li>
-                    <li><strong>Early-Bird Mode:</strong> (Total - Position + 1) × {{ settings.early_bonus }} points
-                        <br><small>Example: 1st person gets 5 × {{ settings.early_bonus }} points when 5 people attend</small>
+                    <li><strong>Position Bonus:</strong> 
+                        <ul>
+                            <li>Last-In Mode: Position × {{ settings.late_bonus }} bonus points<br>
+                                <small>Example: In a day with 5 people, last person (position 5) gets 5 × {{ settings.late_bonus }} bonus</small></li>
+                            <li>Early-Bird Mode: (Total - Position + 1) × {{ settings.early_bonus }} bonus points<br>
+                                <small>Example: In a day with 5 people, first person (position 1) gets 5 × {{ settings.early_bonus }} bonus</small></li>
+                        </ul>
                     </li>
                 </ul>
-                <p class="note">This ensures Early-Bird mode rankings are exactly inverse of Last-In mode</p>
+                <p class="note">This calculation ensures that Early-Bird mode produces exactly inverse rankings of Last-In mode</p>
             </div>
 
             <!-- Base Points -->

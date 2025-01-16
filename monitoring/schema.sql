@@ -320,23 +320,43 @@ scored_entries AS (
         period,
         period_start,
         period_end,
-        -- Early bird points - Position points are based on total_entries - position + 1
-        SUM(
-            base_points + (total_entries - early_position + 1) * (SELECT early_bonus FROM settings LIMIT 1)
-        ) OVER (
-            PARTITION BY username, period, period_start
-            ORDER BY date
-            ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
-        ) AS early_bird_points,
-
-        -- Last-in points - Position points are based directly on position
-        SUM(
-            base_points + late_position * (SELECT late_bonus FROM settings LIMIT 1)
-        ) OVER (
+        -- Single bonus calculation using position
+        -- For last-in mode: higher position = more points
+        -- For early-bird mode: position is reversed (total_entries - position + 1)
+        -- This ensures exact inverse relationship
+        base_points +
+        CASE WHEN late_position = 1 THEN  -- Last person gets full bonus
+            total_entries * (SELECT late_bonus FROM settings LIMIT 1)
+        ELSE 0 END 
+        as last_in_bonus,
+        
+        base_points +
+        CASE WHEN early_position = 1 THEN  -- First person gets full bonus
+            total_entries * (SELECT early_bonus FROM settings LIMIT 1)
+        ELSE 0 END
+        as early_bird_bonus,
+        
+        -- Calculate cumulative points for each mode
+        SUM(base_points +
+            CASE WHEN late_position = 1 THEN
+                total_entries * (SELECT late_bonus FROM settings LIMIT 1)
+            ELSE 0 END)
+        OVER (
             PARTITION BY username, period, period_start
             ORDER BY date
             ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
         ) AS last_in_points,
+
+        SUM(base_points +
+            CASE WHEN early_position = 1 THEN
+                total_entries * (SELECT early_bonus FROM settings LIMIT 1)
+            ELSE 0 END)
+        OVER (
+            PARTITION BY username, period, period_start
+            ORDER BY date
+            ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+        ) AS early_bird_points,
+        
         early_position,
         late_position,
         total_entries,

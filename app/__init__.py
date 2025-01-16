@@ -11,7 +11,8 @@ from .metrics import metrics_app, start_metrics_updater
 from .migrations.run_migrations import run_migrations
 from .sockets import notify_game_update, socketio
 from .utils import init_settings
-from .routes import bp, init_app
+from .routes import init_app
+from .blueprints import bp
 
 
 def create_app():

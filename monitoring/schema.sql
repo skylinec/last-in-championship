@@ -323,7 +323,8 @@ scored_entries AS (
         SUM(
             base_points + (
                 CASE 
-                    WHEN early_position = 1 THEN total_entries * (SELECT early_bonus FROM settings LIMIT 1)
+                    -- Invert last-in logic: earliest arrival = late_position = total_entries
+                    WHEN late_position = total_entries THEN total_entries * (SELECT early_bonus FROM settings LIMIT 1)
                     ELSE 0
                 END
             )

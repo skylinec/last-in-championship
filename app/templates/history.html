@@ -110,35 +110,25 @@ async function loadHistory() {
     const fromDate = document.getElementById('fromDate').value;
     const toDate = document.getElementById('toDate').value;
 
-    const periods = Array.from(periodSelect.selectedOptions).map(opt => opt.value);
-    const users = Array.from(nameSelect.selectedOptions).map(opt => opt.value);
-    const statuses = Array.from(statusSelect.selectedOptions).map(opt => opt.value);
+    const params = new URLSearchParams({
+        page: currentPage,
+        per_page: ITEMS_PER_PAGE,
+        fromDate: fromDate,
+        toDate: toDate
+    });
+
+    // Add multi-select values
+    const selectedUsers = Array.from(nameSelect.selectedOptions).map(opt => opt.value);
+    selectedUsers.forEach(user => params.append('users[]', user));
+
+    const selectedStatuses = Array.from(statusSelect.selectedOptions).map(opt => opt.value);
+    selectedStatuses.forEach(status => params.append('status[]', status));
 
     try {
-        const params = new URLSearchParams({
-            page: currentPage,
-            per_page: ITEMS_PER_PAGE,
-            from: fromDate,
-            to: toDate
-        });
-
-        // Only add non-default filters
-        if (!periods.includes('all')) params.append('period', periods.join(','));
-        if (!users.includes('all')) params.append('user', users.join(','));
-        if (!statuses.includes('all')) params.append('status', statuses.join(','));
-
-        const response = await fetch(`/edit?${params}`);
+        const response = await fetch(`/api/history?${params}`);
         const data = await response.json();
-        
         updateTable(data.entries);
-        updatePagination(data.total);
-        
-        if (periods.includes('today')) {
-            await loadDailyRankings();
-            document.getElementById('dailyRankings').style.display = 'block';
-        } else {
-            document.getElementById('dailyRankings').style.display = 'none';
-        }
+        updatePagination(data.total_pages);
     } catch (error) {
         console.error('Error loading history:', error);
     }

@@ -1620,7 +1620,61 @@ def handle_rules():
     finally:
         db.close()
 
-# ...existing code...
+@bp.route("/api/history")
+@login_required
+def get_history():
+    db = SessionLocal()
+    try:
+        # Get query parameters
+        page = request.args.get('page', 1, type=int)
+        per_page = request.args.get('per_page', 50, type=int)
+        name_filter = request.args.getlist('users[]')
+        status_filter = request.args.getlist('status[]')
+        from_date = request.args.get('fromDate')
+        to_date = request.args.get('toDate')
+
+        # Build base query
+        query = db.query(Entry)
+
+        # Apply filters
+        if name_filter:
+            query = query.filter(Entry.name.in_(name_filter))
+        if status_filter:
+            query = query.filter(Entry.status.in_(status_filter))
+        if from_date:
+            query = query.filter(Entry.date >= from_date)
+        if to_date:
+            query = query.filter(Entry.date <= to_date)
+
+        # Get total count
+        total_count = query.count()
+
+        # Get paginated results
+        entries = query.order_by(Entry.date.desc(), Entry.time.desc())\
+                      .offset((page - 1) * per_page)\
+                      .limit(per_page)\
+                      .all()
+
+        # Format results
+        results = [{
+            'id': entry.id,
+            'date': entry.date,
+            'time': entry.time,
+            'name': entry.name,
+            'status': entry.status,
+            'position': None  # Add position if needed
+        } for entry in entries]
+
+        return jsonify({
+            'entries': results,
+            'total': total_count,
+            'page': page,
+            'per_page': per_page,
+            'total_pages': (total_count + per_page - 1) // per_page
+        })
+
+    finally:
+        db.close()
 
 @bp.route("/rankings/day")
 @bp.route("/rankings/day/<date>")

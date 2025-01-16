@@ -427,3 +427,7 @@ REFRESH MATERIALIZED VIEW rankings;
 \echo 'Creating Mattermost database if it does not exist'
 SELECT 'CREATE DATABASE mattermost WITH ENCODING = ''UTF8'' CONNECTION LIMIT = -1'
 WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'mattermost')\gexec
+
+\echo 'Creating Matomo database if it does not exist'
+SELECT 'CREATE DATABASE matomo WITH ENCODING = ''UTF8'' CONNECTION LIMIT = -1'
+WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'matomo')\gexec

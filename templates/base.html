@@ -1,4 +1,5 @@
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -12,26 +13,28 @@
             --bg-color: #ecf0f1;
         }
 
-        body { 
-            max-width: 1250px; 
-            margin: 0 auto; 
+        body {
+            max-width: 1250px;
+            margin: 0 auto;
             padding: 20px;
             font-family: 'Segoe UI', Arial, sans-serif;
             background: var(--bg-color);
             line-height: 1.6;
         }
 
-        nav { 
+        nav {
             background: var(--primary-color);
             padding: 15px;
             border-radius: 8px;
             margin-bottom: 30px;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
             display: flex;
             align-items: center;
-            justify-content: space-between; /* Add this */
+            justify-content: space-between;
+            /* Add this */
             position: relative;
-            z-index: 1000; /* Ensure nav is above other elements */
+            z-index: 1000;
+            /* Ensure nav is above other elements */
         }
 
         .nav-links {
@@ -41,7 +44,7 @@
             gap: 10px;
         }
 
-        nav a { 
+        nav a {
             margin-right: 20px;
             text-decoration: none;
             color: white;
@@ -50,17 +53,19 @@
             transition: all 0.3s ease;
         }
 
-        nav a:hover { 
+        nav a:hover {
             background: var(--accent-color);
             transform: translateY(-2px);
         }
 
-        .form-group { 
+        .form-group {
             margin-bottom: 20px;
             animation: fadeIn 0.5s ease-out;
         }
 
-        input, select, button { 
+        input,
+        select,
+        button {
             padding: 10px;
             border: 2px solid #ddd;
             border-radius: 4px;
@@ -68,13 +73,14 @@
             transition: all 0.3s ease;
         }
 
-        input:focus, select:focus { 
+        input:focus,
+        select:focus {
             border-color: var(--accent-color);
             box-shadow: 0 0 5px rgba(52, 152, 219, 0.5);
             outline: none;
         }
 
-        button { 
+        button {
             background: var(--accent-color);
             color: white;
             border: none;
@@ -86,19 +92,20 @@
         button:hover {
             background: var(--primary-color);
             transform: translateY(-2px);
-            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
         }
 
-        table { 
+        table {
             width: 100%;
             border-collapse: collapse;
             margin-top: 20px;
             background: white;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
             animation: slideIn 0.5s ease-out;
         }
 
-        th, td { 
+        th,
+        td {
             padding: 12px;
             border: 1px solid #ddd;
             text-align: left;
@@ -117,33 +124,47 @@
             background: #f5f5f5;
         }
 
-        .autocomplete-suggestions { 
+        .autocomplete-suggestions {
             border: 1px solid #ddd;
             background: white;
             overflow: auto;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
             border-radius: 4px;
         }
 
-        .autocomplete-suggestion { 
+        .autocomplete-suggestion {
             padding: 10px;
             cursor: pointer;
             transition: background 0.2s ease;
         }
 
-        .autocomplete-suggestion:hover { 
+        .autocomplete-suggestion:hover {
             background: var(--accent-color);
             color: white;
         }
 
         @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(10px); }
-            to { opacity: 1; transform: translateY(0); }
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
         }
 
         @keyframes slideIn {
-            from { opacity: 0; transform: translateX(-10px); }
-            to { opacity: 1; transform: translateX(0); }
+            from {
+                opacity: 0;
+                transform: translateX(-10px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
         }
 
         .message {
@@ -173,7 +194,7 @@
             position: absolute;
             background-color: var(--primary-color);
             min-width: 160px;
-            box-shadow: 0 8px 16px rgba(0,0,0,0.2);
+            box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2);
             border-radius: 4px;
             z-index: 1;
         }
@@ -212,7 +233,7 @@
             padding: 20px;
             background: white;
             border-radius: 8px;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
         }
 
         .auth-form {
@@ -237,16 +258,18 @@
 
         .global-clock-in {
             position: fixed;
-            bottom: 20px;  /* Changed from top to bottom */
+            bottom: 20px;
+            /* Changed from top to bottom */
             right: 20px;
             display: flex;
-            flex-direction: column;  /* Changed from row to column */
+            flex-direction: column;
+            /* Changed from row to column */
             gap: 10px;
             z-index: 1000;
             background: rgba(255, 255, 255, 0.9);
             padding: 10px;
             border-radius: 8px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
             backdrop-filter: blur(5px);
         }
 
@@ -272,7 +295,7 @@
 
         .global-action-button:hover {
             transform: translateY(-2px);
-            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
         }
 
         .global-action-button:disabled {
@@ -321,7 +344,8 @@
 
         .slider:before {
             position: absolute;
-            content: "🏃";  /* Running emoji for early bird */
+            content: "🏃";
+            /* Running emoji for early bird */
             display: flex;
             align-items: center;
             justify-content: center;
@@ -337,13 +361,14 @@
             border-radius: 50%;
         }
 
-        input:checked + .slider {
+        input:checked+.slider {
             background-color: var(--warning-color);
         }
 
-        input:checked + .slider:before {
+        input:checked+.slider:before {
             transform: translateX(30px);
-            content: "☕";  /* Coffee emoji for late arrival */
+            content: "☕";
+            /* Coffee emoji for late arrival */
         }
 
         .mode-info {
@@ -361,7 +386,8 @@
         .quick-clock-in {
             position: fixed;
             bottom: 20px;
-            right: 80px;  /* Changed from 20px to 80px to make room for chatbot */
+            right: 80px;
+            /* Changed from 20px to 80px to make room for chatbot */
             z-index: 1000;
             display: flex;
             flex-direction: column;
@@ -377,7 +403,7 @@
             border: none;
             cursor: pointer;
             font-size: 24px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
             transition: all 0.3s ease;
             display: flex;
             align-items: center;
@@ -394,7 +420,7 @@
             background: white;
             padding: 10px;
             border-radius: 8px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
             min-width: 200px;
         }
 
@@ -406,7 +432,8 @@
         .chatbot-container {
             position: fixed;
             bottom: 20px;
-            right: 20px;  /* Keeps chatbot on the right */
+            right: 20px;
+            /* Keeps chatbot on the right */
             z-index: 1000;
         }
 
@@ -419,16 +446,21 @@
             color: white;
             font-size: 24px;
             cursor: pointer;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
             transition: transform 0.3s ease;
-            display: flex;           /* Add these lines */
-            align-items: center;     /* to center */
-            justify-content: center; /* the emoji */
+            display: flex;
+            /* Add these lines */
+            align-items: center;
+            /* to center */
+            justify-content: center;
+            /* the emoji */
         }
 
         .chat-icon {
-            line-height: 1;    /* Add these lines */
-            margin-top: -2px;  /* for perfect centering */
+            line-height: 1;
+            /* Add these lines */
+            margin-top: -2px;
+            /* for perfect centering */
         }
 
         .chat-toggle:hover {
@@ -443,7 +475,7 @@
             height: 400px;
             background: white;
             border-radius: 12px;
-            box-shadow: 0 5px 20px rgba(0,0,0,0.2);
+            box-shadow: 0 5px 20px rgba(0, 0, 0, 0.2);
             display: flex;
             flex-direction: column;
             transition: all 0.3s ease;
@@ -546,7 +578,7 @@
 
         .suggestion-chip:hover {
             transform: translateY(-2px);
-            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
         }
 
         .chat-message {
@@ -642,16 +674,16 @@
             }
 
             .hamburger.active .bar:nth-child(1) {
-        transform: translateY(10px) rotate(45deg);
-    }
+                transform: translateY(10px) rotate(45deg);
+            }
 
-    .hamburger.active .bar:nth-child(2) {
-        opacity: 0;
-    }
+            .hamburger.active .bar:nth-child(2) {
+                opacity: 0;
+            }
 
-    .hamburger.active .bar:nth-child(3) {
-        transform: translateY(-10px) rotate(-45deg);
-    }
+            .hamburger.active .bar:nth-child(3) {
+                transform: translateY(-10px) rotate(-45deg);
+            }
 
             .nav-links {
                 display: none;
@@ -665,7 +697,7 @@
                 align-items: flex-start;
                 padding: 80px 20px 20px;
                 z-index: 1001;
-                }
+            }
 
             .nav-links.active {
                 display: flex;
@@ -768,18 +800,21 @@
             .quick-clock-in {
                 bottom: 20px;
                 right: 20px;
-                z-index: 1001; /* Ensure it's above the mobile menu */
+                z-index: 1001;
+                /* Ensure it's above the mobile menu */
             }
 
             .chatbot-container {
                 bottom: 20px;
-                right: 80px; /* Move it to the left of clock-in button */
+                right: 80px;
+                /* Move it to the left of clock-in button */
                 z-index: 1001;
             }
         }
 
         .hamburger {
-            display: none;  /* Hidden by default */
+            display: none;
+            /* Hidden by default */
             flex-direction: column;
             justify-content: space-around;
             width: 30px;
@@ -788,7 +823,8 @@
             border: none;
             cursor: pointer;
             padding: 0;
-            z-index: 1002;  /* Ensure it's above nav menu */
+            z-index: 1002;
+            /* Ensure it's above nav menu */
         }
 
         .bar {
@@ -798,24 +834,19 @@
             transition: all 0.3s ease;
         }
     </style>
-    <!-- Matomo -->
+    <!-- Matomo Tag Manager -->
     <script>
-        var _paq = window._paq = window._paq || [];
-        _paq.push(['trackPageView']);
-        _paq.push(['enableLinkTracking']);
-        _paq.push(['enableHeartBeatTimer']);
-        _paq.push(['trackAllContentImpressions']);
-        (function() {
-            var u="//lic.mattdh.me/matomo/";
-            _paq.push(['setTrackerUrl', u+'matomo.php']);
-            _paq.push(['setSiteId', '1']);
-            var d=document, g=d.createElement('script'), s=d.getElementsByTagName('script')[0];
-            g.async=true; g.src=u+'matomo.js'; s.parentNode.insertBefore(g,s);
+        var _mtm = window._mtm = window._mtm || [];
+        _mtm.push({ 'mtm.startTime': (new Date().getTime()), 'event': 'mtm.Start' });
+        (function () {
+            var d = document, g = d.createElement('script'), s = d.getElementsByTagName('script')[0];
+            g.async = true; g.src = 'https://lic.mattdh.me/js/container_ffDIokOg.js'; s.parentNode.insertBefore(g, s);
         })();
     </script>
-    <!-- End Matomo Code -->
+    <!-- End Matomo Tag Manager -->
     {% block head %}{% endblock %}
 </head>
+
 <body>
     <div id="attendance-warning" class="warning-banner" style="display: none;">
         ⚠️ Missing attendance for: <span id="missing-users"></span>
@@ -826,50 +857,50 @@
             <span class="bar"></span>
             <span class="bar"></span>
         </button>
-        
+
         <div class="nav-links">
             {% if session.get('user') %}
-                <a href="/" class="nav-item">Log Attendance</a>
-                <a href="/history" class="nav-item">View/Edit History</a>
-                <div class="dropdown nav-item">
-                    <a href="#" class="dropdown-trigger">Rankings ▾</a>
-                    <div class="dropdown-content">
-                        <a href="/rankings/day">Daily Rankings</a>
-                        <a href="/rankings/week">Weekly Rankings</a>
-                        <a href="/rankings/month">Monthly Rankings</a>
-                        <a href="/streaks">Streaks</a>
-                        <a href="/tie-breakers">Tie Breakers</a>
-                    </div>
+            <a href="/" class="nav-item">Log Attendance</a>
+            <a href="/history" class="nav-item">View/Edit History</a>
+            <div class="dropdown nav-item">
+                <a href="#" class="dropdown-trigger">Rankings ▾</a>
+                <div class="dropdown-content">
+                    <a href="/rankings/day">Daily Rankings</a>
+                    <a href="/rankings/week">Weekly Rankings</a>
+                    <a href="/rankings/month">Monthly Rankings</a>
+                    <a href="/streaks">Streaks</a>
+                    <a href="/tie-breakers">Tie Breakers</a>
                 </div>
-                <a href="/visualisations" class="nav-item">Visualisations</a>
-                <div class="dropdown nav-item">
-                    <a href="#" class="dropdown-trigger">Admin ▾</a>
-                    <div class="dropdown-content">
-                        <a href="/settings">Settings</a>
-                        <a href="/missing-entries">Missing Entries</a>
-                        <a href="/audit">Audit Trail</a>
-                        <a href="/maintenance">Maintenance</a>
-                        <a href="/grafana">Grafana</a>
-                    </div>
+            </div>
+            <a href="/visualisations" class="nav-item">Visualisations</a>
+            <div class="dropdown nav-item">
+                <a href="#" class="dropdown-trigger">Admin ▾</a>
+                <div class="dropdown-content">
+                    <a href="/settings">Settings</a>
+                    <a href="/missing-entries">Missing Entries</a>
+                    <a href="/audit">Audit Trail</a>
+                    <a href="/maintenance">Maintenance</a>
+                    <a href="/grafana">Grafana</a>
                 </div>
-                <div class="championship-mode">
-                    <label class="switch">
-                        <input type="checkbox" id="championshipToggle">
-                        <span class="slider"></span>
-                    </label>
-                    <div class="mode-info">
-                        <span class="mode-label">Last-In Mode</span>
-                        <div class="mode-description"></div>
-                    </div>
+            </div>
+            <div class="championship-mode">
+                <label class="switch">
+                    <input type="checkbox" id="championshipToggle">
+                    <span class="slider"></span>
+                </label>
+                <div class="mode-info">
+                    <span class="mode-label">Last-In Mode</span>
+                    <div class="mode-description"></div>
                 </div>
-                <div class="user-info nav-item">
-                    {{ session.user }} | <a href="{{ url_for('logout') }}">Logout</a>
-                </div>
+            </div>
+            <div class="user-info nav-item">
+                {{ session.user }} | <a href="{{ url_for('logout') }}">Logout</a>
+            </div>
             {% else %}
-                <div class="auth-links">
-                    <a href="{{ url_for('login') }}" class="nav-item">Login</a>
-                    <a href="{{ url_for('register') }}" class="nav-item">Register</a>
-                </div>
+            <div class="auth-links">
+                <a href="{{ url_for('login') }}" class="nav-item">Login</a>
+                <a href="{{ url_for('register') }}" class="nav-item">Register</a>
+            </div>
             {% endif %}
         </div>
     </nav>
@@ -890,7 +921,7 @@
         <button id="chatToggle" class="chat-toggle">
             <span class="chat-icon">💬</span>
         </button>
-        
+
         <div id="chatWindow" class="chat-window hidden">
             <div class="chat-header">
                 Championship Assistant
@@ -907,92 +938,92 @@
 
     {% if session.get('user') %}
     <script>
-    async function checkMissingAttendance() {
-        // Check if it's a weekday (0-4 = Monday-Friday)
-        const today = new Date();
-        if (today.getDay() === 0 || today.getDay() === 6) {  // Sunday or Saturday
-            document.getElementById('attendance-warning').style.display = 'none';
-            return;
+        async function checkMissingAttendance() {
+            // Check if it's a weekday (0-4 = Monday-Friday)
+            const today = new Date();
+            if (today.getDay() === 0 || today.getDay() === 6) {  // Sunday or Saturday
+                document.getElementById('attendance-warning').style.display = 'none';
+                return;
+            }
+
+            const response = await fetch('/check_attendance');
+            const missingUsers = await response.json();
+            if (missingUsers.length > 0) {
+                document.getElementById('missing-users').textContent = missingUsers.join(', ');
+                document.getElementById('attendance-warning').style.display = 'block';
+            }
+        }
+        checkMissingAttendance();
+
+        async function clockIn(status) {
+            const now = new Date();
+            const data = {
+                date: now.toISOString().split('T')[0],
+                time: now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }),
+                name: '{{ session.user }}',
+                status: status
+            };
+
+            try {
+                const menu = document.getElementById('clockInMenu');
+                menu.classList.remove('show');
+
+                const response = await fetch('/log', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+
+                const result = await response.json();
+
+                // Create and show toast
+                const toast = document.createElement('div');
+                toast.className = `toast ${result.type}`;
+                toast.textContent = result.message;
+                document.body.appendChild(toast);
+
+                // Remove toast after animation completes
+                setTimeout(() => {
+                    toast.remove();
+                    if (result.type === 'success') {
+                        window.location.reload();
+                    }
+                }, 2000);
+
+            } catch (error) {
+                console.error('Error:', error);
+                const toast = document.createElement('div');
+                toast.className = 'toast error';
+                toast.textContent = 'Failed to clock in. Please try again.';
+                document.body.appendChild(toast);
+                setTimeout(() => toast.remove(), 2000);
+            }
         }
 
-        const response = await fetch('/check_attendance');
-        const missingUsers = await response.json();
-        if (missingUsers.length > 0) {
-            document.getElementById('missing-users').textContent = missingUsers.join(', ');
-            document.getElementById('attendance-warning').style.display = 'block';
-        }
-    }
-    checkMissingAttendance();
+        function showToast(message, type = 'success') {
+            // Remove existing toasts
+            document.querySelectorAll('.toast').forEach(t => t.remove());
 
-    async function clockIn(status) {
-        const now = new Date();
-        const data = {
-            date: now.toISOString().split('T')[0],
-            time: now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }),
-            name: '{{ session.user }}',
-            status: status
-        };
-        
-        try {
-            const menu = document.getElementById('clockInMenu');
-            menu.classList.remove('show');
-            
-            const response = await fetch('/log', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(data)
+            const toast = document.createElement('div');
+            toast.className = `toast ${type}`;
+            toast.textContent = message;
+            document.body.appendChild(toast);
+
+            // Remove toast after animation
+            setTimeout(() => toast.remove(), 3000);
+        }
+
+        function disableClockInButtons() {
+            document.querySelectorAll('.global-action-button').forEach(button => {
+                button.disabled = true;
+                button.style.opacity = '0.5';
+                button.style.cursor = 'not-allowed';
+                button.title = 'Already clocked in today';
             });
-            
-            const result = await response.json();
-            
-            // Create and show toast
-            const toast = document.createElement('div');
-            toast.className = `toast ${result.type}`;
-            toast.textContent = result.message;
-            document.body.appendChild(toast);
-            
-            // Remove toast after animation completes
-            setTimeout(() => {
-                toast.remove();
-                if (result.type === 'success') {
-                    window.location.reload();
-                }
-            }, 2000);
-            
-        } catch (error) {
-            console.error('Error:', error);
-            const toast = document.createElement('div');
-            toast.className = 'toast error';
-            toast.textContent = 'Failed to clock in. Please try again.';
-            document.body.appendChild(toast);
-            setTimeout(() => toast.remove(), 2000);
         }
-    }
 
-    function showToast(message, type = 'success') {
-        // Remove existing toasts
-        document.querySelectorAll('.toast').forEach(t => t.remove());
-        
-        const toast = document.createElement('div');
-        toast.className = `toast ${type}`;
-        toast.textContent = message;
-        document.body.appendChild(toast);
-        
-        // Remove toast after animation
-        setTimeout(() => toast.remove(), 3000);
-    }
-
-    function disableClockInButtons() {
-        document.querySelectorAll('.global-action-button').forEach(button => {
-            button.disabled = true;
-            button.style.opacity = '0.5';
-            button.style.cursor = 'not-allowed';
-            button.title = 'Already clocked in today';
-        });
-    }
-
-    // Add toast notification styles
-    document.head.insertAdjacentHTML('beforeend', `
+        // Add toast notification styles
+        document.head.insertAdjacentHTML('beforeend', `
         <style>
             .toast {
                 position: fixed;
@@ -1020,222 +1051,223 @@
         </style>
     `);
 
-    // Check if already clocked in
-    document.addEventListener('DOMContentLoaded', async () => {
-        const response = await fetch('/today-entries');
-        const entries = await response.json();
-        const username = '{{ session.user }}';
-        
-        if (entries.some(e => e.name === username)) {
-            disableClockInButtons();
-        }
-    });
+        // Check if already clocked in
+        document.addEventListener('DOMContentLoaded', async () => {
+            const response = await fetch('/today-entries');
+            const entries = await response.json();
+            const username = '{{ session.user }}';
 
-    // Championship mode toggle functionality
-    document.addEventListener('DOMContentLoaded', function() {
-        const toggle = document.getElementById('championshipToggle');
-        const label = document.querySelector('.mode-label');
-        const description = document.querySelector('.mode-description');
-        
-        const modes = {
-            early: {
-                label: "Early Bird Mode (BETA)",
-                description: "Points for arriving first",
-                class: "early-mode"
-            },
-            late: {
-                label: "Last-In Mode",
-                description: "Points for arriving last",
-                class: "late-mode"
-            }
-        };
-        
-        // Initialize toggle state from URL or localStorage
-        const urlParams = new URLSearchParams(window.location.search);
-        const urlMode = urlParams.get('mode');
-        const savedMode = localStorage.getItem('championshipMode');
-        const isLastIn = urlMode ? urlMode === 'last-in' : (savedMode ? savedMode === 'last-in' : true);
-        
-        toggle.checked = isLastIn;
-        updateModeDisplay(isLastIn);
-        
-        function updateModeDisplay(isLastIn) {
-            const mode = isLastIn ? modes.late : modes.early;
-            label.textContent = mode.label;
-            description.textContent = mode.description;
-            document.body.className = mode.class;
-            
-            // Store the mode preference
-            localStorage.setItem('championshipMode', isLastIn ? 'last-in' : 'early-bird');
-            
-            // Update current URL with new mode
-            const url = new URL(window.location.href);
-            url.searchParams.set('mode', isLastIn ? 'last-in' : 'early-bird');
-            history.replaceState(null, '', url.toString());
-            
-            // Update all ranking links to include the mode
-            document.querySelectorAll('a[href*="/rankings/"]').forEach(link => {
-                const url = new URL(link.href, window.location.origin);
-                url.searchParams.set('mode', isLastIn ? 'last-in' : 'early-bird');
-                link.href = url.toString();
-            });
-        }
-        
-        toggle.addEventListener('change', function() {
-            const isLastIn = this.checked;
-            updateModeDisplay(isLastIn);
-            
-            // If on a rankings or visualisations page, reload with new mode
-            const path = window.location.pathname;
-            if (path.includes('rankings') || path.includes('visualisations')) {
-                window.location.reload();
+            if (entries.some(e => e.name === username)) {
+                disableClockInButtons();
             }
         });
 
-        const chatToggle = document.getElementById('chatToggle');
-    const chatWindow = document.getElementById('chatWindow');
-    const chatClose = document.querySelector('.chat-close');
-    const chatInput = document.getElementById('chatInput');
-    const chatSend = document.getElementById('chatSend');
-    const chatMessages = document.querySelector('.chat-messages');
+        // Championship mode toggle functionality
+        document.addEventListener('DOMContentLoaded', function () {
+            const toggle = document.getElementById('championshipToggle');
+            const label = document.querySelector('.mode-label');
+            const description = document.querySelector('.mode-description');
 
-    function toggleChat() {
-        chatWindow.classList.toggle('hidden');
-        if (!chatWindow.classList.contains('hidden')) {
-            chatInput.focus();
-        }
-    }
-
-    function addMessage(message, isUser = false) {
-        const messageDiv = document.createElement('div');
-        messageDiv.className = `chat-message ${isUser ? 'user-message' : 'bot-message'}`;
-        messageDiv.textContent = message;
-        chatMessages.appendChild(messageDiv);
-        chatMessages.scrollTop = chatMessages.scrollHeight;
-    }
-
-    async function sendMessage() {
-        const message = chatInput.value.trim();
-        if (!message) return;
-
-        addMessage(message, true);
-        chatInput.value = '';
-
-        try {
-            const response = await fetch('/chatbot', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
+            const modes = {
+                early: {
+                    label: "Early Bird Mode (BETA)",
+                    description: "Points for arriving first",
+                    class: "early-mode"
                 },
-                body: JSON.stringify({ message })
-            });
-
-            const data = await response.json();
-            handleChatResponse(data);
-        } catch (error) {
-            addMessage('Sorry, I encountered an error. Please try again.');
-        }
-    }
-
-    function handleChatResponse(data) {
-        addMessage(data.response, false);
-        
-        // Update suggestions
-        const suggestionsDiv = document.querySelector('.chat-suggestions');
-        suggestionsDiv.innerHTML = '';
-        data.suggestions.forEach(suggestion => {
-            const chip = document.createElement('div');
-            chip.className = 'suggestion-chip';
-            chip.textContent = suggestion;
-            chip.onclick = () => {
-                document.getElementById('chatInput').value = suggestion;
-                sendMessage();
+                late: {
+                    label: "Last-In Mode",
+                    description: "Points for arriving last",
+                    class: "late-mode"
+                }
             };
-            suggestionsDiv.appendChild(chip);
-        });
-    }
 
-    chatToggle.addEventListener('click', toggleChat);
-    chatClose.addEventListener('click', toggleChat);
-    chatSend.addEventListener('click', sendMessage);
-    chatInput.addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') sendMessage();
-    });
+            // Initialize toggle state from URL or localStorage
+            const urlParams = new URLSearchParams(window.location.search);
+            const urlMode = urlParams.get('mode');
+            const savedMode = localStorage.getItem('championshipMode');
+            const isLastIn = urlMode ? urlMode === 'last-in' : (savedMode ? savedMode === 'last-in' : true);
 
-    // Add welcome message
-    addMessage('Hello! I can help you with attendance tracking and rankings. What would you like to know?');
-    });
+            toggle.checked = isLastIn;
+            updateModeDisplay(isLastIn);
 
-    function toggleClockIn(event) {
-        event.stopPropagation();
-        const menu = document.getElementById('clockInMenu');
-        menu.classList.toggle('show');
-    }
+            function updateModeDisplay(isLastIn) {
+                const mode = isLastIn ? modes.late : modes.early;
+                label.textContent = mode.label;
+                description.textContent = mode.description;
+                document.body.className = mode.class;
 
-    // Close menu when clicking outside
-    document.addEventListener('click', function(event) {
-        const menu = document.getElementById('clockInMenu');
-        const trigger = event.target.closest('.clock-in-trigger');
-        const menuContent = event.target.closest('.global-clock-in');
-        
-        if (!trigger && !menuContent) {
-            menu.classList.remove('show');
-        }
-    });
+                // Store the mode preference
+                localStorage.setItem('championshipMode', isLastIn ? 'last-in' : 'early-bird');
 
-    // Prevent menu from closing when clicking inside it
-    document.querySelector('.global-clock-in').addEventListener('click', function(event) {
-        event.stopPropagation();
-    });
+                // Update current URL with new mode
+                const url = new URL(window.location.href);
+                url.searchParams.set('mode', isLastIn ? 'last-in' : 'early-bird');
+                history.replaceState(null, '', url.toString());
 
-    // Add this to your existing JavaScript
-    function toggleNav() {
-        const hamburger = document.querySelector('.hamburger');
-        const navLinks = document.querySelector('.nav-links');
-        hamburger.classList.toggle('active');
-        navLinks.classList.toggle('active');
-        document.body.style.overflow = navLinks.classList.contains('active') ? 'hidden' : '';
-    }
-
-    document.addEventListener('DOMContentLoaded', function() {
-        // Handle mobile dropdown menus
-        const dropdowns = document.querySelectorAll('.dropdown');
-        dropdowns.forEach(dropdown => {
-            const trigger = dropdown.querySelector('.dropdown-trigger');
-            if (trigger) {
-                trigger.addEventListener('click', (e) => {
-                    e.preventDefault();
-                    // Close other dropdowns
-                    dropdowns.forEach(d => {
-                        if (d !== dropdown) d.classList.remove('active');
-                    });
-                    dropdown.classList.toggle('active');
+                // Update all ranking links to include the mode
+                document.querySelectorAll('a[href*="/rankings/"]').forEach(link => {
+                    const url = new URL(link.href, window.location.origin);
+                    url.searchParams.set('mode', isLastIn ? 'last-in' : 'early-bird');
+                    link.href = url.toString();
                 });
             }
+
+            toggle.addEventListener('change', function () {
+                const isLastIn = this.checked;
+                updateModeDisplay(isLastIn);
+
+                // If on a rankings or visualisations page, reload with new mode
+                const path = window.location.pathname;
+                if (path.includes('rankings') || path.includes('visualisations')) {
+                    window.location.reload();
+                }
+            });
+
+            const chatToggle = document.getElementById('chatToggle');
+            const chatWindow = document.getElementById('chatWindow');
+            const chatClose = document.querySelector('.chat-close');
+            const chatInput = document.getElementById('chatInput');
+            const chatSend = document.getElementById('chatSend');
+            const chatMessages = document.querySelector('.chat-messages');
+
+            function toggleChat() {
+                chatWindow.classList.toggle('hidden');
+                if (!chatWindow.classList.contains('hidden')) {
+                    chatInput.focus();
+                }
+            }
+
+            function addMessage(message, isUser = false) {
+                const messageDiv = document.createElement('div');
+                messageDiv.className = `chat-message ${isUser ? 'user-message' : 'bot-message'}`;
+                messageDiv.textContent = message;
+                chatMessages.appendChild(messageDiv);
+                chatMessages.scrollTop = chatMessages.scrollHeight;
+            }
+
+            async function sendMessage() {
+                const message = chatInput.value.trim();
+                if (!message) return;
+
+                addMessage(message, true);
+                chatInput.value = '';
+
+                try {
+                    const response = await fetch('/chatbot', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({ message })
+                    });
+
+                    const data = await response.json();
+                    handleChatResponse(data);
+                } catch (error) {
+                    addMessage('Sorry, I encountered an error. Please try again.');
+                }
+            }
+
+            function handleChatResponse(data) {
+                addMessage(data.response, false);
+
+                // Update suggestions
+                const suggestionsDiv = document.querySelector('.chat-suggestions');
+                suggestionsDiv.innerHTML = '';
+                data.suggestions.forEach(suggestion => {
+                    const chip = document.createElement('div');
+                    chip.className = 'suggestion-chip';
+                    chip.textContent = suggestion;
+                    chip.onclick = () => {
+                        document.getElementById('chatInput').value = suggestion;
+                        sendMessage();
+                    };
+                    suggestionsDiv.appendChild(chip);
+                });
+            }
+
+            chatToggle.addEventListener('click', toggleChat);
+            chatClose.addEventListener('click', toggleChat);
+            chatSend.addEventListener('click', sendMessage);
+            chatInput.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') sendMessage();
+            });
+
+            // Add welcome message
+            addMessage('Hello! I can help you with attendance tracking and rankings. What would you like to know?');
         });
 
+        function toggleClockIn(event) {
+            event.stopPropagation();
+            const menu = document.getElementById('clockInMenu');
+            menu.classList.toggle('show');
+        }
+
         // Close menu when clicking outside
-        document.addEventListener('click', (e) => {
-            if (!e.target.closest('.nav-links') && !e.target.closest('.hamburger')) {
-                document.querySelector('.nav-links').classList.remove('active');
-                document.querySelector('.hamburger').classList.remove('active');
-                document.body.style.overflow = '';
+        document.addEventListener('click', function (event) {
+            const menu = document.getElementById('clockInMenu');
+            const trigger = event.target.closest('.clock-in-trigger');
+            const menuContent = event.target.closest('.global-clock-in');
+
+            if (!trigger && !menuContent) {
+                menu.classList.remove('show');
             }
         });
 
-        // Close menu when clicking a nav link (except dropdowns)
-        const navLinks = document.querySelectorAll('.nav-item:not(.dropdown)');
-        navLinks.forEach(link => {
-            link.addEventListener('click', () => {
-                document.querySelector('.nav-links').classList.remove('active');
-                document.querySelector('.hamburger').classList.remove('active');
-                document.body.style.overflow = '';
+        // Prevent menu from closing when clicking inside it
+        document.querySelector('.global-clock-in').addEventListener('click', function (event) {
+            event.stopPropagation();
+        });
+
+        // Add this to your existing JavaScript
+        function toggleNav() {
+            const hamburger = document.querySelector('.hamburger');
+            const navLinks = document.querySelector('.nav-links');
+            hamburger.classList.toggle('active');
+            navLinks.classList.toggle('active');
+            document.body.style.overflow = navLinks.classList.contains('active') ? 'hidden' : '';
+        }
+
+        document.addEventListener('DOMContentLoaded', function () {
+            // Handle mobile dropdown menus
+            const dropdowns = document.querySelectorAll('.dropdown');
+            dropdowns.forEach(dropdown => {
+                const trigger = dropdown.querySelector('.dropdown-trigger');
+                if (trigger) {
+                    trigger.addEventListener('click', (e) => {
+                        e.preventDefault();
+                        // Close other dropdowns
+                        dropdowns.forEach(d => {
+                            if (d !== dropdown) d.classList.remove('active');
+                        });
+                        dropdown.classList.toggle('active');
+                    });
+                }
+            });
+
+            // Close menu when clicking outside
+            document.addEventListener('click', (e) => {
+                if (!e.target.closest('.nav-links') && !e.target.closest('.hamburger')) {
+                    document.querySelector('.nav-links').classList.remove('active');
+                    document.querySelector('.hamburger').classList.remove('active');
+                    document.body.style.overflow = '';
+                }
+            });
+
+            // Close menu when clicking a nav link (except dropdowns)
+            const navLinks = document.querySelectorAll('.nav-item:not(.dropdown)');
+            navLinks.forEach(link => {
+                link.addEventListener('click', () => {
+                    document.querySelector('.nav-links').classList.remove('active');
+                    document.querySelector('.hamburger').classList.remove('active');
+                    document.body.style.overflow = '';
+                });
             });
         });
-    });
     </script>
     {% endif %}
 
     {% block content %}{% endblock %}
 </body>
+
 </html>

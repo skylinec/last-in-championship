@@ -253,8 +253,8 @@ def calculate_daily_score(entry, settings, position=None, total_entries=None, mo
     # If it's not a working day for this user, return zero points
     if day_name not in user_working_days:
         return {
-            "early_bird": 0,
-            "last_in": 0,
+            "early-bird": 0,
+            "last-in": 0,
             "base": 0,
             "streak": 0,
             "position_bonus": 0,
@@ -346,8 +346,8 @@ def calculate_daily_score(entry, settings, position=None, total_entries=None, mo
             db.close()
 
     return {
-        "early_bird": context['current_points'] + early_bird_bonus - streak_bonus + tie_breaker_points,
-        "last_in": context['current_points'] + last_in_bonus + streak_bonus - tie_breaker_points,
+        "early-bird": context['current_points'] + early_bird_bonus - streak_bonus + tie_breaker_points,
+        "last-in": context['current_points'] + last_in_bonus + streak_bonus - tie_breaker_points,
         "base": context['current_points'],
         "streak": streak_bonus,
         "position_bonus": last_in_bonus if mode == 'last-in' else early_bird_bonus,

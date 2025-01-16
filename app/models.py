@@ -54,6 +54,26 @@ class Settings(Base):
     tiebreaker_weekly = Column(Boolean, default=True)
     tiebreaker_monthly = Column(Boolean, default=True)
 
+    def to_dict(self):
+        """Convert Settings object to dictionary"""
+        return {
+            "points": dict(self.points or {}),
+            "late_bonus": float(self.late_bonus or 0.0),
+            "remote_days": dict(self.remote_days or {}),
+            "core_users": list(self.core_users or []),
+            "enable_streaks": bool(self.enable_streaks),
+            "streak_multiplier": float(self.streak_multiplier or 0.5),
+            "streaks_enabled": bool(self.streaks_enabled),
+            "streak_bonus": float(self.streak_bonus or 0.5),
+            "enable_tiebreakers": bool(self.enable_tiebreakers),
+            "tiebreaker_points": int(self.tiebreaker_points or 5),
+            "tiebreaker_expiry": int(self.tiebreaker_expiry or 24),
+            "auto_resolve_tiebreakers": bool(self.auto_resolve_tiebreakers),
+            "tiebreaker_weekly": bool(self.tiebreaker_weekly),
+            "tiebreaker_monthly": bool(self.tiebreaker_monthly),
+            "monitoring_start_date": self.monitoring_start_date
+        }
+
 class AuditLog(Base):
     __tablename__ = 'audit_logs'
     id = Column(Integer, primary_key=True, autoincrement=True)

@@ -386,25 +386,9 @@ def load_settings():
             init_settings()
             settings = db.query(Settings).first()
         
-        # Convert database object to dict with proper types
-        settings_dict = {
-            "points": dict(settings.points or {}),
-            "late_bonus": float(settings.late_bonus or 0.0),
-            "remote_days": dict(settings.remote_days or {}),
-            "core_users": list(settings.core_users or []),
-            "enable_streaks": bool(settings.enable_streaks),
-            "streak_multiplier": float(settings.streak_multiplier or 0.5),
-            "streaks_enabled": bool(settings.streaks_enabled),
-            "streak_bonus": float(settings.streak_bonus or 0.5),
-            "enable_tiebreakers": bool(settings.enable_tiebreakers),
-            "tiebreaker_points": int(settings.tiebreaker_points or 5),
-            "tiebreaker_expiry": int(settings.tiebreaker_expiry or 24),
-            "auto_resolve_tiebreakers": bool(settings.auto_resolve_tiebreakers),
-            "tiebreaker_weekly": bool(settings.tiebreaker_weekly),
-            "tiebreaker_monthly": bool(settings.tiebreaker_monthly),
-            "monitoring_start_date": settings.monitoring_start_date
-        }
-
+        # Convert Settings object to dict using to_dict method
+        settings_dict = settings.to_dict()
+        
         # Ensure points dict has required fields
         if "daily_shifts" not in settings_dict["points"]:
             settings_dict["points"]["daily_shifts"] = {

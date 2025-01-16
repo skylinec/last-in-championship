@@ -1728,13 +1728,13 @@ def update_user_streak(username, attendance_date):
     finally:
         db.close()
 
-@app.route("/visualisations")
+@bp.route("/visualisations")
 @login_required
 def visualisations():
     core_users = get_core_users()  # Use the dynamic function instead of CORE_USERS constant
     return render_template("visualisations.html", core_users=core_users)
 
-@app.route("/visualization-data")
+@bp.route("/visualization-data")
 @login_required
 def get_visualization_data():
     try:

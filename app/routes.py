@@ -8,11 +8,14 @@ from decimal import Decimal
 from functools import wraps
 from threading import Lock, Thread
 
-from flask import (Blueprint, jsonify, redirect, render_template, request,
-                   session, url_for)
+from flask import Blueprint
+from flask import \
+    current_app as app  # Use current_app instead of direct import
+from flask import jsonify, redirect, render_template, request, session, url_for
 from sqlalchemy import inspect, text
 
-from flask import current_app as app  # Use current_app instead of direct import
+from .blueprints import \
+    bp  # Import bp from blueprints instead of creating it here
 from .caching import HashableCacheWithMetrics
 from .chatbot import EnhancedQueryProcessor  # Add this line
 from .data import (calculate_daily_score, calculate_scores, decimal_to_float,
@@ -32,8 +35,13 @@ from .sockets import notify_game_update, socketio
 from .tie_breakers import (check_tie_breaker_completion, create_game,
                            create_next_game, create_next_game_after_draw,
                            create_test_tie_breaker, determine_winner)
-from .blueprints import bp  # Import bp from blueprints instead of creating it here
 from .utils import init_settings
+from .visualisation import (calculate_arrival_patterns, calculate_average_time,
+                            calculate_daily_activity, calculate_daily_score,
+                            calculate_points_progression,
+                            calculate_status_counts, calculate_user_comparison,
+                            calculate_weekly_patterns, analyze_early_arrivals,
+                            analyze_late_arrivals)
 
 # If you need to call methods from your main app or from 'app.py' directly, 
 # you typically do that through current_app from flask, or separate your code further.
@@ -1550,6 +1558,12 @@ def join_game(game_id):
     finally:
         db.close()
 
+@bp.route("/games/<int:game_id>/reset", methods=["POST"])
+@login_required
+def reset_game(game_id):
+    print("Passing")
+    pass
+
 @bp.route("/api/rules", methods=["GET", "POST"])
 @login_required
 def handle_rules():
@@ -1667,3 +1681,262 @@ def history():
         db.close()
 
 # ...existing code...
+
+@bp.route("/streaks")
+@login_required
+def view_streaks():
+    """View streaks for all users"""
+    db = SessionLocal()
+    try:
+        streaks = db.query(UserStreak).all()
+        max_streak = max((s.current_streak for s in streaks), default=0)
+        return render_template("streaks.html", streaks=streaks, max_streak=max_streak)
+    finally:
+        db.close()
+
+def update_user_streak(username, attendance_date):
+    """Update streak for a user based on new attendance"""
+    db = SessionLocal()
+    try:
+        streak = db.query(UserStreak).filter_by(username=username).first()
+        if not streak:
+            streak = UserStreak(username=username)
+            db.add(streak)
+
+        # Convert attendance_date to datetime if it's a string
+        if isinstance(attendance_date, str):
+            attendance_date = datetime.strptime(attendance_date, '%Y-%m-%d')
+        
+        # Ensure we're comparing dates, not mixing date and datetime
+        attendance_date = attendance_date.date() if isinstance(attendance_date, datetime) else attendance_date
+
+        if streak.last_attendance:
+            # Convert last_attendance to date for comparison
+            last_date = streak.last_attendance.date()
+            days_diff = (attendance_date - last_date).days
+            if days_diff <= 3:  # Allow for weekends
+                streak.current_streak += 1
+            else:
+                streak.current_streak = 1
+        else:
+            streak.current_streak = 1
+
+        # Store the full datetime
+        streak.last_attendance = datetime.combine(attendance_date, datetime.min.time())
+        streak.max_streak = max(streak.max_streak, streak.current_streak)
+        db.commit()
+    finally:
+        db.close()
+
+@app.route("/visualisations")
+@login_required
+def visualisations():
+    core_users = get_core_users()  # Use the dynamic function instead of CORE_USERS constant
+    return render_template("visualisations.html", core_users=core_users)
+
+@app.route("/visualization-data")
+@login_required
+def get_visualization_data():
+    try:
+        # Add mode to visualization data request
+        mode = request.args.get('mode', 'last-in')
+        data = load_data()
+        if not data:
+            return jsonify({
+                "weeklyPatterns": {},
+                "statusCounts": {"in_office": 0, "remote": 0, "sick": 0, "leave": 0},
+                "pointsProgress": {},
+                "dailyActivity": {},
+                "lateArrivalAnalysis": {},
+                "userComparison": {}
+            })
+            
+        date_range = request.args.get('range', 'all')
+        user_filter = request.args.get('user', 'all').split(',')
+        
+        cutoff_date = None
+        if date_range != 'all':
+            days = int(date_range)
+            cutoff_date = datetime.now().date() - timedelta(days=days)
+        
+        filtered_data = []
+        for entry in data:
+            try:
+                entry_date = datetime.strptime(entry['date'], '%Y-%m-%d').date()
+                if cutoff_date and entry_date < cutoff_date:
+                    continue
+                if 'all' not in user_filter and entry['name'] not in user_filter:
+                    continue
+                filtered_data.append(entry)
+            except (ValueError, KeyError):
+                continue
+        
+        vis_data = {
+            'weeklyPatterns': calculate_weekly_patterns(filtered_data),
+            'statusCounts': calculate_status_counts(filtered_data),
+            'pointsProgress': calculate_points_progression(filtered_data),
+            'dailyActivity': calculate_daily_activity(filtered_data),
+            'lateArrivalAnalysis': analyze_late_arrivals(filtered_data),
+            'userComparison': calculate_user_comparison(filtered_data)
+        }
+        
+        return jsonify(vis_data)
+    except Exception as e:
+        app.logger.error(f"Visualization error: {str(e)}")
+        return jsonify({
+            "error": f"Failed to generate visualization data: {str(e)}"
+        }), 500
+    
+@bp.route("/edit/<entry_id>", methods=["PATCH", "DELETE"])
+@login_required
+def modify_entry(entry_id):
+    db = SessionLocal()
+    try:
+        entry = db.query(Entry).filter_by(id=entry_id).first()
+        if not entry:
+            return jsonify({"error": "Entry not found"}), 404
+        
+        if request.method == "PATCH":
+            # Store old data for audit
+            old_data = {
+                "date": entry.date,
+                "time": entry.time,
+                "name": entry.name,
+                "status": entry.status
+            }
+            
+            updated_data = request.json
+            
+            # Check for duplicates
+            existing = db.query(Entry).filter(
+                Entry.date == updated_data.get("date", entry.date),
+                Entry.name == updated_data.get("name", entry.name),
+                Entry.id != entry_id
+            ).first()
+            
+            if existing:
+                return jsonify({
+                    "message": "Error: Already have an entry for this person on this date.",
+                    "type": "error"
+                }), 400
+            
+            # Update entry
+            for key, value in updated_data.items():
+                setattr(entry, key, value)
+            
+            log_audit(
+                "modify_entry",
+                session['user'],
+                f"Modified entry for {entry.name} on {entry.date}",
+                old_data=old_data,
+                new_data=updated_data
+            )
+        else:
+            # Log deletion
+            log_audit(
+                "delete_entry",
+                session['user'],
+                f"Deleted entry for {entry.name} on {entry.date}",
+                old_data={
+                    "date": entry.date,
+                    "time": entry.time,
+                    "name": entry.name,
+                    "status": entry.status
+                }
+            )
+            db.delete(entry)
+        
+        db.commit()
+        
+        # Streak updates are now handled by monitoring container
+        
+        return jsonify({
+            "message": "Entry updated successfully.",
+            "type": "success"
+        })
+    
+    except Exception as e:
+        db.rollback()
+        app.logger.error(f"Error modifying entry: {str(e)}")
+        return jsonify({
+            "message": f"Error modifying entry: {str(e)}",
+            "type": "error"
+        }), 500
+    finally:
+        db.close()
+
+@bp.route("/missing-entries")
+@login_required
+def missing_entries():
+    db = SessionLocal()
+    try:
+        # Get monitoring start date
+        settings = db.query(Settings).first()
+        start_date = settings.monitoring_start_date if settings else datetime.now().replace(month=1, day=1).date()
+
+        # Updated query to use named parameter
+        missing = db.execute(
+            text("""
+                SELECT 
+                    missing_entries.date::date as date, 
+                    missing_entries.checked_at 
+                FROM missing_entries 
+                WHERE missing_entries.date >= :start_date
+                ORDER BY missing_entries.date DESC
+            """),
+            {"start_date": start_date.strftime('%Y-%m-%d')}  # Use dictionary for named parameters
+        ).fetchall()
+
+        # Get core users and attendance records
+        core_users = get_core_users()
+        attendance = db.query(Entry.date, Entry.name).filter(
+            Entry.date >= start_date.strftime('%Y-%m-%d')  # Convert date to string
+        ).all()
+
+        # Group attendance by date
+        attendance_by_date = defaultdict(list)
+        for record in attendance:
+            attendance_by_date[record.date].append(record.name)
+
+        # Format missing entries
+        formatted_entries = []
+        for entry in missing:
+            entry_date = entry.date.strftime('%Y-%m-%d') if isinstance(entry.date, date) else entry.date
+            present_users = attendance_by_date.get(entry_date, [])
+            missing_users = [user for user in core_users if user not in present_users]
+            
+            if missing_users:  # Only include dates with missing users
+                formatted_entries.append({
+                    'date': entry.date,
+                    'checked_at': entry.checked_at,
+                    'missing_users': missing_users
+                })
+
+        return render_template(
+            "missing_entries.html",
+            missing_entries=formatted_entries,
+            start_date=start_date.strftime('%Y-%m-%d')
+        )
+    
+    except Exception as e:
+        app.logger.error(f"Error retrieving missing entries: {str(e)}")
+        return render_template("error.html", 
+                            error="Failed to retrieve missing entries",
+                            details=str(e),
+                            back_link=url_for('bp.index'))
+    finally:
+        db.close()
+
+@bp.errorhandler(404)
+def not_found_error(error):
+    return render_template('error.html',
+                         error="Page Not Found", 
+                         details="The requested page could not be found.",
+                         back_link=url_for('bp.index')), 404
+
+@bp.errorhandler(500)
+def internal_error(error):
+    return render_template('error.html',
+                         error="Internal Server Error",
+                         details="An unexpected error has occurred.", 
+                         back_link=url_for('bp.index')), 500

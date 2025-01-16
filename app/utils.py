@@ -58,3 +58,31 @@ def init_settings():
             db.commit()
     finally:
         db.close()
+
+def load_settings():
+    db = SessionLocal()
+    try:
+        settings = db.query(Settings).first()
+        if not settings:
+            init_settings()
+            settings = db.query(Settings).first()
+        result = {
+            "points": settings.points,
+            "late_bonus": settings.late_bonus,
+            "remote_days": settings.remote_days,
+            "core_users": settings.core_users,
+            "enable_streaks": settings.enable_streaks,
+            "streak_multiplier": settings.streak_multiplier,
+            "streaks_enabled": settings.streaks_enabled,
+            "streak_bonus": settings.streak_bonus,
+            "rules": settings.points.get('rules', []),  # Add rules to response
+            "enable_tiebreakers": settings.enable_tiebreakers,
+            "tiebreaker_points": settings.tiebreaker_points,
+            "tiebreaker_expiry": settings.tiebreaker_expiry,
+            "auto_resolve_tiebreakers": settings.auto_resolve_tiebreakers,
+            "tiebreaker_weekly": settings.tiebreaker_weekly,  # Add this
+            "tiebreaker_monthly": settings.tiebreaker_monthly,  # Add this
+        }
+        return result
+    finally:
+        db.close()

@@ -50,7 +50,8 @@ def create_app():
     # Import blueprints after they've loaded their routes
     from .blueprints import (
         bp, api_rules_bp, attendance_bp, audit_bp, rankings_bp,
-        settings_bp, tie_breakers_bp, chatbot_bp, maintenance_bp
+        settings_bp, tie_breakers_bp, chatbot_bp, maintenance_bp,
+        visualisations_bp, streaks_bp, history_bp
     )
 
     # Register blueprints without prefixes
@@ -63,6 +64,9 @@ def create_app():
     app.register_blueprint(chatbot_bp)
     app.register_blueprint(maintenance_bp)
     app.register_blueprint(api_rules_bp)
+    app.register_blueprint(visualisations_bp)
+    app.register_blueprint(streaks_bp)
+    app.register_blueprint(history_bp)
 
     # Initialize SocketIO
     socketio.init_app(

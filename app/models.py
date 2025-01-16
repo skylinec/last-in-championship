@@ -37,41 +37,39 @@ class User(Base):
 
 class Settings(Base):
     __tablename__ = 'settings'
-    id = Column(String, primary_key=True)
-    points = Column(JSON, nullable=False)
-    late_bonus = Column(Float, nullable=False)
-    remote_days = Column(JSON, nullable=False)
-    core_users = Column(JSON, nullable=False)
-    enable_streaks = Column(Boolean, default=False)
+    id = Column(Integer, primary_key=True)
+    points = Column(JSON)
+    late_bonus = Column(Float, default=2.0)
+    early_bonus = Column(Float, default=2.0)
     streak_multiplier = Column(Float, default=0.5)
-    streaks_enabled = Column(Boolean, default=False)
-    streak_bonus = Column(Float, default=0.5)
-    monitoring_start_date = Column(Date, default=lambda: datetime.now().replace(month=1, day=1))
+    enable_streaks = Column(Boolean, default=False)
     enable_tiebreakers = Column(Boolean, default=False)
     tiebreaker_points = Column(Integer, default=5)
     tiebreaker_expiry = Column(Integer, default=24)
     auto_resolve_tiebreakers = Column(Boolean, default=False)
     tiebreaker_weekly = Column(Boolean, default=True)
     tiebreaker_monthly = Column(Boolean, default=True)
+    tiebreaker_types = Column(JSON)
+    core_users = Column(JSON)
+    remote_days = Column(JSON)
 
     def to_dict(self):
         """Convert Settings object to dictionary"""
         return {
             "points": dict(self.points or {}),
             "late_bonus": float(self.late_bonus or 0.0),
-            "remote_days": dict(self.remote_days or {}),
-            "core_users": list(self.core_users or []),
-            "enable_streaks": bool(self.enable_streaks),
+            "early_bonus": float(self.early_bonus or 0.0),
             "streak_multiplier": float(self.streak_multiplier or 0.5),
-            "streaks_enabled": bool(self.streaks_enabled),
-            "streak_bonus": float(self.streak_bonus or 0.5),
+            "enable_streaks": bool(self.enable_streaks),
             "enable_tiebreakers": bool(self.enable_tiebreakers),
             "tiebreaker_points": int(self.tiebreaker_points or 5),
             "tiebreaker_expiry": int(self.tiebreaker_expiry or 24),
             "auto_resolve_tiebreakers": bool(self.auto_resolve_tiebreakers),
             "tiebreaker_weekly": bool(self.tiebreaker_weekly),
             "tiebreaker_monthly": bool(self.tiebreaker_monthly),
-            "monitoring_start_date": self.monitoring_start_date
+            "tiebreaker_types": dict(self.tiebreaker_types or {}),
+            "core_users": list(self.core_users or []),
+            "remote_days": dict(self.remote_days or {})
         }
 
 class AuditLog(Base):

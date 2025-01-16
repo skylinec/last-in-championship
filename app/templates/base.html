@@ -1083,15 +1083,33 @@
                 }
             };
 
-            // Initialize toggle state from URL or localStorage
+            // Get mode from URL first, then localStorage, then default to last-in
             const urlParams = new URLSearchParams(window.location.search);
             const urlMode = urlParams.get('mode');
             const savedMode = localStorage.getItem('championshipMode');
-            // Changed default to true (last-in mode)
-            const isLastIn = urlMode ? urlMode === 'last-in' : (savedMode ? savedMode === 'last-in' : true);
+            const isLastIn = urlMode === 'early_bird' ? false : 
+                           urlMode === 'last_in' ? true :
+                           savedMode === 'early_bird' ? false : true;  // Default to last-in
 
+            // Set toggle state
             toggle.checked = isLastIn;
             updateModeDisplay(isLastIn);
+
+            toggle.addEventListener('change', function () {
+                const isLastIn = this.checked;
+                updateModeDisplay(isLastIn);
+
+                // Always store preference
+                localStorage.setItem('championshipMode', isLastIn ? 'last_in' : 'early_bird');
+
+                // Update current URL if on a rankings page
+                const path = window.location.pathname;
+                if (path.includes('rankings') || path.includes('visualisations')) {
+                    const url = new URL(window.location);
+                    url.searchParams.set('mode', isLastIn ? 'last_in' : 'early_bird');
+                    window.location.href = url.toString(); // Force reload with new mode
+                }
+            });
 
             function updateModeDisplay(isLastIn) {
                 const mode = isLastIn ? modes.late : modes.early;
@@ -1099,106 +1117,87 @@
                 description.textContent = mode.description;
                 document.body.className = mode.class;
 
-                // Store the mode preference
-                localStorage.setItem('championshipMode', isLastIn ? 'last_in' : 'early_bird');
-
-                // Update current URL with new mode
-                const url = new URL(window.location.href);
-                url.searchParams.set('mode', isLastIn ? 'last_in' : 'early_bird');
-                history.replaceState(null, '', url.toString());
-
-                // Update all ranking links to include the mode
+                // Update all ranking links
                 document.querySelectorAll('a[href*="/rankings/"]').forEach(link => {
                     const url = new URL(link.href, window.location.origin);
                     url.searchParams.set('mode', isLastIn ? 'last_in' : 'early_bird');
                     link.href = url.toString();
                 });
             }
-
-            toggle.addEventListener('change', function () {
-                const isLastIn = this.checked;
-                updateModeDisplay(isLastIn);
-
-                // If on a rankings or visualisations page, reload with new mode
-                const path = window.location.pathname;
-                if (path.includes('rankings') || path.includes('visualisations')) {
-                    window.location.reload();
-                }
-            });
-
-            const chatToggle = document.getElementById('chatToggle');
-            const chatWindow = document.getElementById('chatWindow');
-            const chatClose = document.querySelector('.chat-close');
-            const chatInput = document.getElementById('chatInput');
-            const chatSend = document.getElementById('chatSend');
-            const chatMessages = document.querySelector('.chat-messages');
-
-            function toggleChat() {
-                chatWindow.classList.toggle('hidden');
-                if (!chatWindow.classList.contains('hidden')) {
-                    chatInput.focus();
-                }
-            }
-
-            function addMessage(message, isUser = false) {
-                const messageDiv = document.createElement('div');
-                messageDiv.className = `chat-message ${isUser ? 'user-message' : 'bot-message'}`;
-                messageDiv.textContent = message;
-                chatMessages.appendChild(messageDiv);
-                chatMessages.scrollTop = chatMessages.scrollHeight;
-            }
-
-            async function sendMessage() {
-                const message = chatInput.value.trim();
-                if (!message) return;
-
-                addMessage(message, true);
-                chatInput.value = '';
-
-                try {
-                    const response = await fetch('/chatbot', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                        },
-                        body: JSON.stringify({ message })
-                    });
-
-                    const data = await response.json();
-                    handleChatResponse(data);
-                } catch (error) {
-                    addMessage('Sorry, I encountered an error. Please try again.');
-                }
-            }
-
-            function handleChatResponse(data) {
-                addMessage(data.response, false);
-
-                // Update suggestions
-                const suggestionsDiv = document.querySelector('.chat-suggestions');
-                suggestionsDiv.innerHTML = '';
-                data.suggestions.forEach(suggestion => {
-                    const chip = document.createElement('div');
-                    chip.className = 'suggestion-chip';
-                    chip.textContent = suggestion;
-                    chip.onclick = () => {
-                        document.getElementById('chatInput').value = suggestion;
-                        sendMessage();
-                    };
-                    suggestionsDiv.appendChild(chip);
-                });
-            }
-
-            chatToggle.addEventListener('click', toggleChat);
-            chatClose.addEventListener('click', toggleChat);
-            chatSend.addEventListener('click', sendMessage);
-            chatInput.addEventListener('keypress', (e) => {
-                if (e.key === 'Enter') sendMessage();
-            });
-
-            // Add welcome message
-            addMessage('Hello! I can help you with attendance tracking and rankings. What would you like to know?');
         });
+
+        const chatToggle = document.getElementById('chatToggle');
+        const chatWindow = document.getElementById('chatWindow');
+        const chatClose = document.querySelector('.chat-close');
+        const chatInput = document.getElementById('chatInput');
+        const chatSend = document.getElementById('chatSend');
+        const chatMessages = document.querySelector('.chat-messages');
+
+        function toggleChat() {
+            chatWindow.classList.toggle('hidden');
+            if (!chatWindow.classList.contains('hidden')) {
+                chatInput.focus();
+            }
+        }
+
+        function addMessage(message, isUser = false) {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `chat-message ${isUser ? 'user-message' : 'bot-message'}`;
+            messageDiv.textContent = message;
+            chatMessages.appendChild(messageDiv);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+
+        async function sendMessage() {
+            const message = chatInput.value.trim();
+            if (!message) return;
+
+            addMessage(message, true);
+            chatInput.value = '';
+
+            try {
+                const response = await fetch('/chatbot', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ message })
+                });
+
+                const data = await response.json();
+                handleChatResponse(data);
+            } catch (error) {
+                addMessage('Sorry, I encountered an error. Please try again.');
+            }
+        }
+
+        function handleChatResponse(data) {
+            addMessage(data.response, false);
+
+            // Update suggestions
+            const suggestionsDiv = document.querySelector('.chat-suggestions');
+            suggestionsDiv.innerHTML = '';
+            data.suggestions.forEach(suggestion => {
+                const chip = document.createElement('div');
+                chip.className = 'suggestion-chip';
+                chip.textContent = suggestion;
+                chip.onclick = () => {
+                    document.getElementById('chatInput').value = suggestion;
+                    sendMessage();
+                };
+                suggestionsDiv.appendChild(chip);
+            });
+        }
+
+        chatToggle.addEventListener('click', toggleChat);
+        chatClose.addEventListener('click', toggleChat);
+        chatSend.addEventListener('click', sendMessage);
+        chatInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') sendMessage();
+        });
+
+        // Add welcome message
+        addMessage('Hello! I can help you with attendance tracking and rankings. What would you like to know?');
 
         function toggleClockIn(event) {
             event.stopPropagation();

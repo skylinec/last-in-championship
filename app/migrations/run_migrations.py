@@ -1,25 +1,20 @@
-from sqlalchemy import create_engine, inspect, text
-import os
-import importlib
-from ..database import SessionLocal, engine, Base
 import logging
+from sqlalchemy import create_engine, inspect, text
+from ..database import SessionLocal
 
-def check_table_exists(engine, table_name):
-    inspector = inspect(engine)
-    return table_name in inspector.get_table_names()
+logger = logging.getLogger(__name__)
 
 def run_migrations():
-    DATABASE_URL = os.getenv('DATABASE_URL', 'postgresql://user:password@localhost:5432/championship')
-    engine = create_engine(DATABASE_URL)
-    
+    """Run all database migrations in order"""
     db = SessionLocal()
     try:
-        logging.info("Running database migrations...")
+        logger.info("Running database migrations...")
         
-        # Add core_users column to settings if not exists
+        # Basic schema migrations
         db.execute(text("""
             DO $$ 
             BEGIN
+                -- Add core_users to settings if not exists
                 IF NOT EXISTS (
                     SELECT column_name 
                     FROM information_schema.columns 
@@ -27,30 +22,19 @@ def run_migrations():
                 ) THEN
                     ALTER TABLE settings ADD COLUMN core_users JSON;
                 END IF;
-            END $$;
-        """))
-        
-        # Add tie breaker related columns
-        db.execute(text("""
-            DO $$ 
-            BEGIN
+
+                -- Add monitoring_start_date if not exists
                 IF NOT EXISTS (
                     SELECT column_name 
                     FROM information_schema.columns 
-                    WHERE table_name='settings' AND column_name='enable_tiebreakers'
+                    WHERE table_name='settings' AND column_name='monitoring_start_date'
                 ) THEN
-                    ALTER TABLE settings 
-                    ADD COLUMN enable_tiebreakers BOOLEAN DEFAULT false,
-                    ADD COLUMN tiebreaker_points INTEGER DEFAULT 5,
-                    ADD COLUMN tiebreaker_expiry INTEGER DEFAULT 24,
-                    ADD COLUMN auto_resolve_tiebreakers BOOLEAN DEFAULT false,
-                    ADD COLUMN tiebreaker_weekly BOOLEAN DEFAULT true,
-                    ADD COLUMN tiebreaker_monthly BOOLEAN DEFAULT true;
+                    ALTER TABLE settings ADD COLUMN monitoring_start_date DATE;
                 END IF;
             END $$;
         """))
         
-        # Create indexes for performance
+        # Create indexes
         db.execute(text("""
             CREATE INDEX IF NOT EXISTS idx_entries_date ON entries(date);
             CREATE INDEX IF NOT EXISTS idx_entries_name ON entries(name);
@@ -58,37 +42,39 @@ def run_migrations():
         """))
         
         db.commit()
-        logging.info("Database migrations completed successfully")
+        logger.info("Basic schema migrations completed")
+        
+        # Import and run structured migrations
+        migrations = [
+            'add_user_streaks',
+            '20240124_add_monitoring_date'
+        ]
+        
+        for migration_name in migrations:
+            try:
+                migration = __import__(f'app.migrations.{migration_name}', fromlist=['migrate'])
+                if hasattr(migration, 'should_run'):
+                    if migration.should_run(db.get_bind()):
+                        logger.info(f"Running migration: {migration_name}")
+                        migration.migrate(db.get_bind())
+                        logger.info(f"Completed migration: {migration_name}")
+                    else:
+                        logger.info(f"Skipping migration {migration_name} - already applied")
+            except ImportError as e:
+                logger.warning(f"Migration {migration_name} not found: {e}")
+                continue
+            except Exception as e:
+                logger.error(f"Error in migration {migration_name}: {e}")
+                raise
+        
+        logger.info("All migrations completed successfully")
         
     except Exception as e:
         db.rollback()
-        logging.error(f"Migration error: {str(e)}")
+        logger.error(f"Migration error: {e}")
         raise
     finally:
         db.close()
-    
-    # List all migration modules in order
-    migrations = [
-        'add_user_streaks',
-        '20240124_add_monitoring_date'  # Add the new migration
-    ]
-    
-    for migration in migrations:
-        try:
-            print(f"Running migration: {migration}")
-            migration_module = importlib.import_module(f'migrations.{migration}')
-            if hasattr(migration_module, 'should_run'):
-                if migration_module.should_run(engine):
-                    migration_module.migrate(engine)
-                    print(f"Successfully completed migration: {migration}")
-                else:
-                    print(f"Skipping migration {migration} - already applied")
-            else:
-                migration_module.migrate(engine)
-                print(f"Successfully completed migration: {migration}")
-        except Exception as e:
-            print(f"Error in migration {migration}: {str(e)}")
-            raise
 
 if __name__ == "__main__":
     run_migrations()

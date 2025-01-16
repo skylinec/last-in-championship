@@ -1,17 +1,19 @@
-from sqlalchemy import Column, Integer, String, DateTime
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.sql import text
+from ..database import Base
+from sqlalchemy import Column, Integer, String, DateTime, Boolean
 
-Base = declarative_base()
-
-class UserStreak(Base):
-    __tablename__ = "user_streaks"
-    id = Column(Integer, primary_key=True)
-    username = Column(String, nullable=False)
-    current_streak = Column(Integer, default=0)
-    last_attendance = Column(DateTime, nullable=True)
-    max_streak = Column(Integer, default=0)
+def should_run(engine):
+    """Check if this migration should run"""
+    inspector = engine.dialect.inspector(engine)
+    return 'user_streaks' not in inspector.get_table_names()
 
 def migrate(engine):
-    # Create the user_streaks table if it doesn't exist
-    Base.metadata.create_all(bind=engine, tables=[UserStreak.__table__])
+    """Create user_streaks table"""
+    class UserStreak(Base):
+        __tablename__ = 'user_streaks'
+        id = Column(Integer, primary_key=True)
+        username = Column(String, nullable=False)
+        current_streak = Column(Integer, default=0)
+        last_attendance = Column(DateTime, nullable=True)
+        max_streak = Column(Integer, default=0)
+        
+    UserStreak.__table__.create(engine, checkfirst=True)

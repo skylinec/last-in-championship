@@ -106,9 +106,8 @@
             <span class="timeline-name">{{ entry.name }}</span>
             <div class="timeline-bar-container">
                 <div class="timeline-bar" 
-                     style="left: calc((({{ time_to_minutes(entry.time) }} - {{ earliest_hour * 60 }})
-                                       / ({{ (latest_hour - earliest_hour) * 60 }})) * 100%);
-                            width: calc(({{ entry.shift_length }} / ({{ (latest_hour - earliest_hour) * 60 }})) * 100%);"
+                     style="left: {{ ((entry.time_obj.hour * 60 + entry.time_obj.minute - earliest_hour * 60) / ((latest_hour - earliest_hour) * 60) * 100)|round(2) }}%;
+                            width: {{ (entry.shift_length / ((latest_hour - earliest_hour) * 60) * 100)|round(2) }}%;"
                      {% if period != 'day' %}
                      title="{{ entry.name }}: Average start {{ entry.time }} - end {{ entry.end_time }}"
                      {% else %}

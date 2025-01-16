@@ -233,149 +233,29 @@
                 </p>
             </div>
 
-            <div class="settings-section">
-                <h3>How Scoring Works</h3>
-                <p>
-                    Both Early-Bird and Last-In modes use the same base rules:
-                    <br>- Early Bird Bonus applies for arrivals before a certain time.
-                    <br>- Office Attendance awards higher base points than Remote Work.
-                    <br>- Long Streak Bonus multiplies scores if a streak exceeds 5 days.
-                    <br><br>
-                    In Early-Bird mode, the earliest arrival gains extra points, 
-                    whereas in Last-In mode, the latest arrival does.
-                </p>
-            </div>
-
             <button type="submit" class="save-button">Save All Settings</button>
         </form>
     </div>
 
-    <!-- Add Modal for Rules Editor -->
-    <div id="rulesEditorModal" class="modal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h2>Scoring Rules Editor</h2>
-                <span class="close">&times;</span>
-            </div>
-
-            <div class="scoring-dsl-container">
-                <!-- Move scoring blocks above documentation -->
-                <div class="scoring-blocks-palette">
-                    <h3>Available Blocks</h3>
-                    <div class="block-category">
-                        <h4>Conditions</h4>
-                        <div class="block" draggable="true" data-type="condition" data-template="if arrival {operator} {time}">
-                            Arrival Time
-                        </div>
-                        <div class="block" draggable="true" data-type="condition" data-template="if working {status}">
-                            Work Status
-                        </div>
-                        <div class="block" draggable="true" data-type="condition" data-template="if day is {day}">
-                            Day Type
-                        </div>
-                        <div class="block" draggable="true" data-type="condition" data-template="if streak {operator} {value}">
-                            Streak Length
-                        </div>
-                    </div>
-                    <div class="block-category">
-                        <h4>Actions</h4>
-                        <div class="block" draggable="true" data-type="action" data-template="award {points} points">
-                            Award Points
-                        </div>
-                        <div class="block" draggable="true" data-type="action" data-template="multiply points by {value}">
-                            Apply Multiplier
-                        </div>
-                        <div class="block" draggable="true" data-type="action" data-template="add streak bonus">
-                            Add Streak Bonus
-                        </div>
-                    </div>
-                </div>
-                
-                <div class="scoring-rules-builder">
-                    <h3>Current Rules</h3>
-                    <div id="rulesContainer" class="rules-container scrollable-container">
-                        <!-- Rules will be added here -->
-                    </div>
-                    <div class="rules-actions">
-                        <button type="button" onclick="testRules()">Test Rules</button>
-                        <button type="button" onclick="saveRules()">Save Rules</button>
-                    </div>
-                </div>
-
-                <div class="scoring-preview">
-                    <h3>Rule Preview</h3>
-                    <pre id="rulePreview" class="rule-preview"></pre>
-                    
-                    <div class="test-results" style="display: none">
-                        <h3>Test Results</h3>
-                        <div id="testResults"></div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Add documentation section below the editor -->
-            <div class="rules-documentation-section">
-                <div class="rules-documentation scrollable-container">
-                    <h3>How Rules Work</h3>
-                    <p>Rules are evaluated in order from top to bottom. Each rule consists of a condition and an action.</p>
-                    
-                    <h4>Available Conditions:</h4>
-                    <ul>
-                        <li><strong>Arrival Time:</strong> Check when someone arrives (e.g., "if arrival before 09:00")</li>
-                        <li><strong>Work Status:</strong> Check how they're working (e.g., "if working in-office")</li>
-                        <li><strong>Day Type:</strong> Check the type of day (e.g., "if day is Monday")</li>
-                        <li><strong>Streak Length:</strong> Check consecutive attendance (e.g., "if streak > 5")</li>
-                    </ul>
-
-                    <h4>Available Actions:</h4>
-                    <ul>
-                        <li><strong>Award Points:</strong> Add a fixed number of points</li>
-                        <li><strong>Multiply Points:</strong> Multiply current points by a factor</li>
-                        <li><strong>Add Streak Bonus:</strong> Add points based on streak length</li>
-                    </ul>
-
-                    <div class="rule-examples">
-                        <h4>Example Rules:</h4>
-                        <pre class="example-rule">
-# Early Bird Bonus
-if arrival before 09:00
-award 2 points
-
-# Office Attendance
-if working in-office
-award 10 points
-
-# Remote Work
-if working remote
-award 8 points
-
-# Long Streak Bonus
-if streak > 5
-multiply points by 1.5</pre>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Right column: Scoring explanation -->
+    <!-- Right column: Consolidated scoring explanation -->
     <div class="info-column">
         <div class="scoring-explanation">
             <h2>How Scoring Works</h2>
-            <div class="mode-specific-info">
-                <h3>Position Bonus System</h3>
-                <div id="lastInInfo">
-                    <h4>Last-In Championship Mode</h4>
-                    <p>Last person to arrive gets maximum bonus (position × {{ settings.late_bonus }}), decreasing for earlier arrivals.</p>
-                </div>
-                <div id="earlyBirdInfo" style="display: none;">
-                    <h4>Early Bird Mode</h4>
-                    <p>First person to arrive gets maximum bonus (position × {{ settings.late_bonus }}), decreasing for later arrivals.</p>
-                </div>
+            
+            <!-- Position Scoring System -->
+            <div class="scoring-section">
+                <h3>Position Scoring</h3>
+                <p>Each mode uses the exact same scoring logic but inverted:</p>
+                <ul>
+                    <li><strong>Last-In Mode:</strong> Latest arrival gets position × {{ settings.late_bonus }} points</li>
+                    <li><strong>Early-Bird Mode:</strong> Earliest arrival gets position × {{ settings.early_bonus }} points</li>
+                </ul>
+                <p class="note">Example: With 5 people, first arrival = position 5 in scoring calculation</p>
             </div>
 
-            <div class="example-box">
-                <h4>Base Points & Position Bonuses</h4>
+            <!-- Base Points -->
+            <div class="scoring-section">
+                <h3>Base Points</h3>
                 <table class="example-table">
                     <tr><th>Status</th><th>Points</th></tr>
                     {% for status in ['in_office', 'remote', 'sick', 'leave'] %}
@@ -384,40 +264,38 @@ multiply points by 1.5</pre>
                         <td>{{ settings.points[status] }}</td>
                     </tr>
                     {% endfor %}
-                    <tr><td>Position Bonus</td><td>position × {{ settings.late_bonus }}</td></tr>
                 </table>
             </div>
 
-            {% if settings.enable_streaks or settings.enable_tiebreakers %}
-            <div class="example-box">
-                <h4>Bonus Systems</h4>
-                {% if settings.enable_streaks %}
-                <div class="bonus-section">
-                    <h5>Streak Bonuses</h5>
-                    <p>Bonuses are {{ settings.streak_multiplier }} points per consecutive day:</p>
-                    <ul>
-                        <li>Early Bird: +{{ settings.streak_multiplier }} × streak days</li>
-                        <li>Last-In: -{{ settings.streak_multiplier }} × streak days</li>
-                    </ul>
-                </div>
-                {% endif %}
-
-                {% if settings.enable_tiebreakers %}
-                <div class="bonus-section">
-                    <h5>Tie Breakers</h5>
-                    <p>{{ settings.tiebreaker_points }} points per win:</p>
-                    <ul>
-                        <li>Early Bird: +{{ settings.tiebreaker_points }} points</li>
-                        <li>Last-In: -{{ settings.tiebreaker_points }} points</li>
-                    </ul>
-                    <p>Expires after {{ settings.tiebreaker_expiry }} hours{% if settings.auto_resolve_tiebreakers %} with random resolution{% endif %}</p>
-                </div>
-                {% endif %}
+            {% if settings.enable_streaks %}
+            <!-- Streak System -->
+            <div class="scoring-section">
+                <h3>Streak System</h3>
+                <p>Streak points are {{ settings.streak_multiplier }} per consecutive day:</p>
+                <ul>
+                    <li>Early-Bird: +{{ settings.streak_multiplier }} × streak days</li>
+                    <li>Last-In: -{{ settings.streak_multiplier }} × streak days</li>
+                </ul>
+                <p class="note">Last-In mode penalizes streaks to encourage varied arrival times</p>
             </div>
             {% endif %}
 
-            <div class="example-box">
-                <h4>Schedule Configuration</h4>
+            {% if settings.enable_tiebreakers %}
+            <!-- Tie Breakers -->
+            <div class="scoring-section">
+                <h3>Tie Breakers</h3>
+                <p>{{ settings.tiebreaker_points }} points per win:</p>
+                <ul>
+                    <li>Early-Bird: +{{ settings.tiebreaker_points }} points</li>
+                    <li>Last-In: -{{ settings.tiebreaker_points }} points</li>
+                </ul>
+                <p class="note">Expires after {{ settings.tiebreaker_expiry }} hours{% if settings.auto_resolve_tiebreakers %} with random resolution{% endif %}</p>
+            </div>
+            {% endif %}
+
+            <!-- Schedule Info -->
+            <div class="scoring-section">
+                <h3>Daily Schedule</h3>
                 <table class="example-table">
                     <tr>
                         <th>Day</th>
@@ -438,7 +316,114 @@ multiply points by 1.5</pre>
             </div>
         </div>
     </div>
+</div>
 
+<!-- Add Modal for Rules Editor -->
+<div id="rulesEditorModal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2>Scoring Rules Editor</h2>
+            <span class="close">&times;</span>
+        </div>
+
+        <div class="scoring-dsl-container">
+            <!-- Move scoring blocks above documentation -->
+            <div class="scoring-blocks-palette">
+                <h3>Available Blocks</h3>
+                <div class="block-category">
+                    <h4>Conditions</h4>
+                    <div class="block" draggable="true" data-type="condition" data-template="if arrival {operator} {time}">
+                        Arrival Time
+                    </div>
+                    <div class="block" draggable="true" data-type="condition" data-template="if working {status}">
+                        Work Status
+                    </div>
+                    <div class="block" draggable="true" data-type="condition" data-template="if day is {day}">
+                        Day Type
+                    </div>
+                    <div class="block" draggable="true" data-type="condition" data-template="if streak {operator} {value}">
+                        Streak Length
+                    </div>
+                </div>
+                <div class="block-category">
+                    <h4>Actions</h4>
+                    <div class="block" draggable="true" data-type="action" data-template="award {points} points">
+                        Award Points
+                    </div>
+                    <div class="block" draggable="true" data-type="action" data-template="multiply points by {value}">
+                        Apply Multiplier
+                    </div>
+                    <div class="block" draggable="true" data-type="action" data-template="add streak bonus">
+                        Add Streak Bonus
+                    </div>
+                </div>
+            </div>
+            
+            <div class="scoring-rules-builder">
+                <h3>Current Rules</h3>
+                <div id="rulesContainer" class="rules-container scrollable-container">
+                    <!-- Rules will be added here -->
+                </div>
+                <div class="rules-actions">
+                    <button type="button" onclick="testRules()">Test Rules</button>
+                    <button type="button" onclick="saveRules()">Save Rules</button>
+                </div>
+            </div>
+
+            <div class="scoring-preview">
+                <h3>Rule Preview</h3>
+                <pre id="rulePreview" class="rule-preview"></pre>
+                
+                <div class="test-results" style="display: none">
+                    <h3>Test Results</h3>
+                    <div id="testResults"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Add documentation section below the editor -->
+        <div class="rules-documentation-section">
+            <div class="rules-documentation scrollable-container">
+                <h3>How Rules Work</h3>
+                <p>Rules are evaluated in order from top to bottom. Each rule consists of a condition and an action.</p>
+                
+                <h4>Available Conditions:</h4>
+                <ul>
+                    <li><strong>Arrival Time:</strong> Check when someone arrives (e.g., "if arrival before 09:00")</li>
+                    <li><strong>Work Status:</strong> Check how they're working (e.g., "if working in-office")</li>
+                    <li><strong>Day Type:</strong> Check the type of day (e.g., "if day is Monday")</li>
+                    <li><strong>Streak Length:</strong> Check consecutive attendance (e.g., "if streak > 5")</li>
+                </ul>
+
+                <h4>Available Actions:</h4>
+                <ul>
+                    <li><strong>Award Points:</strong> Add a fixed number of points</li>
+                    <li><strong>Multiply Points:</strong> Multiply current points by a factor</li>
+                    <li><strong>Add Streak Bonus:</strong> Add points based on streak length</li>
+                </ul>
+
+                <div class="rule-examples">
+                    <h4>Example Rules:</h4>
+                    <pre class="example-rule">
+# Early Bird Bonus
+if arrival before 09:00
+award 2 points
+
+# Office Attendance
+if working in-office
+award 10 points
+
+# Remote Work
+if working remote
+award 8 points
+
+# Long Streak Bonus
+if streak > 5
+multiply points by 1.5</pre>
+                </div>
+            </div>
+        </div>
+    </div>
 </div>
 
 <style>

@@ -777,12 +777,13 @@ def view_rankings(period, date_str=None):
                     'rankings': rankings,
                     'period': period,
                     'current_date': current_date.strftime('%Y-%m-%d'),
-                    'current_display': format_date_range(current_date, period_end, period),
+                    'current_display': format_date_range(current_date, period_end, period),  # Pass datetime objects
                     'current_month_value': current_date.strftime('%Y-%m'),
                     'mode': mode,
                     'streaks_enabled': settings.get("enable_streaks", False),
                     'earliest_hour': earliest_hour,
-                    'latest_hour': latest_hour
+                    'latest_hour': latest_hour,
+                    'today': datetime.now().date()  # Add today's date explicitly
                 }
                 
                 app.logger.debug(f"Rankings template data: {template_data}")

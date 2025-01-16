@@ -86,7 +86,7 @@ def load_data():
     finally:
         db.close()
 
-def calculate_scores(data, period, current_date):
+def calculate_scores(data, period, current_date, mode='last-in'):
     """Calculate scores with proper date validation"""
     # Ensure current_date is not in the future
     now = datetime.now()
@@ -99,8 +99,8 @@ def calculate_scores(data, period, current_date):
 
     # Get settings first
     settings = get_settings()
-    mode = request.args.get('mode', 'last-in')
-
+    # Remove request.args dependency
+    
     rankings = defaultdict(lambda: {
         "name": "",
         "points": 0,

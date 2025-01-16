@@ -708,7 +708,7 @@ def view_rankings(period, date_str=None):
                                         mode=mode,
                                         streaks_enabled=False)
                 
-                rankings = calculate_scores(data, period, current_date)
+                rankings = calculate_scores(data, period, current_date, mode=mode)
                 
                 # Process each ranking entry to add time data
                 for rank in rankings:

@@ -230,6 +230,18 @@ BEGIN
     END IF;
 END $$;
 
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'settings'
+        AND column_name = 'late_bonus'
+    ) THEN
+        ALTER TABLE settings
+        ADD COLUMN late_bonus NUMERIC(10,2) DEFAULT 2.0;
+    END IF;
+END $$;
+
 ------------------------------------------
 -- SECTION 5: RANKINGS SYSTEM
 ------------------------------------------
@@ -365,6 +377,9 @@ ON rankings(username, date, period, period_start, period_end, early_bird_points)
 CREATE INDEX idx_rankings_period ON rankings(period, period_end);
 CREATE INDEX idx_rankings_period_points ON rankings(period, base_points);
 CREATE INDEX idx_rankings_period_end ON rankings(period_end);
+
+-- Make sure to refresh the rankings
+REFRESH MATERIALIZED VIEW rankings;
 
 ------------------------------------------
 -- SECTION 6: INDICES

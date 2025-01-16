@@ -1,79 +1,28 @@
 # models.py
 import json
 import uuid
-import re
-import random
-from time import time
 from datetime import datetime, timedelta
 
-from collections import defaultdict
 from sqlalchemy import (
     Column, String, Integer, DateTime, Date, Float, JSON,
     Boolean, func, text
 )
 from sqlalchemy.orm import relationship
 from .database import Base, SessionLocal
-from .helpers import parse_date_reference
 
-import os
-import logging
+# Move chat-related classes to chatbot.py
+# Remove: from .chatbot import ChatHistory, ConversationContext, QueryIntent, QueryProcessor, EnhancedQueryProcessor
 
 # from .data import calculate_scores, load_data
 
 def get_core_users():
-    db = SessionLocal()
-    try:
-        settings = db.query(Settings).first()
-        return settings.core_users if settings else []
-    finally:
-        db.close()
+    # Move this to a new utils.py to avoid circular imports
+    from .utils import get_settings
+    return get_settings().core_users if get_settings() else []
 
 def migrate_database():
     # ...existing code for migrations if any...
     pass
-
-def init_settings():
-    db = SessionLocal()
-    try:
-        existing = db.query(Settings).first()
-        if not existing:
-            # ...create default settings...
-            default = Settings(
-                id=str(uuid.uuid4()),
-                points={
-                    "in_office": 10,
-                    "remote": 8,
-                    "sick": 5,
-                    "leave": 5,
-                    "shift_length": 9,
-                    "daily_shifts": {
-                        day: {"hours": 9, "start": "09:00"}
-                        for day in ["monday", "tuesday", "wednesday", "thursday", "friday"]
-                    },
-                    "working_days": {
-                        user: ['mon','tue','wed','thu','fri']
-                        for user in ["Matt", "Kushal", "Nathan", "Michael", "Ben"]
-                    },
-                    "rules": []
-                },
-                late_bonus=1,
-                remote_days={},
-                core_users=["Matt", "Kushal", "Nathan", "Michael", "Ben"],
-                enable_streaks=False,
-                streak_multiplier=0.5,
-                streaks_enabled=False,
-                streak_bonus=0.5,
-                enable_tiebreakers=False,
-                tiebreaker_points=5,
-                tiebreaker_expiry=24,
-                auto_resolve_tiebreakers=False,
-                tiebreaker_weekly=True,
-                tiebreaker_monthly=True
-            )
-            db.add(default)
-            db.commit()
-    finally:
-        db.close()
 
 class Entry(Base):
     __tablename__ = 'entries'
@@ -161,7 +110,5 @@ class TieBreakerGame(Base):
     final_tiebreaker = Column(Boolean, default=False)
     created_at = Column(DateTime, default=datetime.now)
     completed_at = Column(DateTime, nullable=True)
-
-from .chatbot import ChatHistory, ConversationContext, QueryIntent, QueryProcessor, EnhancedQueryProcessor, generate_response
 
 # ...existing code...

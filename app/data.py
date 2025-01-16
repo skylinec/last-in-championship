@@ -5,7 +5,7 @@ from flask import request
 import logging
 
 from .database import SessionLocal
-from .routes import load_settings
+from .utils import get_settings  # Use utils instead
 from .streaks import calculate_streak_for_date, calculate_current_streak
 from .helpers import in_period, calculate_average_time
 from .app import app
@@ -87,7 +87,7 @@ def load_data():
 
 def calculate_scores(data, period, current_date):
     """Calculate scores with proper handling of early-bird/last-in modes"""
-    settings = load_settings()
+    settings = get_settings()  # Use utils function instead of routes
     filtered_data = [entry for entry in data if in_period(entry, period, current_date)]
     mode = request.args.get('mode', 'last-in')
     

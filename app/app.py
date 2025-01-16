@@ -15,16 +15,16 @@ from flask_socketio import SocketIO, emit, join_room, leave_room
 from gevent import monkey
 monkey.patch_all()
 
-# Local modules
-from .database import engine, SessionLocal, Base
-from .models import init_settings
-from .metrics import metrics_app, start_metrics_updater, record_request_metric  # Our custom metrics module
-from .caching import CACHE_HITS, CACHE_MISSES  # Or import the entire caching module
-from .routes import bp as main_blueprint  # Single blueprint with all routes
-
 # Create Flask app
 app = Flask(__name__)
 app.secret_key = os.getenv('SECRET_KEY', 'dev-secret-key')
+
+# Local modules
+from .database import engine, SessionLocal, Base
+from .utils import get_settings, init_settings  # Use utils instead of models directly
+from .metrics import metrics_app, start_metrics_updater, record_request_metric  # Our custom metrics module
+from .caching import CACHE_HITS, CACHE_MISSES  # Or import the entire caching module
+from .routes import bp as main_blueprint  # Single blueprint with all routes
 
 # Attach Prometheus WSGI app to /metrics
 app.wsgi_app = DispatcherMiddleware(app.wsgi_app, {

@@ -3,9 +3,9 @@ from prometheus_client import make_wsgi_app, Summary, Counter, Gauge, Histogram,
 import time
 from threading import Thread
 from .database import SessionLocal
-from .app import app
+import logging
 
-from .models import Entry, UserStreak
+logger = logging.getLogger(__name__)
 
 registry = CollectorRegistry()
 
@@ -32,7 +32,7 @@ def start_metrics_updater():
             try:
                 update_prometheus_metrics()
             except Exception as e:
-                app.logger.error(f"Error updating metrics: {str(e)}")
+                logger.error(f"Error updating metrics: {str(e)}")
             time.sleep(300)  # Update every 5 minutes
 
     thread = Thread(target=update_loop, daemon=True)
@@ -41,6 +41,9 @@ def start_metrics_updater():
 def update_prometheus_metrics():
     db = SessionLocal()
     try:
+        # Import models inside function to avoid circular imports
+        from .models import Entry, UserStreak
+        
         # Update attendance_count_total by status
         statuses = ['in-office','remote','sick','leave']
         for s in statuses:

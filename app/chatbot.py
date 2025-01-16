@@ -1,4 +1,5 @@
 from datetime import datetime
+import time
 import random
 import re
 from collections import defaultdict
@@ -6,6 +7,7 @@ from fuzzywuzzy import fuzz, process
 import logging
 from sqlalchemy import text, func
 from typing import Dict, List, Optional, Union, Any
+from datetime import timedelta
 
 from .database import SessionLocal
 from .models import Entry, UserStreak, Settings

@@ -7,9 +7,9 @@ from prometheus_client import make_wsgi_app
 from .config import get_database_url
 from .database import engine, Base, SessionLocal
 from .migrations.run_migrations import run_migrations
-from .models import init_settings
 from .metrics import metrics_app, start_metrics_updater
 from .sockets import socketio, notify_game_update
+from .utils import init_settings
 
 def create_app():
     # Configure logging

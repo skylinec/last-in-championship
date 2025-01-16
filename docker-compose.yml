@@ -128,21 +128,38 @@ services:
       - db
       - monitoring
 
+  matomo_db:
+    image: mariadb:10.11
+    command: --max-allowed-packet=64MB
+    environment:
+      - MYSQL_ROOT_PASSWORD=rootpass
+      - MYSQL_DATABASE=matomo
+      - MYSQL_USER=matomo
+      - MYSQL_PASSWORD=matomo
+    volumes:
+      - matomo_mysql:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-prootpass"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
   matomo:
     image: matomo:latest
     environment:
-      - MATOMO_DATABASE_HOST=db
+      - MATOMO_DATABASE_HOST=matomo_db
       - MATOMO_DATABASE_ADAPTER=mysql
       - MATOMO_DATABASE_TABLES_PREFIX=matomo_
-      - MATOMO_DATABASE_USERNAME=user
-      - MATOMO_DATABASE_PASSWORD=password
+      - MATOMO_DATABASE_USERNAME=matomo
+      - MATOMO_DATABASE_PASSWORD=matomo
       - MATOMO_DATABASE_DBNAME=matomo
       - MATOMO_WEBSITE_HOST=lic.mattdh.me
       - MATOMO_WEBSITE_NAME=Last In Championship
     volumes:
       - matomo_data:/var/www/html/matomo
     depends_on:
-      - db
+      matomo_db:
+        condition: service_healthy
 
 volumes:
   postgres_data:
@@ -154,3 +171,4 @@ volumes:
   mattermost_config:
   bugzilla_db:
   matomo_data:
+  matomo_mysql:

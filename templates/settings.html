@@ -343,54 +343,30 @@
             <div class="scoring-blocks-palette">
                 <h3>Available Blocks</h3>
                 <div class="block-category">
-                    <h4>Time Conditions</h4>
-                    <div class="block" draggable="true" data-type="condition" data-category="time" 
-                         data-template="arrival-time">
-                        If arrival time [before/after] [HH:MM]
+                    <h4>Conditions</h4>
+                    <div class="block" draggable="true" data-type="condition" data-template="if arrival {operator} {time}">
+                        Arrival Time
                     </div>
-                    <div class="block" draggable="true" data-type="condition" data-category="time" 
-                         data-template="time-between">
-                        If time is between [HH:MM] and [HH:MM]
+                    <div class="block" draggable="true" data-type="condition" data-template="if working {status}">
+                        Work Status
                     </div>
-                </div>
-
-                <div class="block-category">
-                    <h4>Work Status</h4>
-                    <div class="block" draggable="true" data-type="condition" data-category="status" 
-                         data-template="work-status">
-                        If working [in-office/remote/sick/leave]
+                    <div class="block" draggable="true" data-type="condition" data-template="if day is {day}">
+                        Day Type
                     </div>
-                    <div class="block" draggable="true" data-type="condition" data-category="status" 
-                         data-template="day-status">
-                        If day is [weekday/weekend/holiday]
+                    <div class="block" draggable="true" data-type="condition" data-template="if streak {operator} {value}">
+                        Streak Length
                     </div>
                 </div>
-
                 <div class="block-category">
-                    <h4>Streak Rules</h4>
-                    <div class="block" draggable="true" data-type="condition" data-category="streak" 
-                         data-template="streak-length">
-                        If streak length [>/</] [number] days
+                    <h4>Actions</h4>
+                    <div class="block" draggable="true" data-type="action" data-template="award {points} points">
+                        Award Points
                     </div>
-                    <div class="block" draggable="true" data-type="condition" data-category="streak" 
-                         data-template="streak-type">
-                        If streak type is [early/late/any]
+                    <div class="block" draggable="true" data-type="action" data-template="multiply points by {value}">
+                        Apply Multiplier
                     </div>
-                </div>
-
-                <div class="block-category">
-                    <h4>Point Modifiers</h4>
-                    <div class="block" draggable="true" data-type="action" data-category="points" 
-                         data-template="add-points">
-                        Add [number] points
-                    </div>
-                    <div class="block" draggable="true" data-type="action" data-category="points" 
-                         data-template="multiply-points">
-                        Multiply points by [number]
-                    </div>
-                    <div class="block" draggable="true" data-type="action" data-category="points" 
-                         data-template="streak-bonus">
-                        Add streak bonus of [number] per day
+                    <div class="block" draggable="true" data-type="action" data-template="add streak bonus">
+                        Add Streak Bonus
                     </div>
                 </div>
             </div>

@@ -6,7 +6,7 @@ def should_run(engine):
         result = conn.execute(text("""
             SELECT EXISTS (
                 SELECT 1 
-                FROM information_schema.indexes 
+                FROM pg_indexes 
                 WHERE indexname = 'idx_rankings_period_end'
             )
         """))
@@ -26,23 +26,5 @@ def migrate(engine):
                 ) THEN
                     CREATE INDEX idx_rankings_period_end ON tie_breakers (period_end);
                 END IF;
-
-                -- Drop and recreate trigger
-                DROP TRIGGER IF EXISTS trg_refresh_rankings ON tie_breakers;
-                
-                -- Ensure trigger function exists
-                CREATE OR REPLACE FUNCTION refresh_rankings()
-                RETURNS TRIGGER AS $$
-                BEGIN
-                    -- Add your ranking refresh logic here
-                    RETURN NEW;
-                END;
-                $$ LANGUAGE plpgsql;
-
-                -- Create trigger
-                CREATE TRIGGER trg_refresh_rankings
-                    AFTER INSERT ON tie_breakers
-                    FOR EACH ROW
-                    EXECUTE PROCEDURE refresh_rankings();
             END $$;
         """))

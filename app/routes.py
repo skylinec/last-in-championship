@@ -27,13 +27,13 @@ from .metrics import (ATTENDANCE_COUNT, AUDIT_ACTIONS, IN_PROGRESS,
                       RANKING_CALLS, REQUEST_COUNT, REQUEST_TIME,
                       RESPONSE_TIME)
 from .models import (AuditLog, Entry, Settings, TieBreaker, TieBreakerGame,
-                     TieBreakerParticipant, User, UserStreak, get_core_users,
-                     init_settings)
+                     TieBreakerParticipant, User, UserStreak, get_core_users)
 from .sockets import notify_game_update, socketio
 from .tie_breakers import (check_tie_breaker_completion, create_game,
                            create_next_game, create_next_game_after_draw,
                            create_test_tie_breaker, determine_winner)
 from .blueprints import bp  # Import bp from blueprints instead of creating it here
+from .utils import init_settings
 
 # If you need to call methods from your main app or from 'app.py' directly, 
 # you typically do that through current_app from flask, or separate your code further.

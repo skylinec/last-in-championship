@@ -2,7 +2,8 @@ from decimal import Decimal
 from datetime import datetime, timedelta
 
 from sqlalchemy import text
-from requests import request
+from flask import request
+import logging
 
 from .models import Entry
 from .database import SessionLocal
@@ -11,6 +12,9 @@ from .streaks import calculate_streak_for_date, calculate_current_streak
 from .helpers import in_period, calculate_average_time
 
 from .app import app
+
+# Create a logger instance
+logger = logging.getLogger(__name__)
 
 def compare_times(time1, time2, operator):
     """Compare two time objects"""
@@ -68,22 +72,25 @@ def evaluate_rule(rule, entry, context):
         return 0
 
 def load_data():
-    """Monitor database load operations"""
+    """Load entries from database"""
     db = SessionLocal()
-    entries = db.query(Entry).all()
-    data = [
-        {
-            "id": entry.id,
-            "date": entry.date,
-            "time": entry.time,
-            "name": entry.name,
-            "status": entry.status,
-            "timestamp": entry.timestamp.isoformat()
-        }
-        for entry in entries
-    ]
-    db.close()
-    return data
+    try:
+        result = db.execute(text("""
+            SELECT id, date, time, name, status, timestamp
+            FROM entries
+            ORDER BY date DESC, time DESC
+        """))
+        
+        return [{
+            "id": row.id,
+            "date": row.date,
+            "time": row.time,
+            "name": row.name,
+            "status": row.status,
+            "timestamp": row.timestamp.isoformat()
+        } for row in result]
+    finally:
+        db.close()
 
 def calculate_scores(data, period, current_date):
     """Calculate scores with proper handling of early-bird/last-in modes"""

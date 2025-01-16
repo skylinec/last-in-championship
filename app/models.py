@@ -7,7 +7,6 @@ from time import time
 from datetime import datetime, timedelta
 
 from collections import defaultdict
-from datetime import datetime
 from sqlalchemy import (
     Column, String, Integer, DateTime, Date, Float, JSON,
     Boolean, func, text

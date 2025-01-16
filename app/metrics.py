@@ -1,11 +1,13 @@
 # metrics.py
-from prometheus_client import make_wsgi_app, Summary, Counter, Gauge, Histogram
+from prometheus_client import make_wsgi_app, Summary, Counter, Gauge, Histogram, CollectorRegistry
 import time
 from threading import Thread
 from .database import SessionLocal
 from .app import app
 
 from .models import Entry, UserStreak
+
+registry = CollectorRegistry()
 
 # Define your custom Prometheus metrics here
 REQUEST_TIME = Summary('request_processing_seconds', 'Time spent processing request')
@@ -18,6 +20,8 @@ DB_CONNECTIONS = Gauge('db_connections', 'Number of current DB connections')
 AUDIT_TRAIL_COUNT = Counter('audit_trail_count', 'Total audit logs recorded')
 ATTENDANCE_DB_COUNT = Counter('attendance_db_count', 'Attendance DB operations', ['operation'])
 RANKING_CALLS = Counter('ranking_calls_total', 'Number of times rankings have been requested', registry=registry)
+
+USER_STREAK = Gauge('user_streak_days', 'Current streak for user', ['username'], registry=registry)
 
 # The WSGI metrics app for /metrics
 metrics_app = make_wsgi_app()

@@ -1,54 +1,43 @@
 from datetime import datetime, timedelta
 from sqlalchemy import text
-from .database import SessionLocal
+import logging
 
-from datetime import datetime, date, timedelta
-from typing import Union, Optional
+from .database import SessionLocal, Base
 
-from .models import Entry, Settings, User, UserStreak
-from .app import app
+logger = logging.getLogger(__name__)
 
-MAX_WEEKEND_GAP = 3
-WEEKEND_START = 5  # Saturday is 5
+# Import model classes directly from Base
+Entry = Base.metadata.tables['entries']
+Settings = Base.metadata.tables['settings']
+UserStreak = Base.metadata.tables['user_streaks']
 
-def calculate_streak_for_date(
-    name: str,
-    target_date: Union[str, date],
-) -> int:
-    """Calculate work streak for a user up to a specific date.
-    
-    Args:
-        name: User's name
-        target_date: Target date to calculate streak until
-    
-    Returns:
-        int: Current streak count
-    """
+def calculate_streak_for_date(username, target_date, db):
+    """Calculate streak up to a specific date"""
     db = SessionLocal()
     
     try:
-        if not name or not target_date:
+        if not username or not target_date:
             return 0
             
         target_date = (datetime.strptime(target_date, '%Y-%m-%d').date() 
                       if isinstance(target_date, str) else target_date)
         
-        # Get settings for working days
-        settings = db.query(Settings).first()
+        # Get settings using raw table
+        settings = db.execute(Settings.select()).first()
         if not settings:
             return 0
             
-        # Get user's working days
-        working_days = settings.points.get('working_days', {}).get(name, ['mon', 'tue', 'wed', 'thu', 'fri'])
+        # Get user's working days from settings JSON
+        working_days = settings.points.get('working_days', {}).get(username, ['mon', 'tue', 'wed', 'thu', 'fri'])
         
-        # Get recent entries up to target date, ordered by date descending
-        entries = db.query(Entry).filter(
-            Entry.name == name,
-            Entry.status.in_(['in-office', 'remote']),
-            Entry.date <= target_date.isoformat()
-        ).order_by(
-            Entry.date.desc()
-        ).all()
+        # Query entries using raw table
+        entries = db.execute(
+            Entry.select().where(
+                Entry.c.name == username,
+                Entry.c.status.in_(['in-office', 'remote']),
+                Entry.c.date <= target_date.isoformat()
+            ).order_by(Entry.c.date.desc())
+        ).fetchall()
         
         if not entries:
             return 0
@@ -100,7 +89,7 @@ def calculate_streak_for_date(
         return streak
         
     except Exception as e:
-        app.logger.error(f"Error calculating streak: {str(e)}")
+        logger.error(f"Error calculating streak: {str(e)}")
         return 0
     finally:
         db.close()
@@ -109,39 +98,48 @@ def update_user_streak(username, attendance_date):
     """Update streak for a user based on new attendance"""
     db = SessionLocal()
     try:
-        streak = db.query(UserStreak).filter_by(username=username).first()
+        streak = db.execute(
+            UserStreak.select().where(UserStreak.c.username == username)
+        ).first()
+
         if not streak:
-            streak = UserStreak(username=username)
-            db.add(streak)
+            db.execute(
+                UserStreak.insert().values(
+                    username=username,
+                    current_streak=1,
+                    max_streak=1,
+                    last_attendance=datetime.combine(attendance_date, datetime.min.time())
+                )
+            )
+        else:
+            # Convert attendance_date to datetime if it's a string
+            if isinstance(attendance_date, str):
+                attendance_date = datetime.strptime(attendance_date, '%Y-%m-%d')
+            
+            # Ensure we're comparing dates, not mixing date and datetime
+            attendance_date = attendance_date.date() if isinstance(attendance_date, datetime) else attendance_date
 
-        # Convert attendance_date to datetime if it's a string
-        if isinstance(attendance_date, str):
-            attendance_date = datetime.strptime(attendance_date, '%Y-%m-%d')
-        
-        # Ensure we're comparing dates, not mixing date and datetime
-        attendance_date = attendance_date.date() if isinstance(attendance_date, datetime) else attendance_date
-
-        if streak.last_attendance:
-            # Convert last_attendance to date for comparison
-            last_date = streak.last_attendance.date()
-            days_diff = (attendance_date - last_date).days
-            if days_diff <= 3:  # Allow for weekends
-                streak.current_streak += 1
+            if streak.last_attendance:
+                # Convert last_attendance to date for comparison
+                last_date = streak.last_attendance.date()
+                days_diff = (attendance_date - last_date).days
+                if days_diff <= 3:  # Allow for weekends
+                    streak.current_streak += 1
+                else:
+                    streak.current_streak = 1
             else:
                 streak.current_streak = 1
-        else:
-            streak.current_streak = 1
 
-        # Store the full datetime
-        streak.last_attendance = datetime.combine(attendance_date, datetime.min.time())
-        streak.max_streak = max(streak.max_streak, streak.current_streak)
-        db.commit()
+            # Store the full datetime
+            streak.last_attendance = datetime.combine(attendance_date, datetime.min.time())
+            streak.max_streak = max(streak.max_streak, streak.current_streak)
+            db.commit()
     finally:
         db.close()
 
 def generate_streaks():
     """Generate user streaks properly"""
-    app.logger.info("Generating streaks...")
+    logger.info("Generating streaks...")
     db = SessionLocal()
     try:
         # Get settings
@@ -182,19 +180,19 @@ def generate_streaks():
         
     except Exception as e:
         db.rollback()
-        app.logger.error(f"Error generating streaks: {str(e)}")
+        logger.error(f"Error generating streaks: {str(e)}")
     finally:
         db.close()
 
-def calculate_current_streak(name):
-    """Calculate current streak for a user"""
+def calculate_current_streak(username):
+    """Calculate current active streak"""
     db = SessionLocal()
     try:
         today = datetime.now().date()
         
         # Get most recent entries, ordered by date descending
         entries = db.query(Entry).filter(
-            Entry.name == name,
+            Entry.name == username,
             Entry.status.in_(['in-office', 'remote'])
         ).order_by(Entry.date.desc()).all()
         

@@ -156,7 +156,7 @@ services:
       - MATOMO_WEBSITE_HOST=lic.mattdh.me
       - MATOMO_WEBSITE_NAME=Last In Championship
     volumes:
-      - matomo_data:/var/www/html/matomo
+      - matomo_data:/var/www/html/
     depends_on:
       matomo_db:
         condition: service_healthy

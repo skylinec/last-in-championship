@@ -861,7 +861,8 @@
 
         <div class="nav-links">
             {% if session.get('user') %}
-            <a href="/" class="nav-item">Log Attendance</a>
+            <a href="{{ url_for('bp.index') }}">Home</a>
+            <a href="{{ url_for('bp.index') }}" class="nav-item">Log Attendance</a>
             <a href="/history" class="nav-item">View/Edit History</a>
             <div class="dropdown nav-item">
                 <a href="#" class="dropdown-trigger">Rankings ▾</a>
@@ -895,12 +896,12 @@
                 </div>
             </div>
             <div class="user-info nav-item">
-                {{ session.user }} | <a href="{{ url_for('logout') }}">Logout</a>
+                {{ session.user }} | <a href="{{ url_for('bp.logout') }}">Logout</a>
             </div>
             {% else %}
             <div class="auth-links">
-                <a href="{{ url_for('login') }}" class="nav-item">Login</a>
-                <a href="{{ url_for('register') }}" class="nav-item">Register</a>
+                <a href="{{ url_for('bp.login') }}" class="nav-item">Login</a>
+                <a href="{{ url_for('bp.register') }}" class="nav-item">Register</a>
             </div>
             {% endif %}
         </div>

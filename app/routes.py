@@ -206,7 +206,7 @@ def register():
         if not username or not password:
             return render_template("error.html", 
                                 error="Username and password are required",
-                                back_link=url_for('register'))
+                                back_link=url_for('bp.register'))  # Fix: add bp. prefix
         
         db = SessionLocal()
         try:
@@ -214,7 +214,7 @@ def register():
             if (existing_user):
                 return render_template("error.html", 
                                     error="Username already exists",
-                                    back_link=url_for('register'))
+                                    back_link=url_for('bp.register'))  # Fix: add bp. prefix
             
             user = User(username=username, password=password)
             db.add(user)
@@ -222,7 +222,7 @@ def register():
             
             session['user'] = username
             log_audit("register", username, "New user registration")
-            return redirect(url_for('index'))
+            return redirect(url_for('bp.index'))  # Fix: add bp. prefix
         
         except Exception as e:
             db.rollback()
@@ -230,7 +230,7 @@ def register():
             return render_template("error.html", 
                                 error="Registration system error",
                                 details=str(e),
-                                back_link=url_for('register'))
+                                back_link=url_for('bp.register'))  # Fix: add bp. prefix
         finally:
             db.close()
     return render_template("register.html")
@@ -826,7 +826,7 @@ def tie_breakers():
         return render_template("error.html", 
                              error="Failed to load tie breakers",
                              details=str(e),
-                             back_link=url_for('index'))
+                             back_link=url_for('bp.index'))  # Fix: add bp. prefix
     finally:
         db.close()
 
@@ -874,7 +874,7 @@ def choose_game(tie_id):
             """), {"tie_id": tie_id})
 
         db.commit()
-        return redirect(url_for('tie_breakers'))
+        return redirect(url_for('bp.tie_breakers'))
     finally:
         db.close()
 
@@ -1456,7 +1456,7 @@ def play_game(game_id):
         """), {"game_id": game_id}).fetchone()
 
         if not game:
-            return redirect(url_for('tie_breakers'))
+            return redirect(url_for('bp.tie_breakers'))
 
         # Check if user can play (is one of the players)
         current_user = session.get('user')
@@ -1472,7 +1472,7 @@ def play_game(game_id):
 
     except Exception as e:
         app.logger.error(f"Error loading game: {str(e)}")
-        return redirect(url_for('tie_breakers'))
+        return redirect(url_for('bp.tie_breakers'))
     finally:
         db.close()
 
@@ -1541,7 +1541,7 @@ def join_game(game_id):
         db.commit()
 
         # Redirect to game page
-        return redirect(url_for('play_game', game_id=game_id))
+        return redirect(url_for('bp.play_game', game_id=game_id))
 
     except Exception as e:
         db.rollback()

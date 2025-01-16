@@ -211,8 +211,8 @@
                     <input type="date" 
                            id="monitoring_start_date" 
                            name="monitoring_start_date"
-                           value="{{ settings.monitoring_start_date|default(today().replace(month=1, day=1).strftime('%Y-%m-%d')) }}"
-                           max="{{ today().strftime('%Y-%m-%d') }}">
+                           value="{{ settings.monitoring_start_date|default(today.strftime('%Y-%m-%d')) }}"
+                           max="{{ today.strftime('%Y-%m-%d') }}">
                     <p class="helper-text">The system will check for missing entries starting from this date</p>
                 </div>
             </div>

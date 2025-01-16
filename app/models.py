@@ -41,8 +41,10 @@ class Settings(Base):
     points = Column(JSON)
     late_bonus = Column(Float, default=2.0)
     early_bonus = Column(Float, default=2.0)
-    streak_multiplier = Column(Float, default=0.5)
+    remote_days = Column(JSON)
+    core_users = Column(JSON)
     enable_streaks = Column(Boolean, default=False)
+    streak_multiplier = Column(Float, default=0.5)
     enable_tiebreakers = Column(Boolean, default=False)
     tiebreaker_points = Column(Integer, default=5)
     tiebreaker_expiry = Column(Integer, default=24)
@@ -50,8 +52,7 @@ class Settings(Base):
     tiebreaker_weekly = Column(Boolean, default=True)
     tiebreaker_monthly = Column(Boolean, default=True)
     tiebreaker_types = Column(JSON)
-    core_users = Column(JSON)
-    remote_days = Column(JSON)
+    monitoring_start_date = Column(Date)
 
     def to_dict(self):
         """Convert Settings object to dictionary"""
@@ -59,8 +60,10 @@ class Settings(Base):
             "points": dict(self.points or {}),
             "late_bonus": float(self.late_bonus or 0.0),
             "early_bonus": float(self.early_bonus or 0.0),
-            "streak_multiplier": float(self.streak_multiplier or 0.5),
+            "remote_days": dict(self.remote_days or {}),
+            "core_users": list(self.core_users or []),
             "enable_streaks": bool(self.enable_streaks),
+            "streak_multiplier": float(self.streak_multiplier or 0.5),
             "enable_tiebreakers": bool(self.enable_tiebreakers),
             "tiebreaker_points": int(self.tiebreaker_points or 5),
             "tiebreaker_expiry": int(self.tiebreaker_expiry or 24),
@@ -68,8 +71,7 @@ class Settings(Base):
             "tiebreaker_weekly": bool(self.tiebreaker_weekly),
             "tiebreaker_monthly": bool(self.tiebreaker_monthly),
             "tiebreaker_types": dict(self.tiebreaker_types or {}),
-            "core_users": list(self.core_users or []),
-            "remote_days": dict(self.remote_days or {})
+            "monitoring_start_date": self.monitoring_start_date
         }
 
 class AuditLog(Base):

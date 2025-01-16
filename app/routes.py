@@ -464,9 +464,8 @@ def manage_settings():
             registered_users = [user[0] for user in db.query(User.username).all()]
             core_users = settings_data.get("core_users", [])
             
-            # Ensure tie breaker generation settings are present
-            settings_data.setdefault('tiebreaker_weekly', True)
-            settings_data.setdefault('tiebreaker_monthly', True)
+            # Pass today's date to the template
+            today = datetime.now().date()
             
             return render_template(
                 "settings.html",
@@ -474,7 +473,8 @@ def manage_settings():
                 settings_data=settings_data,
                 registered_users=registered_users,
                 core_users=core_users,
-                rules=settings_data.get("points", {}).get("rules", [])
+                rules=settings_data.get("points", {}).get("rules", []),
+                today=today  # Add this line
             )
         else:
             try:

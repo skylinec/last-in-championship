@@ -187,17 +187,25 @@ def calculate_daily_score(entry, settings, position=None, total_entries=None, mo
     entry_date = datetime.strptime(entry["date"], '%Y-%m-%d')
     weekday = entry_date.strftime('%A').lower()
     
+    # Get daily shifts configuration
+    daily_shifts = settings.points.get("daily_shifts", {}) if isinstance(settings, Settings) else \
+                  settings.get("points", {}).get("daily_shifts", {})
+    
+    # Get shift configuration for the current day
+    day_shift = daily_shifts.get(weekday, {
+        "hours": 9,
+        "start": "09:00"
+    })
+    
     # Access settings properties correctly
     points = settings.points if hasattr(settings, 'points') else {}
     late_bonus = float(settings.late_bonus if hasattr(settings, 'late_bonus') else 2.0)
+    early_bonus = float(settings.early_bonus if hasattr(settings, 'early_bonus') else 2.0)
     streak_multiplier = float(settings.streak_multiplier if hasattr(settings, 'streak_multiplier') else 0.5)
-    enable_streaks = bool(settings.enable_streaks if hasattr(settings, 'enable_streaks') else False)
-    enable_tiebreakers = bool(settings.enable_tiebreakers if hasattr(settings, 'enable_tiebreakers') else False)
-    tiebreaker_points = int(settings.tiebreaker_points if hasattr(settings, 'tiebreaker_points') else 5)
     
     # Get base points based on status
     status = entry["status"].replace("-", "_")
-    base_points = float(getattr(points, status, 0) if points else 0)
+    base_points = float(points.get(status, 0)) if isinstance(points, dict) else 0
     
     # Initialize context
     context = {
@@ -211,7 +219,7 @@ def calculate_daily_score(entry, settings, position=None, total_entries=None, mo
     shift_start = datetime.strptime(day_shift["start"], "%H:%M").time()
     entry_time = datetime.strptime(entry["time"], "%H:%M").time()
     
-    is_llate = entry_time > shift_start
+    is_late = entry_time > shift_start
 
     # Check if it's a working day for this user
     day_name = entry_date.strftime('%a').lower()
@@ -262,12 +270,10 @@ def calculate_daily_score(entry, settings, position=None, total_entries=None, mo
     early_bird_bonus = 0
     last_in_bonus = 0
     if position is not None and total_entries is not None and status in ["in_office", "remote"]:
-        # Modify bonus calculation to make early-bird exactly inverse of last-in
-        # Now first person (position=1) gets bonus equal to total_entries in early-bird mode
-        # Last person (position=total_entries) gets bonus equal to total_entries in last-in mode
-        position_bonus = position * settings["late_bonus"]
+        # Use early_bonus for early-bird mode and late_bonus for last-in mode
+        position_bonus = position * late_bonus
         last_in_bonus = position_bonus
-        early_bird_bonus = (total_entries + 1 - position) * settings["late_bonus"]
+        early_bird_bonus = (total_entries + 1 - position) * early_bonus
     
     # Calculate streak bonus only if the entry isn't in the future
     streak_bonus = 0

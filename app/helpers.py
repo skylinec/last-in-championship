@@ -3,31 +3,18 @@ from typing import Union, List, Dict, Any
 from sqlalchemy import text
 from functools import wraps
 import re
-import logging
 
 from .database import SessionLocal
 
-def format_date_range(start_date, end_date, period):
+def format_date_range(start_date: datetime, end_date: datetime, period: str) -> str:
     """Format date range for display"""
-    try:
-        # Ensure we have datetime objects
-        if isinstance(start_date, str):
-            start_date = datetime.strptime(start_date, '%Y-%m-%d')
-        if isinstance(end_date, str):
-            end_date = datetime.strptime(end_date, '%Y-%m-%d')
-            
-        if period == 'day':
-            return start_date.strftime('%d/%m/%Y')
-        elif period == 'week':
-            return f"{start_date.strftime('%d/%m/%Y')} - {end_date.strftime('%d/%m/%Y')}"
-        elif period == 'month':
-            return start_date.strftime('%B %Y')
-        else:
-            return start_date.strftime('%d/%m/%Y')
-    except (ValueError, AttributeError) as e:
-        # Log the error and return a safe default
-        logging.error(f"Error formatting date range: {str(e)}")
-        return "Invalid date range"
+    if period == 'day':
+        return start_date.strftime('%d/%m/%Y')
+    elif period == 'week':
+        return f"{start_date.strftime('%d/%m/%Y')} - {end_date.strftime('%d/%m/%Y')}"
+    elif period == 'month':
+        return start_date.strftime('%B %Y')
+    return start_date.strftime('%d/%m/%Y')
 
 def normalize_status(status: str) -> str:
     """Normalize status strings"""

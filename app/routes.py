@@ -716,60 +716,19 @@ def view_rankings(period, date_str=None):
                                         streaks_enabled=False)
                 
                 rankings = calculate_scores(data, period, current_date, mode=mode)
-
-                # Process each ranking entry to add time data
-                for rank in rankings:
-                    user_entries = [e for e in data if e["name"] == rank["name"] and 
-                                in_period(e, period, current_date) and
-                                normalize_status(e["status"]) in ["in_office", "remote"]]
-                    
-                    # Set default values first
-                    rank.update({
-                        "time": "N/A",
-                        "time_obj": datetime.strptime("09:00", "%H:%M"),
-                        "shift_length": 540,
-                        "end_time": "18:00",
-                        "current_streak": 0,
-                        "max_streak": 0
-                    })
-                    
-                    if user_entries:
-                        # Calculate average time from entries
-                        times = [datetime.strptime(e["time"], "%H:%M") for e in user_entries]
-                        avg_time = sum((t.hour * 60 + t.minute) for t in times) // len(times)
-                        avg_hour = avg_time // 60
-                        avg_minute = avg_time % 60
-                        
-                        rank["time"] = f"{avg_hour:02d}:{avg_minute:02d}"
-                        rank["time_obj"] = datetime.strptime(rank["time"], "%H:%M")
-                        end_time = rank["time_obj"] + timedelta(minutes=rank["shift_length"])
-                        rank["end_time"] = end_time.strftime('%H:%M')
-                    
-                    # Add streak information
-                    streak = db.query(UserStreak).filter_by(username=rank["name"]).first()
-                    if streak:
-                        rank["current_streak"] = streak.current_streak
-                        rank["max_streak"] = streak.max_streak
-                
-                settings = get_settings()
                 
                 # Calculate earliest and latest hours from actual data
                 all_times = []
                 for rank in rankings:
-                    if rank.get('time') and rank['time'] != 'N/A':
-                        time_obj = datetime.strptime(rank['time'], '%H:%M')
-                        all_times.append(time_obj)
-                        if rank.get('end_time') and rank['end_time'] != 'N/A':
-                            end_obj = datetime.strptime(rank['end_time'], '%H:%M')
-                            all_times.append(end_obj)
-
+                    arrival_times = rank.get('stats', {}).get('arrival_times', [])
+                    all_times.extend(arrival_times)
+                
                 earliest_hour = 7  # Default earliest
                 latest_hour = 19  # Default latest
                 
                 if all_times:
                     earliest_time = min(all_times)
                     latest_time = max(all_times)
-                    # Round down/up to nearest hour
                     earliest_hour = max(7, earliest_time.hour)  # Don't go earlier than 7am
                     latest_hour = min(19, latest_time.hour + 1)  # Don't go later than 7pm
                 
@@ -777,16 +736,15 @@ def view_rankings(period, date_str=None):
                     'rankings': rankings,
                     'period': period,
                     'current_date': current_date.strftime('%Y-%m-%d'),
-                    'current_display': format_date_range(current_date, period_end, period),  # Pass datetime objects
+                    'current_display': format_date_range(current_date, period_end, period),
                     'current_month_value': current_date.strftime('%Y-%m'),
                     'mode': mode,
                     'streaks_enabled': settings.get("enable_streaks", False),
                     'earliest_hour': earliest_hour,
                     'latest_hour': latest_hour,
-                    'today': datetime.now().date()  # Add today's date explicitly
+                    'today': datetime.now().date()
                 }
                 
-                app.logger.debug(f"Rankings template data: {template_data}")
                 return render_template("rankings.html", **template_data)
             
         except ValueError as e:

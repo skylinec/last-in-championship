@@ -105,59 +105,92 @@ def calculate_scores(data, period, current_date, mode='last-in'):
     # Get settings first
     settings = get_settings()
     
-    rankings = defaultdict(lambda: {
-        "name": "",
-        "score": 0,
-        "stats": {
-            "days": 0,
-            "in_office": 0,
-            "remote": 0,
-            "sick": 0,
-            "leave": 0
-        }
-    })
+    # Group entries by date first
+    daily_entries = {}
+    daily_scores = {}
     
     # Filter entries for current period
     filtered_entries = [entry for entry in data if in_period(entry, period, current_date)]
     
-    # Sort entries by date and time
-    filtered_entries.sort(key=lambda x: (x["date"], x["time"]))
-    
-    # Process each entry
+    # Group entries by date
     for entry in filtered_entries:
-        name = entry["name"]
-        rankings[name]["name"] = name
+        date = entry["date"]
+        if date not in daily_entries:
+            daily_entries[date] = []
+        daily_entries[date].append(entry)
+    
+    # Calculate scores for each day
+    for date, entries in daily_entries.items():
+        # Sort entries by time (always ascending)
+        entries.sort(key=lambda x: datetime.strptime(x["time"], "%H:%M"))
         
-        # Update stats
-        status = entry["status"].replace("-", "_")
-        rankings[name]["stats"]["days"] += 1
-        rankings[name]["stats"][status] = rankings[name]["stats"].get(status, 0) + 1
-        
-        # Calculate daily score with position bonus/penalty
-        if status in ["in_office", "remote"]:
-            daily_entries = [e for e in filtered_entries if e["date"] == entry["date"]]
-            position = daily_entries.index(entry) + 1
-            total_entries = len(daily_entries)
-            
-            score_data = calculate_daily_score(entry, settings, position, total_entries, mode)
-            rankings[name]["score"] += score_data[mode]
-            
-            # Store score components for breakdown
-            if "score_breakdown" not in rankings[name]:
-                rankings[name]["score_breakdown"] = {
-                    "base_points": 0,
-                    "position_bonus": 0,
-                    "streak_bonus": 0
+        total_entries = len(entries)
+        for position, entry in enumerate(entries, 1):
+            name = entry["name"]
+            if name not in daily_scores:
+                daily_scores[name] = {
+                    "early_bird_total": 0,
+                    "last_in_total": 0,
+                    "active_days": 0,
+                    "base_points_total": 0,
+                    "position_bonus_total": 0,
+                    "streak_bonus_total": 0,
+                    "stats": {
+                        "in_office": 0,
+                        "remote": 0,
+                        "sick": 0,
+                        "leave": 0,
+                        "days": 0,
+                        "latest_arrivals": 0,
+                        "arrival_times": []
+                    }
                 }
-            rankings[name]["score_breakdown"]["base_points"] += score_data["base"]
-            rankings[name]["score_breakdown"]["position_bonus"] += score_data["position_bonus"]
-            rankings[name]["score_breakdown"]["streak_bonus"] += score_data["streak"]
+            
+            # Calculate scores for both modes
+            scores = calculate_daily_score(entry, settings, position, total_entries, mode)
+            
+            status = entry["status"].replace("-", "_")
+            daily_scores[name]["stats"][status] += 1
+            daily_scores[name]["stats"]["days"] += 1
+            
+            if status in ["in_office", "remote"]:
+                daily_scores[name]["active_days"] += 1
+                daily_scores[name]["early_bird_total"] += scores["early-bird"]
+                daily_scores[name]["last_in_total"] += scores["last-in"]
+                daily_scores[name]["base_points_total"] += scores["base"]
+                daily_scores[name]["position_bonus_total"] += scores["position_bonus"]
+                daily_scores[name]["streak_bonus_total"] += scores["streak"]
+                
+                # Track achievements based on mode
+                if (mode == 'last-in' and position == total_entries) or \
+                   (mode == 'early-bird' and position == 1):
+                    daily_scores[name]["stats"]["latest_arrivals"] += 1
+                
+                arrival_time = datetime.strptime(entry["time"], "%H:%M")
+                daily_scores[name]["stats"]["arrival_times"].append(arrival_time)
     
-    # Convert to list and sort
-    results = list(rankings.values())
-    results.sort(key=lambda x: (-x["score"], x["name"]))
+    # Format rankings
+    rankings = []
+    for name, scores in daily_scores.items():
+        if scores["active_days"] > 0:
+            early_bird_avg = scores["early_bird_total"] / scores["active_days"]
+            last_in_avg = scores["last_in_total"] / scores["active_days"]
+            arrival_times = scores["stats"]["arrival_times"]
+            
+            rankings.append({
+                "name": name,
+                "score": round(last_in_avg if mode == 'last-in' else early_bird_avg, 2),
+                "streak": calculate_current_streak(name),
+                "stats": scores["stats"],
+                "average_arrival_time": calculate_average_time(arrival_times) if arrival_times else "N/A",
+                "base_points": scores["base_points_total"] / scores["active_days"] if scores["active_days"] > 0 else 0,
+                "position_bonus": scores["position_bonus_total"] / scores["active_days"] if scores["active_days"] > 0 else 0,
+                "streak_bonus": scores["streak_bonus_total"] / scores["active_days"] if scores["active_days"] > 0 else 0
+            })
     
-    return results
+    # Always sort by descending score (scores are already mode-specific)
+    rankings.sort(key=lambda x: (-x["score"], x["name"]))
+    return rankings
 
 def get_settings():
     """Get settings with proper object conversion"""

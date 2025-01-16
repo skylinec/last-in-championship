@@ -603,25 +603,27 @@ def view_rankings(period, date_str=None):
         
         # Get current date (either from URL or today)
         try:
-            current_date = datetime.strptime(date_str, '%Y-%m-%d') if date_str else datetime.now()
+            if (date_str):
+                current_date = datetime.strptime(date_str, '%Y-%m-%d')
+            else:
+                current_date = datetime.now()
             
             # For weekly view, always snap to Monday
-            if period == 'week':
+            if (period == 'week'):
                 current_date = current_date - timedelta(days=current_date.weekday())
             
             # Calculate period end date
-            if period == 'week':
+            if (period == 'week'):
                 period_end = current_date + timedelta(days=6)
-            elif period == 'month':
+            elif (period == 'month'):
                 next_month = current_date.replace(day=28) + timedelta(days=4)
                 period_end = next_month - timedelta(days=next_month.day)
             else:
                 period_end = current_date
             
             with rankings_lock:
+                # Ensure thread-safe access to data
                 data = load_data()
-                settings = load_settings()
-                
                 if not data:
                     app.logger.warning("No data found for rankings")
                     return render_template("rankings.html", 
@@ -633,23 +635,63 @@ def view_rankings(period, date_str=None):
                                         mode=mode,
                                         streaks_enabled=False)
                 
-                # Calculate rankings with period and settings
-                period_start = current_date.strftime('%Y-%m-%d')
-                period_end = period_end.strftime('%Y-%m-%d')
+                rankings = calculate_scores(data, period, current_date)
                 
-                # Filter data for period
-                period_data = [
-                    entry for entry in data 
-                    if period_start <= entry["date"] <= period_end
-                ]
-                
-                rankings = calculate_scores(period_data, settings, mode)
-                
-                # Process rankings with streak information
+                # Process each ranking entry to add time data
                 for rank in rankings:
+                    user_entries = [e for e in data if e["name"] == rank["name"] and 
+                                in_period(e, period, current_date) and
+                                normalize_status(e["status"]) in ["in_office", "remote"]]
+                    
+                    # Set default values first
+                    rank.update({
+                        "time": "N/A",
+                        "time_obj": datetime.strptime("09:00", "%H:%M"),
+                        "shift_length": 540,
+                        "end_time": "18:00",
+                        "current_streak": 0,
+                        "max_streak": 0
+                    })
+                    
+                    if user_entries:
+                        # Calculate average time from entries
+                        times = [datetime.strptime(e["time"], "%H:%M") for e in user_entries]
+                        avg_time = sum((t.hour * 60 + t.minute) for t in times) // len(times)
+                        avg_hour = avg_time // 60
+                        avg_minute = avg_time % 60
+                        
+                        rank["time"] = f"{avg_hour:02d}:{avg_minute:02d}"
+                        rank["time_obj"] = datetime.strptime(rank["time"], "%H:%M")
+                        end_time = rank["time_obj"] + timedelta(minutes=rank["shift_length"])
+                        rank["end_time"] = end_time.strftime('%H:%M')
+                    
+                    # Add streak information
                     streak = db.query(UserStreak).filter_by(username=rank["name"]).first()
-                    rank["current_streak"] = streak.current_streak if streak else 0
-                    rank["max_streak"] = streak.max_streak if streak else 0
+                    if streak:
+                        rank["current_streak"] = streak.current_streak
+                        rank["max_streak"] = streak.max_streak
+                
+                settings = load_settings()
+                
+                # Calculate earliest and latest hours from actual data
+                all_times = []
+                for rank in rankings:
+                    if rank.get('time') and rank['time'] != 'N/A':
+                        time_obj = datetime.strptime(rank['time'], '%H:%M')
+                        all_times.append(time_obj)
+                        if rank.get('end_time') and rank['end_time'] != 'N/A':
+                            end_obj = datetime.strptime(rank['end_time'], '%H:%M')
+                            all_times.append(end_obj)
+
+                earliest_hour = 7  # Default earliest
+                latest_hour = 19  # Default latest
+                
+                if all_times:
+                    earliest_time = min(all_times)
+                    latest_time = max(all_times)
+                    # Round down/up to nearest hour
+                    earliest_hour = max(7, earliest_time.hour)  # Don't go earlier than 7am
+                    latest_hour = min(19, latest_time.hour + 1)  # Don't go later than 7pm
                 
                 template_data = {
                     'rankings': rankings,
@@ -658,18 +700,23 @@ def view_rankings(period, date_str=None):
                     'current_display': format_date_range(current_date, period_end, period),
                     'current_month_value': current_date.strftime('%Y-%m'),
                     'mode': mode,
-                    'streaks_enabled': settings.get("enable_streaks", False)
+                    'streaks_enabled': settings.get("enable_streaks", False),
+                    'earliest_hour': earliest_hour,
+                    'latest_hour': latest_hour
                 }
                 
+                app.logger.debug(f"Rankings template data: {template_data}")
                 return render_template("rankings.html", **template_data)
-                
+            
         except ValueError as e:
             app.logger.error(f"Date parsing error: {str(e)}")
-            return render_template("error.html", error=f"Invalid date format: {str(e)}")
+            return render_template("error.html", 
+                                error=f"Invalid date format: {str(e)}")
             
     except Exception as e:
         app.logger.error(f"Rankings error: {str(e)}")
-        return render_template("error.html", error=f"Failed to load rankings: {str(e)}")
+        return render_template("error.html", 
+                            error=f"Failed to load rankings: {str(e)}")
     finally:
         db.close()
 
@@ -736,8 +783,7 @@ def tie_breakers():
                         'id', g.id,
                         'game_type', g.game_type,
                         'player1', g.player1,
-                        'player2', g.player2,
-                        'status', g.status,
+                        'player2', g.status,
                         'game_state', g.game_state,
                         'final_tiebreaker', g.final_tiebreaker
                     )) FILTER (WHERE g.id IS NOT NULL) as games
@@ -1551,11 +1597,11 @@ def handle_rules():
 def get_history():
     db = SessionLocal()
     try:
-        # Get query parameters
+        # Get query parameters with defaults
         page = request.args.get('page', 1, type=int)
-        per_page = request.args.get('per_page', 50, type=int)
-        name_filter = request.args.getlist('users[]')
-        status_filter = request.args.getlist('status[]')
+        per_page = min(int(request.args.get('per_page', 50)), 500)  # Limit max per_page
+        users = request.args.getlist('users[]')
+        statuses = request.args.getlist('status[]')
         from_date = request.args.get('fromDate')
         to_date = request.args.get('toDate')
 
@@ -1563,10 +1609,10 @@ def get_history():
         query = db.query(Entry)
 
         # Apply filters
-        if name_filter:
-            query = query.filter(Entry.name.in_(name_filter))
-        if status_filter:
-            query = query.filter(Entry.status.in_(status_filter))
+        if users and 'all' not in users:
+            query = query.filter(Entry.name.in_(users))
+        if statuses and 'all' not in statuses:
+            query = query.filter(Entry.status.in_(statuses))
         if from_date:
             query = query.filter(Entry.date >= from_date)
         if to_date:
@@ -1582,14 +1628,22 @@ def get_history():
                       .all()
 
         # Format results
-        results = [{
-            'id': entry.id,
-            'date': entry.date,
-            'time': entry.time,
-            'name': entry.name,
-            'status': entry.status,
-            'position': None  # Add position if needed
-        } for entry in entries]
+        results = []
+        for entry in entries:
+            # Calculate position for the day
+            day_position = db.query(Entry)\
+                .filter(Entry.date == entry.date)\
+                .filter(Entry.time <= entry.time)\
+                .count()
+
+            results.append({
+                'id': entry.id,
+                'date': entry.date,
+                'time': entry.time,
+                'name': entry.name,
+                'status': entry.status,
+                'position': day_position
+            })
 
         return jsonify({
             'entries': results,
@@ -1599,6 +1653,9 @@ def get_history():
             'total_pages': (total_count + per_page - 1) // per_page
         })
 
+    except Exception as e:
+        app.logger.error(f"Error fetching history: {str(e)}")
+        return jsonify({'error': str(e)}), 500
     finally:
         db.close()
 
@@ -1964,8 +2021,3 @@ def internal_error(error):
                          error="Internal Server Error",
                          details="An unexpected error has occurred.", 
                          back_link=url_for('bp.index')), 500
-
-def init_app(app):
-    """Initialize the Flask app with all required settings"""
-    register_template_filters(app)
-    # Add any other initialization code here

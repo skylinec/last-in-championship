@@ -33,11 +33,13 @@ from .sockets import notify_game_update, socketio
 from .tie_breakers import (check_tie_breaker_completion, create_game,
                            create_next_game, create_next_game_after_draw,
                            create_test_tie_breaker, determine_winner)
+from .blueprints import bp  # Import bp from blueprints instead of creating it here
 
 # If you need to call methods from your main app or from 'app.py' directly, 
 # you typically do that through current_app from flask, or separate your code further.
 
-bp = Blueprint('bp', __name__)  # 'bp' is the blueprint name; register it in app.py
+# Remove this line since we moved it to blueprints.py:
+# bp = Blueprint('bp', __name__)
 
 rankings_lock = Lock()
 

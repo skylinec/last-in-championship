@@ -21,13 +21,14 @@ from .caching import (CACHE_HITS,  # Or import the entire caching module
                       CACHE_MISSES)
 # Local modules
 from .database import Base, engine
-from .metrics import (metrics_app,  # Our custom metrics module
-                      record_request_metric, start_metrics_updater)
-from .routes import bp as main_blueprint  # Single blueprint with all routes
-from .utils import (get_settings,  # Use utils instead of models directly
-                    init_settings)
+from .metrics import metrics_app, start_metrics_updater
+from .utils import init_settings
 # Import socketio instance from sockets.py
 from .sockets import socketio
+from .blueprints import (
+    bp, api_rules_bp, attendance_bp, audit_bp, rankings_bp,
+    settings_bp, tie_breakers_bp, chatbot_bp, maintenance_bp
+)
 
 def create_app():
     app = Flask(__name__)
@@ -78,9 +79,17 @@ def create_app():
         }
     )
 
-    # Register blueprint after app creation
-    app.register_blueprint(main_blueprint)
-    
+    # Register blueprints
+    app.register_blueprint(bp)
+    app.register_blueprint(attendance_bp)
+    app.register_blueprint(audit_bp)
+    app.register_blueprint(rankings_bp)
+    app.register_blueprint(settings_bp)
+    app.register_blueprint(tie_breakers_bp)
+    app.register_blueprint(chatbot_bp)
+    app.register_blueprint(maintenance_bp)
+    app.register_blueprint(api_rules_bp)
+
     # Initialize database and settings
     Base.metadata.create_all(bind=engine)
     init_settings()

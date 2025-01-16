@@ -49,6 +49,15 @@ from .visualisation import (calculate_arrival_patterns, calculate_average_time,
 # Remove this line since we moved it to blueprints.py:
 # bp = Blueprint('bp', __name__)
 
+def minutes_to_time(minutes):
+    """Convert minutes since midnight to HH:MM format."""
+    hours = minutes // 60
+    mins = minutes % 60
+    return f"{hours:02d}:{mins:02d}"
+
+# Register the filter with the blueprint
+bp.add_app_template_filter(minutes_to_time)
+
 rankings_lock = Lock()
 
 # -------------

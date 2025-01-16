@@ -320,30 +320,19 @@ scored_entries AS (
         period,
         period_start,
         period_end,
+        -- Early bird points - Position points are based on total_entries - position + 1
         SUM(
-            base_points + (
-                CASE 
-                    -- Invert last-in logic: earliest arrival = late_position = total_entries
-                    WHEN late_position = total_entries THEN total_entries * (SELECT early_bonus FROM settings LIMIT 1)
-                    ELSE 0
-                END
-            )
-        )
-        OVER (
+            base_points + (total_entries - early_position + 1) * (SELECT early_bonus FROM settings LIMIT 1)
+        ) OVER (
             PARTITION BY username, period, period_start
             ORDER BY date
             ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
         ) AS early_bird_points,
 
+        -- Last-in points - Position points are based directly on position
         SUM(
-            base_points + (
-                CASE 
-                    WHEN late_position = 1 THEN total_entries * (SELECT late_bonus FROM settings LIMIT 1)
-                    ELSE 0
-                END
-            )
-        )
-        OVER (
+            base_points + late_position * (SELECT late_bonus FROM settings LIMIT 1)
+        ) OVER (
             PARTITION BY username, period, period_start
             ORDER BY date
             ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW

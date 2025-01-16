@@ -245,12 +245,16 @@
             <!-- Position Scoring System -->
             <div class="scoring-section">
                 <h3>Position Scoring</h3>
-                <p>Each mode uses the exact same scoring logic but inverted:</p>
+                <p>Both modes use the same underlying position numbers but calculate scores inversely:</p>
                 <ul>
-                    <li><strong>Last-In Mode:</strong> Latest arrival gets position × {{ settings.late_bonus }} points</li>
-                    <li><strong>Early-Bird Mode:</strong> Earliest arrival gets position × {{ settings.early_bonus }} points</li>
+                    <li><strong>Last-In Mode:</strong> Position × {{ settings.late_bonus }} points
+                        <br><small>Example: 5th person gets 5 × {{ settings.late_bonus }} points</small>
+                    </li>
+                    <li><strong>Early-Bird Mode:</strong> (Total - Position + 1) × {{ settings.early_bonus }} points
+                        <br><small>Example: 1st person gets 5 × {{ settings.early_bonus }} points when 5 people attend</small>
+                    </li>
                 </ul>
-                <p class="note">Example: With 5 people, first arrival = position 5 in scoring calculation</p>
+                <p class="note">This ensures Early-Bird mode rankings are exactly inverse of Last-In mode</p>
             </div>
 
             <!-- Base Points -->

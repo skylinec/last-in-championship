@@ -165,7 +165,7 @@ def not_found_error(error):
         'error.html',
         error="Page Not Found",
         details="The requested page could not be found.",
-        back_link=url_for('bp.index')  # or just url_for('index') depending on your naming
+        back_link=url_for('bp.index')  # Fix: Use bp.index
     ), 404
 
 @app.errorhandler(500)
@@ -174,7 +174,7 @@ def internal_error(error):
         'error.html',
         error="Internal Server Error",
         details="An unexpected error has occurred.",
-        back_link=url_for('bp.index')
+        back_link=url_for('bp.index')  # Fix: Use bp.index
     ), 500
 
 # If you have before_request / after_request logic, place it here

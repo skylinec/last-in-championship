@@ -186,7 +186,7 @@ def login():
         if username and password and verify_user(username, password):
             session['user'] = username
             log_audit("login", username, "Successful login")
-            return redirect(url_for('index'))
+            return redirect(url_for('bp.index'))  # Fix: use bp.index instead of index
         return render_template("login.html", error="Invalid credentials")
     return render_template("login.html")
 

@@ -53,7 +53,7 @@ def create_app():
         settings_bp, tie_breakers_bp, chatbot_bp, maintenance_bp
     )
 
-    app.register_blueprint(bp)
+    app.register_blueprint(bp, url_prefix='/')  # Fix: Add explicit url_prefix
     app.register_blueprint(attendance_bp, url_prefix="/attendance")
     app.register_blueprint(audit_bp)
     app.register_blueprint(rankings_bp, url_prefix="/rankings")

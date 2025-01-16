@@ -665,7 +665,12 @@ def view_rankings(period, date_str=None):
     RANKING_CALLS.inc()
     db = SessionLocal()
     try:
+        # Validate and normalize mode parameter
         mode = request.args.get('mode', 'last-in')
+        if mode not in ['last-in', 'early-bird']:
+            app.logger.warning(f"Invalid mode provided: {mode}, defaulting to last-in")
+            mode = 'last-in'
+            
         app.logger.debug(f"Rankings request - Period: {period}, Date: {date_str}, Mode: {mode}")
         
         # Get current date (either from URL or today)
@@ -682,13 +687,13 @@ def view_rankings(period, date_str=None):
                 current_date = datetime.now()
             
             # For weekly view, always snap to Monday
-            if (period == 'week'):
+            if period == 'week':
                 current_date = current_date - timedelta(days=current_date.weekday())
             
             # Calculate period end date
-            if (period == 'week'):
+            if period == 'week':
                 period_end = current_date + timedelta(days=6)
-            elif (period == 'month'):
+            elif period == 'month':
                 next_month = current_date.replace(day=28) + timedelta(days=4)
                 period_end = next_month - timedelta(days=next_month.day)
             else:
@@ -697,6 +702,8 @@ def view_rankings(period, date_str=None):
             with rankings_lock:
                 # Ensure thread-safe access to data
                 data = load_data()
+                settings = get_settings()  # Get settings here to pass to calculate_scores
+                
                 if not data:
                     app.logger.warning("No data found for rankings")
                     return render_template("rankings.html", 
@@ -709,7 +716,7 @@ def view_rankings(period, date_str=None):
                                         streaks_enabled=False)
                 
                 rankings = calculate_scores(data, period, current_date, mode=mode)
-                
+
                 # Process each ranking entry to add time data
                 for rank in rankings:
                     user_entries = [e for e in data if e["name"] == rank["name"] and 
@@ -787,9 +794,11 @@ def view_rankings(period, date_str=None):
                                 error=f"Invalid date format: {str(e)}")
             
     except Exception as e:
-        app.logger.error(f"Rankings error: {str(e)}")
+        app.logger.error(f"Rankings error: {str(e)}", exc_info=True)  # Added exc_info for full traceback
         return render_template("error.html", 
-                            error=f"Failed to load rankings: {str(e)}")
+                            error=f"Failed to load rankings",
+                            details=str(e),
+                            back_link=url_for('bp.index'))
     finally:
         db.close()
 

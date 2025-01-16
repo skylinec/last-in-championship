@@ -88,6 +88,11 @@ def load_data():
 
 def calculate_scores(data, period, current_date, mode='last-in'):
     """Calculate scores with proper date validation"""
+    # Validate mode parameter
+    if mode not in ['last-in', 'early-bird']:
+        logging.warning(f"Invalid mode '{mode}' provided to calculate_scores, defaulting to last-in")
+        mode = 'last-in'
+        
     # Ensure current_date is not in the future
     now = datetime.now()
     if current_date > now:
@@ -99,35 +104,58 @@ def calculate_scores(data, period, current_date, mode='last-in'):
 
     # Get settings first
     settings = get_settings()
-    # Remove request.args dependency
     
     rankings = defaultdict(lambda: {
         "name": "",
-        "points": 0,
-        "days": 0,
-        "remote_days": 0
+        "score": 0,
+        "stats": {
+            "days": 0,
+            "in_office": 0,
+            "remote": 0,
+            "sick": 0,
+            "leave": 0
+        }
     })
     
     # Filter entries for current period
     filtered_entries = [entry for entry in data if in_period(entry, period, current_date)]
+    
+    # Sort entries by date and time
+    filtered_entries.sort(key=lambda x: (x["date"], x["time"]))
     
     # Process each entry
     for entry in filtered_entries:
         name = entry["name"]
         rankings[name]["name"] = name
         
-        # Calculate daily score
-        daily_score = calculate_daily_score(entry, settings, mode=mode)
-        rankings[name]["points"] += daily_score[mode]
+        # Update stats
+        status = entry["status"].replace("-", "_")
+        rankings[name]["stats"]["days"] += 1
+        rankings[name]["stats"][status] = rankings[name]["stats"].get(status, 0) + 1
         
-        # Track attendance
-        if entry["status"] == "remote":
-            rankings[name]["remote_days"] += 1
-        rankings[name]["days"] += 1
+        # Calculate daily score with position bonus/penalty
+        if status in ["in_office", "remote"]:
+            daily_entries = [e for e in filtered_entries if e["date"] == entry["date"]]
+            position = daily_entries.index(entry) + 1
+            total_entries = len(daily_entries)
+            
+            score_data = calculate_daily_score(entry, settings, position, total_entries, mode)
+            rankings[name]["score"] += score_data[mode]
+            
+            # Store score components for breakdown
+            if "score_breakdown" not in rankings[name]:
+                rankings[name]["score_breakdown"] = {
+                    "base_points": 0,
+                    "position_bonus": 0,
+                    "streak_bonus": 0
+                }
+            rankings[name]["score_breakdown"]["base_points"] += score_data["base"]
+            rankings[name]["score_breakdown"]["position_bonus"] += score_data["position_bonus"]
+            rankings[name]["score_breakdown"]["streak_bonus"] += score_data["streak"]
     
     # Convert to list and sort
     results = list(rankings.values())
-    results.sort(key=lambda x: (-x["points"], x["name"]))
+    results.sort(key=lambda x: (-x["score"], x["name"]))
     
     return results
 

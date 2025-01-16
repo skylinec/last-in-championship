@@ -86,7 +86,7 @@ from .blueprints import \
 from .caching import HashableCacheWithMetrics
 from .chatbot import EnhancedQueryProcessor  # Add this line
 from .data import (calculate_daily_score, calculate_scores, decimal_to_float,
-                   load_data)
+                   load_data, get_settings)  # Add get_settings here
 from .database import SessionLocal
 # from your local modules
 from .game import (apply_move, check_connect4_winner, check_tictactoe_winner,

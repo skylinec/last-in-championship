@@ -97,6 +97,10 @@ def calculate_scores(data, period, current_date):
     if isinstance(current_date, str):
         current_date = datetime.strptime(current_date, '%Y-%m-%d')
 
+    # Get settings first
+    settings = get_settings()
+    mode = request.args.get('mode', 'last-in')
+
     rankings = defaultdict(lambda: {
         "name": "",
         "points": 0,
@@ -104,8 +108,11 @@ def calculate_scores(data, period, current_date):
         "remote_days": 0
     })
     
+    # Filter entries for current period
+    filtered_entries = [entry for entry in data if in_period(entry, period, current_date)]
+    
     # Process each entry
-    for entry in data:
+    for entry in filtered_entries:
         name = entry["name"]
         rankings[name]["name"] = name
         

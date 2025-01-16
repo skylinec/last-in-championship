@@ -3,6 +3,7 @@ from datetime import datetime
 
 from .database import SessionLocal
 from .models import Settings
+from .caching import HashableCacheWithMetrics
 
 def get_settings():
     """Get application settings"""
@@ -59,30 +60,29 @@ def init_settings():
     finally:
         db.close()
 
+@HashableCacheWithMetrics
 def load_settings():
+    """Load settings with proper type conversion and defaults"""
     db = SessionLocal()
     try:
         settings = db.query(Settings).first()
         if not settings:
             init_settings()
             settings = db.query(Settings).first()
-        result = {
-            "points": settings.points,
-            "late_bonus": settings.late_bonus,
-            "remote_days": settings.remote_days,
-            "core_users": settings.core_users,
-            "enable_streaks": settings.enable_streaks,
-            "streak_multiplier": settings.streak_multiplier,
-            "streaks_enabled": settings.streaks_enabled,
-            "streak_bonus": settings.streak_bonus,
-            "rules": settings.points.get('rules', []),  # Add rules to response
-            "enable_tiebreakers": settings.enable_tiebreakers,
-            "tiebreaker_points": settings.tiebreaker_points,
-            "tiebreaker_expiry": settings.tiebreaker_expiry,
-            "auto_resolve_tiebreakers": settings.auto_resolve_tiebreakers,
-            "tiebreaker_weekly": settings.tiebreaker_weekly,  # Add this
-            "tiebreaker_monthly": settings.tiebreaker_monthly,  # Add this
-        }
-        return result
+        
+        # Convert Settings object to dict using to_dict method
+        settings_dict = settings.to_dict()
+        
+        # Ensure points dict has required fields
+        if "daily_shifts" not in settings_dict["points"]:
+            settings_dict["points"]["daily_shifts"] = {
+                day: {"hours": 9, "start": "09:00"}
+                for day in ["monday", "tuesday", "wednesday", "thursday", "friday"]
+            }
+
+        if "rules" not in settings_dict["points"]:
+            settings_dict["points"]["rules"] = []
+
+        return settings_dict
     finally:
         db.close()

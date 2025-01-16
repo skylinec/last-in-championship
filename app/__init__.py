@@ -78,3 +78,5 @@ def create_app():
     start_metrics_updater()
 
     return app
+
+create_app()

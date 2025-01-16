@@ -47,13 +47,13 @@ def create_app():
     logger.info("Initializing default settings...")
     init_settings()
 
-    # Register routes (Blueprints)
+    # Import blueprints after they've loaded their routes
     from .blueprints import (
         bp, api_rules_bp, attendance_bp, audit_bp, rankings_bp,
         settings_bp, tie_breakers_bp, chatbot_bp, maintenance_bp
     )
 
-    # Register blueprints - let the blueprint's url_prefix handle routing
+    # Register blueprints without prefixes
     app.register_blueprint(bp)
     app.register_blueprint(attendance_bp)
     app.register_blueprint(audit_bp)

@@ -1,30 +1,35 @@
 # app.py
-import os
 import logging
-import time
+import os
 import random
-from flask import Flask, render_template, request, session, redirect, url_for, jsonify
-from flask_cors import CORS
-from werkzeug.middleware.dispatcher import DispatcherMiddleware
+import time
 from datetime import datetime
-from threading import Thread, Lock
+from threading import Lock, Thread
 
-# Prometheus and SocketIO
-from prometheus_client import make_wsgi_app
+from flask import (Flask, jsonify, redirect, render_template, request, session,
+                   url_for)
+from flask_cors import CORS
 from flask_socketio import SocketIO, emit, join_room, leave_room
 from gevent import monkey
+# Prometheus and SocketIO
+from prometheus_client import make_wsgi_app
+from werkzeug.middleware.dispatcher import DispatcherMiddleware
+
 monkey.patch_all()
 
 # Create Flask app
 app = Flask(__name__)
 app.secret_key = os.getenv('SECRET_KEY', 'dev-secret-key')
 
+from .caching import (CACHE_HITS,  # Or import the entire caching module
+                      CACHE_MISSES)
 # Local modules
-from .database import engine, SessionLocal, Base
-from .utils import get_settings, init_settings  # Use utils instead of models directly
-from .metrics import metrics_app, start_metrics_updater, record_request_metric  # Our custom metrics module
-from .caching import CACHE_HITS, CACHE_MISSES  # Or import the entire caching module
+from .database import Base, SessionLocal, engine
+from .metrics import (metrics_app,  # Our custom metrics module
+                      record_request_metric, start_metrics_updater)
 from .routes import bp as main_blueprint  # Single blueprint with all routes
+from .utils import (get_settings,  # Use utils instead of models directly
+                    init_settings)
 
 # Attach Prometheus WSGI app to /metrics
 app.wsgi_app = DispatcherMiddleware(app.wsgi_app, {

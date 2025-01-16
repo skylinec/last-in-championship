@@ -3,17 +3,13 @@ import json
 import uuid
 from datetime import datetime, timedelta
 
-from sqlalchemy import (
-    Column, String, Integer, DateTime, Date, Float, JSON,
-    Boolean, func, text
-)
+from sqlalchemy import (JSON, Boolean, Column, Date, DateTime, Float, Integer,
+                        String, func, text)
 from sqlalchemy.orm import relationship
+
 from .database import Base, SessionLocal
 
-# Move chat-related classes to chatbot.py
-# Remove: from .chatbot import ChatHistory, ConversationContext, QueryIntent, QueryProcessor, EnhancedQueryProcessor
-
-# from .data import calculate_scores, load_data
+# ...existing code...
 
 def get_core_users():
     # Move this to a new utils.py to avoid circular imports

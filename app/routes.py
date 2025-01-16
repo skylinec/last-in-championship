@@ -1,46 +1,39 @@
 # routes.py
-from flask import (
-    Blueprint, render_template, request, jsonify, session,
-    redirect, url_for
-)
-from datetime import datetime, timedelta, date
-import uuid
 import json
-import os
 import logging
-import time
-import random
-
-from threading import Thread, Lock
-
-from decimal import Decimal
-
-from sqlalchemy import text, inspect
-from functools import wraps
+import uuid
 from collections import defaultdict
+from datetime import date, datetime, timedelta
+from decimal import Decimal
+from functools import wraps
+from threading import Lock, Thread
 
-# from your local modules
-from .game import is_valid_move, apply_move, check_winner, create_test_games, check_connect4_winner, check_tictactoe_winner
-from .sockets import socketio, notify_game_update
-from .database import SessionLocal
-from .models import (
-    Entry, User, Settings, AuditLog, UserStreak,
-    TieBreaker, TieBreakerParticipant, TieBreakerGame,
-    EnhancedQueryProcessor, get_core_users, init_settings
-)
-from .data import load_data, load_settings, decimal_to_float, calculate_scores, calculate_daily_score
-from .caching import HashableCacheWithMetrics
-from .metrics import (
-    REQUEST_TIME, REQUEST_COUNT, IN_PROGRESS, ATTENDANCE_COUNT,
-    RESPONSE_TIME, AUDIT_ACTIONS, RANKING_CALLS
-)
-from .helpers import normalize_status, format_date_range, in_period, normalize_settings, track_response_time
-from .tie_breakers import (
-    create_test_tie_breaker, create_next_game, create_game,
-    create_next_game_after_draw, check_tie_breaker_completion,
-    determine_winner
-)
+from flask import (Blueprint, jsonify, redirect, render_template, request,
+                   session, url_for)
+from sqlalchemy import inspect, text
+
 from .app import app
+from .caching import HashableCacheWithMetrics
+from .chatbot import EnhancedQueryProcessor  # Add this line
+from .data import (calculate_daily_score, calculate_scores, decimal_to_float,
+                   load_data, load_settings)
+from .database import SessionLocal
+# from your local modules
+from .game import (apply_move, check_connect4_winner, check_tictactoe_winner,
+                   check_winner, create_test_games, is_valid_move)
+from .helpers import (format_date_range, in_period, normalize_settings,
+                      normalize_status, track_response_time)
+from .metrics import (ATTENDANCE_COUNT, AUDIT_ACTIONS, IN_PROGRESS,
+                      RANKING_CALLS, REQUEST_COUNT, REQUEST_TIME,
+                      RESPONSE_TIME)
+from .models import (AuditLog, Entry, Settings, TieBreaker, TieBreakerGame,
+                     TieBreakerParticipant, User, UserStreak, get_core_users,
+                     init_settings)
+from .sockets import notify_game_update, socketio
+from .tie_breakers import (check_tie_breaker_completion, create_game,
+                           create_next_game, create_next_game_after_draw,
+                           create_test_tie_breaker, determine_winner)
+
 # If you need to call methods from your main app or from 'app.py' directly, 
 # you typically do that through current_app from flask, or separate your code further.
 

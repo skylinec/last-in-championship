@@ -1,15 +1,17 @@
-import os
 import logging
+import os
+
 from flask import Flask
-from werkzeug.middleware.dispatcher import DispatcherMiddleware
 from prometheus_client import make_wsgi_app
+from werkzeug.middleware.dispatcher import DispatcherMiddleware
 
 from .config import get_database_url
-from .database import engine, Base, SessionLocal
-from .migrations.run_migrations import run_migrations
+from .database import Base, SessionLocal, engine
 from .metrics import metrics_app, start_metrics_updater
-from .sockets import socketio, notify_game_update
+from .migrations.run_migrations import run_migrations
+from .sockets import notify_game_update, socketio
 from .utils import init_settings
+
 
 def create_app():
     # Configure logging
@@ -46,8 +48,9 @@ def create_app():
     init_settings()
 
     # Register routes (Blueprints)
-    from .routes import main_bp, attendance_bp, audit_bp, rankings_bp, settings_bp
-    from .routes import tie_breakers_bp, chatbot_bp, maintenance_bp, api_rules_bp
+    from .routes import (api_rules_bp, attendance_bp, audit_bp, chatbot_bp,
+                         main_bp, maintenance_bp, rankings_bp, settings_bp,
+                         tie_breakers_bp)
 
     app.register_blueprint(main_bp)
     app.register_blueprint(attendance_bp, url_prefix="/attendance")

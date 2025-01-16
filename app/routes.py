@@ -186,7 +186,7 @@ def login():
         if username and password and verify_user(username, password):
             session['user'] = username
             log_audit("login", username, "Successful login")
-             return redirect(url_for('bp.index'))  # Fix: use bp.index instead of index
+            return redirect(url_for('bp.index'))
         return render_template("login.html", error="Invalid credentials")
     return render_template("login.html")
 
@@ -195,7 +195,7 @@ def logout():
     if 'user' in session:
         log_audit("logout", session['user'], "User logged out")
         session.pop('user', None)
-    return redirect(url_for('login'))
+    return redirect(url_for('bp.login'))  # Fix: use bp.login
 
 @bp.route("/register", methods=["GET", "POST"])
 def register():

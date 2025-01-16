@@ -53,16 +53,16 @@ def create_app():
         settings_bp, tie_breakers_bp, chatbot_bp, maintenance_bp
     )
 
-    # Register blueprints without url_prefix for main routes
-    app.register_blueprint(bp)  # Remove url_prefix to handle root routes
-    app.register_blueprint(attendance_bp, url_prefix="/attendance")
+    # Register blueprints - let the blueprint's url_prefix handle routing
+    app.register_blueprint(bp)
+    app.register_blueprint(attendance_bp)
     app.register_blueprint(audit_bp)
-    app.register_blueprint(rankings_bp)  # Remove prefix to fix rankings routes
-    app.register_blueprint(settings_bp, url_prefix="/settings")
-    app.register_blueprint(tie_breakers_bp, url_prefix="/tie-breakers")
-    app.register_blueprint(chatbot_bp, url_prefix="/chatbot")
-    app.register_blueprint(maintenance_bp, url_prefix="/maintenance")
-    app.register_blueprint(api_rules_bp, url_prefix="/api")
+    app.register_blueprint(rankings_bp)
+    app.register_blueprint(settings_bp)
+    app.register_blueprint(tie_breakers_bp)
+    app.register_blueprint(chatbot_bp)
+    app.register_blueprint(maintenance_bp)
+    app.register_blueprint(api_rules_bp)
 
     # Initialize SocketIO
     socketio.init_app(

@@ -3,18 +3,13 @@ import json
 import uuid
 from datetime import datetime, timedelta
 
-from sqlalchemy import (JSON, Boolean, Column, Date, DateTime, Float, Integer,
-                        String, func, text)
+from sqlalchemy import (Column, String, Integer, DateTime, Date, Float, JSON,
+                       Boolean)
 from sqlalchemy.orm import relationship
 
 from .database import Base, SessionLocal
 
 # ...existing code...
-
-def get_core_users():
-    # Move this to a new utils.py to avoid circular imports
-    from .utils import get_settings
-    return get_settings().core_users if get_settings() else []
 
 def migrate_database():
     # ...existing code for migrations if any...

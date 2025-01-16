@@ -1,32 +1,25 @@
-try:
-    from flask_socketio import SocketIO, emit, join_room, leave_room
-except ImportError:
-    # Add fallback or error message
-    logging.error("flask_socketio not found. WebSocket functionality will be disabled.")
-    SocketIO = None
-    emit = join_room = leave_room = lambda *args, **kwargs: None
-
-from datetime import datetime
 import logging
+from datetime import datetime
 from flask import session, request
+from flask_socketio import SocketIO, emit, join_room, leave_room
 
-# Initialize SocketIO with proper error handling
-socketio = SocketIO() if SocketIO else None
+# Create SocketIO instance at module level
+socketio = SocketIO()
 
 # Store WebSocket connections
 websocket_connections = {}
 
 @socketio.on('connect')
 def on_connect():
-    """Handle client connection"""
     try:
-        user = session.get('user')
-        if not user:
+        current_user = session.get('user')
+        if not current_user:
             logging.warning("Unauthenticated connection attempt")
             return False
 
+        logging.info(f"Client connected (sid={request.sid}) - User: {current_user}")
         websocket_connections[request.sid] = {
-            'user': user,
+            'user': current_user,
             'connected_at': datetime.now(),
             'reconnect_count': 0
         }
@@ -38,11 +31,14 @@ def on_connect():
 
 @socketio.on('disconnect')
 def on_disconnect():
-    """Handle client disconnection"""
     try:
-        conn = websocket_connections.pop(request.sid, None)
-        if conn:
-            logging.info(f"Client disconnected - User: {conn['user']}")
+        conn_info = websocket_connections.pop(request.sid, None)
+        if conn_info:
+            logging.info(
+                f"Client disconnected (sid={request.sid}) - "
+                f"User: {conn_info['user']}, "
+                f"Duration: {datetime.now() - conn_info['connected_at']}"
+            )
     except Exception as e:
         logging.error(f"Disconnect error: {str(e)}")
 

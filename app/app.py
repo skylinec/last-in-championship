@@ -9,7 +9,7 @@ from threading import Lock, Thread
 from flask import (Flask, jsonify, redirect, render_template, request, session,
                    url_for)
 from flask_cors import CORS
-from flask_socketio import SocketIO, emit, join_room, leave_room
+from flask_socketio import emit
 from gevent import monkey
 # Prometheus and SocketIO
 from prometheus_client import make_wsgi_app
@@ -17,64 +17,78 @@ from werkzeug.middleware.dispatcher import DispatcherMiddleware
 
 monkey.patch_all()
 
-# Create Flask app
-app = Flask(__name__)
-app.secret_key = os.getenv('SECRET_KEY', 'dev-secret-key')
-
 from .caching import (CACHE_HITS,  # Or import the entire caching module
                       CACHE_MISSES)
 # Local modules
-from .database import Base, SessionLocal, engine
+from .database import Base, engine
 from .metrics import (metrics_app,  # Our custom metrics module
                       record_request_metric, start_metrics_updater)
 from .routes import bp as main_blueprint  # Single blueprint with all routes
 from .utils import (get_settings,  # Use utils instead of models directly
                     init_settings)
+# Import socketio instance from sockets.py
+from .sockets import socketio
 
-# Attach Prometheus WSGI app to /metrics
-app.wsgi_app = DispatcherMiddleware(app.wsgi_app, {
-    '/metrics': metrics_app
-})
+def create_app():
+    app = Flask(__name__)
+    app.secret_key = os.getenv('SECRET_KEY', 'dev-secret-key')
+    
+    # Attach Prometheus WSGI app to /metrics
+    app.wsgi_app = DispatcherMiddleware(app.wsgi_app, {
+        '/metrics': metrics_app
+    })
 
-# CORS setup if needed
-CORS(app, resources={
-    r"/*": {
-        "origins": "*",
-        "allow_headers": ["Content-Type", "Authorization"],
-        "expose_headers": ["Content-Range", "X-Total-Count"],
-        "supports_credentials": True
-    }
-})
-
-# SocketIO setup
-socketio = SocketIO(
-    app,
-    async_mode='gevent',
-    cors_allowed_origins=["http://localhost:9000", "https://lic.mattdh.me"],
-    ping_timeout=60,
-    ping_interval=25,
-    path='/socket.io',
-    always_connect=True,
-    manage_session=True,
-    logger=True,
-    engineio_logger=True,
-    transports=['websocket', 'polling'],
-    max_http_buffer_size=1000000,
-    cookie=None,
-    transport_options={
-        'websocket': {
-            'pingTimeout': 60000,
-            'pingInterval': 25000,
-            'maxPayload': 1000000,
-            'perMessageDeflate': True,
-            'httpCompression': True,
-            'origins': '*'
-        },
-        'polling': {
-            'timeout': 60000
+    # CORS setup if needed
+    CORS(app, resources={
+        r"/*": {
+            "origins": "*",
+            "allow_headers": ["Content-Type", "Authorization"],
+            "expose_headers": ["Content-Range", "X-Total-Count"],
+            "supports_credentials": True
         }
-    }
-)
+    })
+
+    # Initialize SocketIO with the app
+    socketio.init_app(
+        app,
+        async_mode='gevent',
+        cors_allowed_origins=["http://localhost:9000", "https://lic.mattdh.me"],
+        ping_timeout=60,
+        ping_interval=25,
+        path='/socket.io',
+        always_connect=True,
+        manage_session=True,
+        logger=True,
+        engineio_logger=True,
+        transports=['websocket', 'polling'],
+        max_http_buffer_size=1000000,
+        cookie=None,
+        transport_options={
+            'websocket': {
+                'pingTimeout': 60000,
+                'pingInterval': 25000,
+                'maxPayload': 1000000,
+                'perMessageDeflate': True,
+                'httpCompression': True,
+                'origins': '*'
+            },
+            'polling': {
+                'timeout': 60000
+            }
+        }
+    )
+
+    # Register blueprint after app creation
+    app.register_blueprint(main_blueprint)
+    
+    # Initialize database and settings
+    Base.metadata.create_all(bind=engine)
+    init_settings()
+    
+    return app
+
+# Create the application instance
+app = create_app()
 
 # Logging
 logging.basicConfig(
@@ -83,17 +97,6 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 logger.info("Starting Flask application...")
-
-# Database initialization
-logger.info("Creating database tables if they don't exist...")
-Base.metadata.create_all(bind=engine)
-
-# Initialize default settings
-logger.info("Initializing default settings if not present...")
-init_settings()
-
-# Register our single Blueprint containing all routes
-app.register_blueprint(main_blueprint)
 
 # Start background metrics updater
 start_metrics_updater()

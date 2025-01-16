@@ -1,22 +1,28 @@
 import uuid
+from datetime import datetime
 
 from .database import SessionLocal
 from .models import Settings
 
 def get_settings():
+    """Get application settings"""
     db = SessionLocal()
     try:
         return db.query(Settings).first()
     finally:
         db.close()
 
+def get_core_users():
+    """Get list of core users"""
+    settings = get_settings()
+    return settings.core_users if settings else []
+
 def init_settings():
+    """Initialize default settings"""
     db = SessionLocal()
     try:
-        existing = db.query(Settings).first()
-        if not existing:
-            # ...create default settings...
-            default = Settings(
+        if db.query(Settings).first() is None:
+            default_settings = Settings(
                 id=str(uuid.uuid4()),
                 points={
                     "in_office": 10,
@@ -48,7 +54,7 @@ def init_settings():
                 tiebreaker_weekly=True,
                 tiebreaker_monthly=True
             )
-            db.add(default)
+            db.add(default_settings)
             db.commit()
     finally:
         db.close()

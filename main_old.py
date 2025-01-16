@@ -2271,7 +2271,7 @@ def initialize_app():
         
         # Run migrations first
         app.logger.info("Running database migrations...")
-        from migrations.run_migrations import run_migrations
+        from .app.migrations.run_migrations import run_migrations
         run_migrations()
         app.logger.info("Database migrations completed successfully")
         

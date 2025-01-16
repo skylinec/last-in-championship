@@ -12,7 +12,7 @@ from flask import (Blueprint, jsonify, redirect, render_template, request,
                    session, url_for)
 from sqlalchemy import inspect, text
 
-from .app import app
+from flask import current_app as app  # Use current_app instead of direct import
 from .caching import HashableCacheWithMetrics
 from .chatbot import EnhancedQueryProcessor  # Add this line
 from .data import (calculate_daily_score, calculate_scores, decimal_to_float,

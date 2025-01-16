@@ -49,9 +49,9 @@ def create_app():
     logger.info("Initializing default settings...")
     init_settings()
 
-    # Initialize template filters first
+    # Initialize template filters and app settings first
     init_app(app)
-    
+
     # Register blueprint after filters
     app.register_blueprint(bp)
 

@@ -1,4 +1,75 @@
-# routes.py
+
+from datetime import datetime
+from .utils import load_settings, get_core_users
+
+def init_app(app):
+    """Initialize Flask app with filters and context processors"""
+    
+    @app.template_filter('time_to_minutes')
+    def time_to_minutes(time_str):
+        """Convert time string (HH:MM) to minutes since midnight"""
+        if not time_str:
+            return 0
+        try:
+            hours, minutes = map(int, time_str.split(':'))
+            return hours * 60 + minutes
+        except (ValueError, AttributeError):
+            return 0
+    
+    @app.template_filter('minutes_to_time')
+    def minutes_to_time(minutes):
+        """Convert minutes since midnight to HH:MM format"""
+        if not minutes:
+            return "00:00"
+        try:
+            hours = int(minutes) // 60
+            mins = int(minutes) % 60
+            return f"{hours:02d}:{mins:02d}"
+        except (ValueError, TypeError):
+            return "00:00"
+    
+    @app.template_filter('format_date')
+    def format_date(value):
+        """Format date for template display"""
+        if isinstance(value, str):
+            try:
+                value = datetime.strptime(value, '%Y-%m-%d').date()
+            except ValueError:
+                return value
+        return value.strftime('%d/%m/%Y') if value else ''
+
+    @app.template_filter('format_time')
+    def format_time(value):
+        """Format time for template display"""
+        if not value:
+            return ''
+        try:
+            if isinstance(value, str):
+                time = datetime.strptime(value, '%H:%M').time()
+            else:
+                time = value
+            return time.strftime('%H:%M')
+        except ValueError:
+            return value
+
+    @app.context_processor
+    def utility_processor():
+        """Make utility functions available to all templates"""
+        def today():
+            """Return today's date for template use"""
+            return datetime.now().date()
+            
+        def get_setting(key, default=None):
+            """Get a setting value with fallback"""
+            settings = load_settings()
+            return settings.get(key, default)
+            
+        return {
+            'today': today,
+            'get_setting': get_setting,
+            'core_users': get_core_users()
+        }
+
 import json
 import logging
 import uuid
@@ -2021,3 +2092,188 @@ def internal_error(error):
                          error="Internal Server Error",
                          details="An unexpected error has occurred.", 
                          back_link=url_for('bp.index')), 500
+
+# ...existing code...
+
+@bp.route('/games/<int:game_id>/resign', methods=['POST'])
+@login_required
+def resign_game(game_id):
+    db = SessionLocal()
+    try:
+        current_user = session.get('user')
+        
+        # Get game with locking
+        game = db.execute(text("""
+            SELECT g.*, t.status as tie_breaker_status 
+            FROM tie_breaker_games g
+            JOIN tie_breakers t ON g.tie_breaker_id = t.id 
+            WHERE g.id = :game_id
+            FOR UPDATE
+        """), {"game_id": game_id}).fetchone()
+        
+        if not game or game.status != 'active':
+            return jsonify({"error": "Invalid game"}), 400
+            
+        if current_user not in [game.player1, game.player2]:
+            return jsonify({"error": "Not your game"}), 403
+            
+        # Set other player as winner
+        winner = game.player2 if current_user == game.player1 else game.player1
+        
+        # Update game status
+        db.execute(text("""
+            UPDATE tie_breaker_games 
+            SET status = 'completed',
+                winner = :winner,
+                completed_at = NOW()
+            WHERE id = :game_id
+        """), {
+            "game_id": game_id,
+            "winner": winner
+        })
+        
+        # Check if tie breaker is complete
+        check_tie_breaker_completion(db, game.tie_breaker_id)
+        
+        db.commit()
+        
+        # Notify other players
+        socketio.emit('game_resigned', {
+            'game_id': game_id,
+            'resigned_by': current_user,
+            'winner': winner
+        }, room=f'game_{game_id}')
+        
+        return jsonify({"success": True, "winner": winner})
+        
+    except Exception as e:
+        db.rollback()
+        app.logger.error(f"Error resigning game: {str(e)}")
+        return jsonify({"error": "Server error"}), 500
+    finally:
+        db.close()
+
+@bp.route('/games/<int:game_id>/draw', methods=['POST'])
+@login_required
+def offer_draw(game_id):
+    """Offer or accept a draw in a game"""
+    db = SessionLocal()
+    try:
+        current_user = session.get('user')
+        action = request.json.get('action')  # 'offer' or 'accept'
+        
+        game = db.execute(text("""
+            SELECT g.*, t.status as tie_breaker_status,
+                   g.game_state->>'draw_offered_by' as draw_offered_by
+            FROM tie_breaker_games g
+            JOIN tie_breakers t ON g.tie_breaker_id = t.id 
+            WHERE g.id = :game_id
+            FOR UPDATE
+        """), {"game_id": game_id}).fetchone()
+        
+        if not game or game.status != 'active':
+            return jsonify({"error": "Invalid game"}), 400
+            
+        if current_user not in [game.player1, game.player2]:
+            return jsonify({"error": "Not your game"}), 403
+        
+        game_state = game.game_state
+        
+        if action == 'offer':
+            if game_state.get('draw_offered_by'):
+                return jsonify({"error": "Draw already offered"}), 400
+                
+            game_state['draw_offered_by'] = current_user
+            
+            # Update game state
+            db.execute(text("""
+                UPDATE tie_breaker_games 
+                SET game_state = :game_state
+                WHERE id = :game_id
+            """), {
+                "game_id": game_id,
+                "game_state": json.dumps(game_state)
+            })
+            
+            db.commit()
+            
+            # Notify other player of draw offer
+            socketio.emit('draw_offered', {
+                'game_id': game_id,
+                'offered_by': current_user
+            }, room=f'game_{game_id}')
+            
+            return jsonify({"success": True, "status": "draw_offered"})
+            
+        elif action == 'accept':
+            if not game_state.get('draw_offered_by'):
+                return jsonify({"error": "No draw offered"}), 400
+                
+            if game_state['draw_offered_by'] == current_user:
+                return jsonify({"error": "Cannot accept your own draw offer"}), 400
+            
+            # Create next game with reversed player order
+            create_next_game_after_draw(
+                db,
+                game.tie_breaker_id,
+                game.game_type,
+                game.player1,
+                game.player2
+            )
+            
+            # Update current game as completed with draw
+            db.execute(text("""
+                UPDATE tie_breaker_games 
+                SET status = 'completed',
+                    completed_at = NOW()
+                WHERE id = :game_id
+            """), {"game_id": game_id})
+            
+            db.commit()
+            
+            # Notify players of accepted draw
+            socketio.emit('draw_accepted', {
+                'game_id': game_id
+            }, room=f'game_{game_id}')
+            
+            return jsonify({"success": True, "status": "draw_accepted"})
+            
+        return jsonify({"error": "Invalid action"}), 400
+        
+    except Exception as e:
+        db.rollback()
+        app.logger.error(f"Error handling draw: {str(e)}")
+        return jsonify({"error": "Server error"}), 500
+    finally:
+        db.close()
+
+@bp.route('/games/<int:game_id>/status')
+@login_required
+def game_status(game_id):
+    """Get current game status"""
+    db = SessionLocal()
+    try:
+        game = db.execute(text("""
+            SELECT g.*, t.status as tie_breaker_status
+            FROM tie_breaker_games g
+            JOIN tie_breakers t ON g.tie_breaker_id = t.id
+            WHERE g.id = :game_id
+        """), {"game_id": game_id}).fetchone()
+        
+        if not game:
+            return jsonify({"error": "Game not found"}), 404
+            
+        return jsonify({
+            "status": game.status,
+            "state": game.game_state,
+            "winner": game.winner,
+            "tie_breaker_status": game.tie_breaker_status
+        })
+        
+    except Exception as e:
+        app.logger.error(f"Error getting game status: {str(e)}")
+        return jsonify({"error": "Server error"}), 500
+    finally:
+        db.close()
+
+# ...existing code...

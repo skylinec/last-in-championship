@@ -186,7 +186,7 @@ def login():
         if username and password and verify_user(username, password):
             session['user'] = username
             log_audit("login", username, "Successful login")
-            return redirect(url_for('bp.index'))  # Fix: use bp.index instead of index
+             return redirect(url_for('bp.index'))  # Fix: use bp.index instead of index
         return render_template("login.html", error="Invalid credentials")
     return render_template("login.html")
 
@@ -211,7 +211,7 @@ def register():
         db = SessionLocal()
         try:
             existing_user = db.query(User).filter_by(username=username).first()
-            if existing_user:
+            if (existing_user):
                 return render_template("error.html", 
                                     error="Username already exists",
                                     back_link=url_for('register'))
@@ -1569,3 +1569,89 @@ def handle_rules():
         return jsonify({"status": "ok"})
     finally:
         db.close()
+
+# ...existing code...
+
+@bp.route("/rankings/day")
+@bp.route("/rankings/day/<date>")
+@login_required
+def day_rankings(date=None):
+    if date is None:
+        date = datetime.now().date().isoformat()
+    
+    data = load_data()
+    settings = load_settings()
+    mode = request.args.get('mode', 'last-in')
+    
+    # Get entries for the specified date and sort by time
+    day_entries = [e for e in data if e["date"] == date]
+    day_entries.sort(key=lambda x: datetime.strptime(x["time"], "%H:%M"))
+    
+    # Get shift length based on the day
+    weekday = datetime.strptime(date, '%Y-%m-%d').strftime('%A').lower()
+    day_shift = settings["points"].get("daily_shifts", {}).get(weekday, {
+        "hours": settings["points"].get("shift_length", 9),
+        "start": "09:00"
+    })
+    
+    shift_length_hours = float(day_shift["hours"])
+    shift_length_minutes = int(shift_length_hours * 60)
+    shift_start = datetime.strptime(day_shift["start"], "%H:%M")
+    start_hour = shift_start.hour
+    start_minute = shift_start.minute
+    
+    # Calculate points and prepare rankings
+    rankings = []
+    total_entries = len(day_entries)
+    for position, entry in enumerate(day_entries, 1):
+        scores = calculate_daily_score(entry, settings, position, total_entries, mode)
+        entry_time = datetime.strptime(entry["time"], "%H:%M")
+        entry_date = datetime.strptime(entry["date"], "%Y-%m-%d")
+        
+        # Use day-specific shift length
+        shift_length = shift_length_minutes
+        end_time = entry_time + timedelta(minutes=shift_length)
+        
+        rankings.append({
+            "name": entry["name"],
+            "time": entry["time"],
+            "time_obj": entry_time,
+            "shift_length": shift_length,
+            "shift_hours": shift_length_hours,
+            "end_time": end_time.strftime('%H:%M'),
+            "status": entry["status"],
+            "points": scores["last_in"] if mode == 'last-in' else scores["early_bird"]
+        })
+    
+    # Sort by points descending
+    rankings.sort(key=lambda x: x["points"], reverse=True)
+    
+    # Calculate earliest and latest hours from the actual data
+    all_times = []
+    for rank in rankings:
+        if rank.get('time'):
+            time_obj = datetime.strptime(rank['time'], "%H:%M")
+            all_times.append(time_obj)
+            if rank.get('end_time'):
+                end_obj = datetime.strptime(rank['end_time'], "%H:%M")
+                all_times.append(end_obj)
+
+    earliest_hour = 7  # Default earliest
+    latest_hour = 19  # Default latest
+    
+    if all_times:
+        earliest_time = min(all_times)
+        latest_time = max(all_times)
+        earliest_hour = max(7, earliest_time.hour)  # Don't go earlier than 7am
+        latest_hour = min(19, latest_time.hour + 1)  # Don't go later than 7pm
+
+    return render_template("day_rankings.html", 
+                         rankings=rankings,
+                         date=date,
+                         mode=mode,
+                         start_hour=start_hour,
+                         start_minute=start_minute,
+                         earliest_hour=earliest_hour,
+                         latest_hour=latest_hour)
+
+# ...existing code...

@@ -53,10 +53,11 @@ def create_app():
         settings_bp, tie_breakers_bp, chatbot_bp, maintenance_bp
     )
 
-    app.register_blueprint(bp, url_prefix='/')  # Fix: Add explicit url_prefix
+    # Register blueprints without url_prefix for main routes
+    app.register_blueprint(bp)  # Remove url_prefix to handle root routes
     app.register_blueprint(attendance_bp, url_prefix="/attendance")
     app.register_blueprint(audit_bp)
-    app.register_blueprint(rankings_bp, url_prefix="/rankings")
+    app.register_blueprint(rankings_bp)  # Remove prefix to fix rankings routes
     app.register_blueprint(settings_bp, url_prefix="/settings")
     app.register_blueprint(tie_breakers_bp, url_prefix="/tie-breakers")
     app.register_blueprint(chatbot_bp, url_prefix="/chatbot")

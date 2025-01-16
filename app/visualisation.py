@@ -1,7 +1,7 @@
 from collections import defaultdict
 from datetime import datetime, timedelta
 from typing import List, Dict, Any
-from requests import request
+from flask import request  # Change this import
 import logging
 
 from .data import calculate_daily_score, load_data
@@ -29,7 +29,7 @@ def calculate_arrival_patterns(data):
 def calculate_points_progression(data):
     settings = load_settings()
     progression = {}
-    mode = request.args.get('mode', 'last-in')
+    mode = request.args.get('mode', 'last-in')  # Now using Flask's request object
     
     for entry in data:
         try:
@@ -40,7 +40,7 @@ def calculate_points_progression(data):
             # Get scores for the entry
             scores = calculate_daily_score(entry, settings)
             # Use the appropriate score based on mode
-            points = scores['last_in'] if mode == 'last_in' else scores['early_bird']
+            points = scores['last_in'] if mode == 'last-in' else scores['early_bird']
             
             progression[date]['total'] += points
             progression[date]['count'] += 1

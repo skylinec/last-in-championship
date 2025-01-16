@@ -70,19 +70,19 @@ def load_settings():
             init_settings()
             settings = db.query(Settings).first()
         
-        # Convert Settings object to dict using to_dict method
-        settings_dict = settings.to_dict()
-        
-        # Ensure points dict has required fields
-        if "daily_shifts" not in settings_dict["points"]:
-            settings_dict["points"]["daily_shifts"] = {
-                day: {"hours": 9, "start": "09:00"}
-                for day in ["monday", "tuesday", "wednesday", "thursday", "friday"]
-            }
-
-        if "rules" not in settings_dict["points"]:
-            settings_dict["points"]["rules"] = []
-
-        return settings_dict
+        return {
+            "points": settings.points if isinstance(settings.points, dict) else {},
+            "late_bonus": settings.late_bonus,
+            "remote_days": settings.remote_days,
+            "core_users": settings.core_users,
+            "enable_streaks": settings.enable_streaks,
+            "streak_multiplier": settings.streak_multiplier,
+            "enable_tiebreakers": settings.enable_tiebreakers,
+            "tiebreaker_points": settings.tiebreaker_points,
+            "tiebreaker_expiry": settings.tiebreaker_expiry,
+            "auto_resolve_tiebreakers": settings.auto_resolve_tiebreakers,
+            "tiebreaker_weekly": settings.tiebreaker_weekly,
+            "tiebreaker_monthly": settings.tiebreaker_monthly
+        }
     finally:
         db.close()

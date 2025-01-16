@@ -35,7 +35,7 @@ from .sockets import notify_game_update, socketio
 from .tie_breakers import (check_tie_breaker_completion, create_game,
                            create_next_game, create_next_game_after_draw,
                            create_test_tie_breaker, determine_winner)
-from .utils import init_settings
+from .utils import init_settings, load_settings
 from .visualisation import (calculate_arrival_patterns, calculate_average_time,
                             calculate_daily_activity, calculate_daily_score,
                             calculate_points_progression,
@@ -376,33 +376,6 @@ def log_attendance():
 # SETTINGS
 # -------------
 
-@HashableCacheWithMetrics
-def load_settings():
-    """Load settings with proper type conversion and defaults"""
-    db = SessionLocal()
-    try:
-        settings = db.query(Settings).first()
-        if not settings:
-            init_settings()
-            settings = db.query(Settings).first()
-        
-        # Convert Settings object to dict using to_dict method
-        settings_dict = settings.to_dict()
-        
-        # Ensure points dict has required fields
-        if "daily_shifts" not in settings_dict["points"]:
-            settings_dict["points"]["daily_shifts"] = {
-                day: {"hours": 9, "start": "09:00"}
-                for day in ["monday", "tuesday", "wednesday", "thursday", "friday"]
-            }
-
-        if "rules" not in settings_dict["points"]:
-            settings_dict["points"]["rules"] = []
-
-        return settings_dict
-    finally:
-        db.close()
-
 # Add cache invalidation on settings update
 def save_settings(settings_data):
     """Update settings with cache invalidation"""
@@ -630,27 +603,25 @@ def view_rankings(period, date_str=None):
         
         # Get current date (either from URL or today)
         try:
-            if (date_str):
-                current_date = datetime.strptime(date_str, '%Y-%m-%d')
-            else:
-                current_date = datetime.now()
+            current_date = datetime.strptime(date_str, '%Y-%m-%d') if date_str else datetime.now()
             
             # For weekly view, always snap to Monday
-            if (period == 'week'):
+            if period == 'week':
                 current_date = current_date - timedelta(days=current_date.weekday())
             
             # Calculate period end date
-            if (period == 'week'):
+            if period == 'week':
                 period_end = current_date + timedelta(days=6)
-            elif (period == 'month'):
+            elif period == 'month':
                 next_month = current_date.replace(day=28) + timedelta(days=4)
                 period_end = next_month - timedelta(days=next_month.day)
             else:
                 period_end = current_date
             
             with rankings_lock:
-                # Ensure thread-safe access to data
                 data = load_data()
+                settings = load_settings()
+                
                 if not data:
                     app.logger.warning("No data found for rankings")
                     return render_template("rankings.html", 
@@ -662,63 +633,23 @@ def view_rankings(period, date_str=None):
                                         mode=mode,
                                         streaks_enabled=False)
                 
-                rankings = calculate_scores(data, period, current_date)
+                # Calculate rankings with period and settings
+                period_start = current_date.strftime('%Y-%m-%d')
+                period_end = period_end.strftime('%Y-%m-%d')
                 
-                # Process each ranking entry to add time data
+                # Filter data for period
+                period_data = [
+                    entry for entry in data 
+                    if period_start <= entry["date"] <= period_end
+                ]
+                
+                rankings = calculate_scores(period_data, settings, mode)
+                
+                # Process rankings with streak information
                 for rank in rankings:
-                    user_entries = [e for e in data if e["name"] == rank["name"] and 
-                                in_period(e, period, current_date) and
-                                normalize_status(e["status"]) in ["in_office", "remote"]]
-                    
-                    # Set default values first
-                    rank.update({
-                        "time": "N/A",
-                        "time_obj": datetime.strptime("09:00", "%H:%M"),
-                        "shift_length": 540,
-                        "end_time": "18:00",
-                        "current_streak": 0,
-                        "max_streak": 0
-                    })
-                    
-                    if user_entries:
-                        # Calculate average time from entries
-                        times = [datetime.strptime(e["time"], "%H:%M") for e in user_entries]
-                        avg_time = sum((t.hour * 60 + t.minute) for t in times) // len(times)
-                        avg_hour = avg_time // 60
-                        avg_minute = avg_time % 60
-                        
-                        rank["time"] = f"{avg_hour:02d}:{avg_minute:02d}"
-                        rank["time_obj"] = datetime.strptime(rank["time"], "%H:%M")
-                        end_time = rank["time_obj"] + timedelta(minutes=rank["shift_length"])
-                        rank["end_time"] = end_time.strftime('%H:%M')
-                    
-                    # Add streak information
                     streak = db.query(UserStreak).filter_by(username=rank["name"]).first()
-                    if streak:
-                        rank["current_streak"] = streak.current_streak
-                        rank["max_streak"] = streak.max_streak
-                
-                settings = load_settings()
-                
-                # Calculate earliest and latest hours from actual data
-                all_times = []
-                for rank in rankings:
-                    if rank.get('time') and rank['time'] != 'N/A':
-                        time_obj = datetime.strptime(rank['time'], '%H:%M')
-                        all_times.append(time_obj)
-                        if rank.get('end_time') and rank['end_time'] != 'N/A':
-                            end_obj = datetime.strptime(rank['end_time'], '%H:%M')
-                            all_times.append(end_obj)
-
-                earliest_hour = 7  # Default earliest
-                latest_hour = 19  # Default latest
-                
-                if all_times:
-                    earliest_time = min(all_times)
-                    latest_time = max(all_times)
-                    # Round down/up to nearest hour
-                    earliest_hour = max(7, earliest_time.hour)  # Don't go earlier than 7am
-                    latest_hour = min(19, latest_time.hour + 1)  # Don't go later than 7pm
+                    rank["current_streak"] = streak.current_streak if streak else 0
+                    rank["max_streak"] = streak.max_streak if streak else 0
                 
                 template_data = {
                     'rankings': rankings,
@@ -727,23 +658,18 @@ def view_rankings(period, date_str=None):
                     'current_display': format_date_range(current_date, period_end, period),
                     'current_month_value': current_date.strftime('%Y-%m'),
                     'mode': mode,
-                    'streaks_enabled': settings.get("enable_streaks", False),
-                    'earliest_hour': earliest_hour,
-                    'latest_hour': latest_hour
+                    'streaks_enabled': settings.get("enable_streaks", False)
                 }
                 
-                app.logger.debug(f"Rankings template data: {template_data}")
                 return render_template("rankings.html", **template_data)
-            
+                
         except ValueError as e:
             app.logger.error(f"Date parsing error: {str(e)}")
-            return render_template("error.html", 
-                                error=f"Invalid date format: {str(e)}")
+            return render_template("error.html", error=f"Invalid date format: {str(e)}")
             
     except Exception as e:
         app.logger.error(f"Rankings error: {str(e)}")
-        return render_template("error.html", 
-                            error=f"Failed to load rankings: {str(e)}")
+        return render_template("error.html", error=f"Failed to load rankings: {str(e)}")
     finally:
         db.close()
 

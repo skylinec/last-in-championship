@@ -29,7 +29,8 @@ services:
              "--timeout", "120",
              "--keep-alive", "5",
              "--log-level", "info",
-             "main_old:app"]
+             "wsgi:application"]
+
     ports:
       - "${PORT:-9000}:9000"
 

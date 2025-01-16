@@ -28,7 +28,10 @@
             </div>
         </div>
     {% elif period == 'month' %}
-        <input type="month" id="periodSelect" value="{{ current_month_value }}" onchange="loadPeriod(this.value)">
+        <input type="month" 
+               id="periodSelect" 
+               value="{{ current_month_value }}" 
+               onchange="loadPeriod(this.value)">
     {% endif %}
     <button onclick="changePeriod(1)">Next {{ period|title }}</button>
 </div>
@@ -103,9 +106,9 @@
             <span class="timeline-name">{{ entry.name }}</span>
             <div class="timeline-bar-container">
                 <div class="timeline-bar" 
-                     style="left: calc(((entry.time_obj.hour * 60 + entry.time_obj.minute) - (earliest_hour * 60))
-                                       / (((latest_hour - earliest_hour) * 60)) * 100%);
-                            width: calc((entry.shift_length / ((latest_hour - earliest_hour) * 60)) * 100%);"
+                     style="left: calc((({{ time_to_minutes(entry.time) }} - {{ earliest_hour * 60 }})
+                                       / ({{ (latest_hour - earliest_hour) * 60 }})) * 100%);
+                            width: calc(({{ entry.shift_length }} / ({{ (latest_hour - earliest_hour) * 60 }})) * 100%);"
                      {% if period != 'day' %}
                      title="{{ entry.name }}: Average start {{ entry.time }} - end {{ entry.end_time }}"
                      {% else %}

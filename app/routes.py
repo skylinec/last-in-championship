@@ -657,6 +657,33 @@ def view_audit():
 # RANKINGS
 # -------------
 
+def calculate_period_averages(rankings, period):
+    """Calculate average arrival times for weekly/monthly views"""
+    for rank in rankings:
+        arrival_times = rank.get('stats', {}).get('arrival_times', [])
+        if arrival_times:
+            avg_time = calculate_average_time(arrival_times)
+            if avg_time != "N/A":
+                avg_datetime = datetime.strptime(avg_time, '%H:%M')
+                
+                # Calculate average shift length from points settings
+                settings = load_settings()
+                shift_length = float(settings.get('points', {}).get('shift_length', 9))
+                
+                # Calculate end time
+                end_datetime = avg_datetime + timedelta(hours=shift_length)
+                
+                rank['time'] = avg_time
+                rank['time_obj'] = avg_datetime.time()
+                rank['end_time'] = end_datetime.strftime('%H:%M')
+                rank['shift_length'] = shift_length * 60  # Convert hours to minutes
+        else:
+            # Set default values if no arrival times
+            rank['time'] = "N/A"
+            rank['time_obj'] = datetime.strptime("00:00", '%H:%M').time()
+            rank['end_time'] = "N/A"
+            rank['shift_length'] = 540  # Default 9 hours in minutes
+
 @bp.route("/rankings/<period>")
 @bp.route("/rankings/<period>/<date_str>")
 @login_required
@@ -717,11 +744,19 @@ def view_rankings(period, date_str=None):
                 
                 rankings = calculate_scores(data, period, current_date, mode=mode)
                 
+                # Add this after rankings calculation
+                if period in ['week', 'month']:
+                    calculate_period_averages(rankings, period)
+                
                 # Calculate earliest and latest hours from actual data
                 all_times = []
                 for rank in rankings:
-                    arrival_times = rank.get('stats', {}).get('arrival_times', [])
-                    all_times.extend(arrival_times)
+                    if rank.get('time') and rank['time'] != "N/A":
+                        time_obj = datetime.strptime(rank['time'], '%H:%M')
+                        all_times.append(time_obj)
+                        if rank.get('end_time') and rank['end_time'] != "N/A":
+                            end_obj = datetime.strptime(rank['end_time'], '%H:%M')
+                            all_times.append(end_obj)
                 
                 earliest_hour = 7  # Default earliest
                 latest_hour = 19  # Default latest
@@ -731,7 +766,7 @@ def view_rankings(period, date_str=None):
                     latest_time = max(all_times)
                     earliest_hour = max(7, earliest_time.hour)  # Don't go earlier than 7am
                     latest_hour = min(19, latest_time.hour + 1)  # Don't go later than 7pm
-                
+
                 template_data = {
                     'rankings': rankings,
                     'period': period,

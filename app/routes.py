@@ -670,8 +670,14 @@ def view_rankings(period, date_str=None):
         
         # Get current date (either from URL or today)
         try:
-            if (date_str):
+            if date_str:
                 current_date = datetime.strptime(date_str, '%Y-%m-%d')
+                # Validate date is not in future
+                if current_date.date() > datetime.now().date():
+                    return render_template("error.html", 
+                                        error="Invalid Date",
+                                        details="Cannot view rankings for future dates.",
+                                        back_link=url_for('bp.index'))
             else:
                 current_date = datetime.now()
             

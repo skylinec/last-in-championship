@@ -7,13 +7,21 @@
 <div class="period-selector">
     <button onclick="changePeriod(-1)">Previous {{ period|title }}</button>
     {% if period == 'day' %}
-        <input type="date" id="periodSelect" value="{{ current_date }}" onchange="loadPeriod(this.value)">
+        <input type="date" 
+               id="periodSelect" 
+               value="{{ current_date }}" 
+               max="{{ today.strftime('%Y-%m-%d') }}"
+               onchange="loadPeriod(this.value)">
     {% elif period == 'week' %}
         <div class="week-picker">
             <button onclick="loadThisWeek()">Current Week</button>
             <div class="date-selector">
                 <label>Select any date in the week:</label>
-                <input type="date" id="weekSelect" value="{{ current_date }}" onchange="loadWeek(this.value)">
+                <input type="date" 
+                       id="weekSelect" 
+                       value="{{ current_date }}"
+                       max="{{ today.strftime('%Y-%m-%d') }}"
+                       onchange="loadWeek(this.value)">
             </div>
             <div class="current-week">
                 {{ current_display }}

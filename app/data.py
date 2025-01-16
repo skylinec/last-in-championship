@@ -86,8 +86,17 @@ def load_data():
     finally:
         db.close()
 
-def calculate_scores(data, settings, mode='last-in'):
-    """Calculate scores for the given data and settings"""
+def calculate_scores(data, period, current_date):
+    """Calculate scores with proper date validation"""
+    # Ensure current_date is not in the future
+    now = datetime.now()
+    if current_date > now:
+        return []  # Return empty list for future dates
+        
+    # Convert current_date to datetime if it's a string
+    if isinstance(current_date, str):
+        current_date = datetime.strptime(current_date, '%Y-%m-%d')
+
     rankings = defaultdict(lambda: {
         "name": "",
         "points": 0,

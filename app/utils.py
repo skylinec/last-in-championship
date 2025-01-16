@@ -19,46 +19,41 @@ def get_core_users():
     return settings.core_users if settings else []
 
 def init_settings():
-    """Initialize default settings"""
+    """Initialize settings if not exists"""
     db = SessionLocal()
-    try:
-        if db.query(Settings).first() is None:
-            default_settings = Settings(
-                id=str(uuid.uuid4()),
-                points={
-                    "in_office": 10,
-                    "remote": 8,
-                    "sick": 5,
-                    "leave": 5,
-                    "shift_length": 9,
-                    "daily_shifts": {
-                        day: {"hours": 9, "start": "09:00"}
-                        for day in ["monday", "tuesday", "wednesday", "thursday", "friday"]
-                    },
-                    "working_days": {
-                        user: ['mon','tue','wed','thu','fri']
-                        for user in ["Matt", "Kushal", "Nathan", "Michael", "Ben"]
-                    },
-                    "rules": []
+    if not db.query(Settings).first():
+        default_settings = Settings(
+            points={
+                "in_office": 10,
+                "remote": 8,
+                "sick": 5,
+                "leave": 5,
+                "shift_length": 9,
+                "daily_shifts": {
+                    day: {"hours": 9, "start": "09:00"}
+                    for day in ["monday", "tuesday", "wednesday", "thursday", "friday"]
                 },
-                late_bonus=1,
-                remote_days={},
-                core_users=["Matt", "Kushal", "Nathan", "Michael", "Ben"],
-                enable_streaks=False,
-                streak_multiplier=0.5,
-                streaks_enabled=False,
-                streak_bonus=0.5,
-                enable_tiebreakers=False,
-                tiebreaker_points=5,
-                tiebreaker_expiry=24,
-                auto_resolve_tiebreakers=False,
-                tiebreaker_weekly=True,
-                tiebreaker_monthly=True
-            )
-            db.add(default_settings)
-            db.commit()
-    finally:
-        db.close()
+                "working_days": {
+                    user: ['mon','tue','wed','thu','fri'] 
+                    for user in ["Matt", "Kushal", "Nathan", "Michael", "Ben"]
+                }
+            },
+            late_bonus=2.0,  # Ensure late_bonus is positive for last-in mode
+            early_bonus=0.0,  # Set early_bonus to 0 to enforce last-in mode
+            remote_days={},
+            core_users=["Matt", "Kushal", "Nathan", "Michael", "Ben"],
+            enable_streaks=False,
+            streak_multiplier=0.5,
+            enable_tiebreakers=False,
+            tiebreaker_points=5,
+            tiebreaker_expiry=24,
+            auto_resolve_tiebreakers=False,
+            tiebreaker_weekly=True,
+            tiebreaker_monthly=True
+        )
+        db.add(default_settings)
+        db.commit()
+    db.close()
 
 @HashableCacheWithMetrics
 def load_settings():

@@ -665,7 +665,7 @@ def view_rankings(period, date_str=None):
     RANKING_CALLS.inc()
     db = SessionLocal()
     try:
-        # Validate and normalize mode parameter
+        # Change default mode to 'last_in'
         mode = request.args.get('mode', 'last_in')
         if mode not in ['last_in', 'early_bird']:
             app.logger.warning(f"Invalid mode provided: {mode}, defaulting to last-in")

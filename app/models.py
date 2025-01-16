@@ -40,7 +40,7 @@ class Settings(Base):
     id = Column(Integer, primary_key=True)
     points = Column(JSON)
     late_bonus = Column(Float, default=2.0)
-    early_bonus = Column(Float, default=2.0)
+    early_bonus = Column(Float, default=0.0)
     remote_days = Column(JSON)
     core_users = Column(JSON)
     enable_streaks = Column(Boolean, default=False)

@@ -1087,6 +1087,7 @@
             const urlParams = new URLSearchParams(window.location.search);
             const urlMode = urlParams.get('mode');
             const savedMode = localStorage.getItem('championshipMode');
+            // Changed default to true (last-in mode)
             const isLastIn = urlMode ? urlMode === 'last-in' : (savedMode ? savedMode === 'last-in' : true);
 
             toggle.checked = isLastIn;

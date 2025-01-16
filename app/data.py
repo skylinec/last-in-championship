@@ -379,8 +379,8 @@ def calculate_daily_score(entry, settings, position=None, total_entries=None, mo
             db.close()
 
     return {
-        "early-bird": context['current_points'] + early_bird_bonus - streak_bonus + tie_breaker_points,
-        "last-in": context['current_points'] + last_in_bonus + streak_bonus - tie_breaker_points,
+        "last_in": context['current_points'] + last_in_bonus + streak_bonus - tie_breaker_points,
+        "early_bird": context['current_points'] + early_bird_bonus - streak_bonus + tie_breaker_points,
         "base": context['current_points'],
         "streak": streak_bonus,
         "position_bonus": last_in_bonus if mode == 'last-in' else early_bird_bonus,

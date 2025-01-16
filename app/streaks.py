@@ -184,29 +184,29 @@ def generate_streaks():
     finally:
         db.close()
 
-def calculate_current_streak(username):
-    """Calculate current active streak"""
+def calculate_current_streak(name):
+    """Calculate current streak for a user"""
     db = SessionLocal()
     try:
-        today = datetime.now().date()
-        
-        # Get most recent entries, ordered by date descending
-        entries = db.query(Entry).filter(
-            Entry.name == username,
-            Entry.status.in_(['in-office', 'remote'])
-        ).order_by(Entry.date.desc()).all()
-        
+        # Use proper table reference and string formatting in query
+        entries = db.execute(text("""
+            SELECT date, status 
+            FROM entries 
+            WHERE name = :name 
+            AND status IN ('in-office', 'remote')
+            ORDER BY date DESC
+        """), {"name": name}).fetchall()
+
         if not entries:
             return 0
-            
+
         streak = 1
         last_date = datetime.strptime(entries[0].date, "%Y-%m-%d").date()
-        
-        # Skip first entry as it's counted above
+
         for entry in entries[1:]:
             entry_date = datetime.strptime(entry.date, "%Y-%m-%d").date()
             days_between = (last_date - entry_date).days
-            
+
             if days_between > 3:  # More than a weekend
                 break
             elif days_between > 1:
@@ -219,11 +219,14 @@ def calculate_current_streak(username):
                         break
                 if not weekend_only:
                     break
-            
+
             streak += 1
             last_date = entry_date
-            
+
         return streak
-        
+
+    except Exception as e:
+        logging.error(f"Error calculating streak: {str(e)}")
+        return 0
     finally:
         db.close()

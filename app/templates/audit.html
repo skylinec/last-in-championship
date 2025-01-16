@@ -453,21 +453,28 @@ function applyFilters(requestedPage = null) {
     const toDate = document.getElementById('to').value;
     const perPage = document.getElementById('entriesPerPage').value;
     
+    // Get selected values, handling 'all' option
+    const actions = Array.from(actionSelect.selectedOptions)
+        .map(opt => opt.value)
+        .filter(val => val !== 'all');
+    
+    const users = Array.from(userSelect.selectedOptions)
+        .map(opt => opt.value)
+        .filter(val => val !== 'all');
+
     // Get current page or use requested page
     const currentPage = document.getElementById('currentPage');
     const targetPage = requestedPage || currentPage.textContent;
 
-    const actions = Array.from(actionSelect.selectedOptions).map(opt => opt.value);
-    const users = Array.from(userSelect.selectedOptions).map(opt => opt.value);
-
-    const params = new URLSearchParams({
-        action: actions.join(','),
-        user: users.join(','),
-        from: fromDate || '',
-        to: toDate || '',
-        page: targetPage,
-        per_page: perPage
-    });
+    // Build query parameters, only including non-empty values
+    const params = new URLSearchParams();
+    
+    if (actions.length > 0) params.set('action', actions.join(','));
+    if (users.length > 0) params.set('user', users.join(','));
+    if (fromDate) params.set('from', fromDate);
+    if (toDate) params.set('to', toDate);
+    if (perPage) params.set('per_page', perPage);
+    if (targetPage) params.set('page', targetPage);
 
     window.location.href = `/audit?${params.toString()}`;
 }

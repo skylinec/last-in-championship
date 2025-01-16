@@ -115,8 +115,46 @@ def calculate_scores(data, settings, mode='last-in'):
     
     return results
 
+def get_settings():
+    """Get settings with proper object conversion"""
+    db = SessionLocal()
+    try:
+        settings = db.query(Settings).first()
+        if not settings:
+            return {
+                "points": {},
+                "late_bonus": 2.0,
+                "early_bonus": 2.0,
+                "remote_days": {},
+                "core_users": [],
+                "enable_streaks": False,
+                "streak_multiplier": 0.5,
+                "enable_tiebreakers": False,
+                "tiebreaker_points": 5
+            }
+        
+        # Always return a dictionary, not the Settings object
+        return {
+            "points": dict(settings.points or {}),
+            "late_bonus": float(settings.late_bonus or 2.0),
+            "early_bonus": float(settings.early_bonus or 2.0),
+            "remote_days": dict(settings.remote_days or {}),
+            "core_users": list(settings.core_users or []),
+            "enable_streaks": bool(settings.enable_streaks),
+            "streak_multiplier": float(settings.streak_multiplier or 0.5),
+            "enable_tiebreakers": bool(settings.enable_tiebreakers),
+            "tiebreaker_points": int(settings.tiebreaker_points or 5),
+            "tiebreaker_types": dict(settings.tiebreaker_types or {})
+        }
+    finally:
+        db.close()
+
 def calculate_daily_score(entry, settings, position=None, total_entries=None, mode='last-in'):
     """Calculate score for a single day's entry with proper streak handling"""
+    # Ensure settings is a dict
+    if not isinstance(settings, dict):
+        settings = get_settings()
+
     entry_date = datetime.strptime(entry["date"], '%Y-%m-%d')
     weekday = entry_date.strftime('%A').lower()
     

@@ -27,12 +27,12 @@ def init_app(app):
     @app.template_filter('format_date')
     def format_date(value):
         """Format date for template display"""
-        if isinstance(value, str):
-            try:
-                value = datetime.strptime(value, '%Y-%m-%d').date()
-            except ValueError:
-                return value
-        return value.strftime('%d/%m/%Y') if value else ''
+        if not value:
+            return ''
+        # Ensure value is a date/datetime, otherwise return it unchanged
+        if hasattr(value, 'strftime'):
+            return value.strftime('%d/%m/%Y')
+        return value
 
     @app.template_filter('format_time')
     def format_time(value):

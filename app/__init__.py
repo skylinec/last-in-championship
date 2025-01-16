@@ -11,6 +11,7 @@ from .metrics import metrics_app, start_metrics_updater
 from .migrations.run_migrations import run_migrations
 from .sockets import notify_game_update, socketio
 from .utils import init_settings
+from .routes import bp, init_app
 
 
 def create_app():
@@ -24,6 +25,7 @@ def create_app():
 
     app = Flask(__name__)
     app.secret_key = os.getenv('SECRET_KEY', 'dev-secret-key')
+    app.config.from_object('config')
 
     # Attach prometheus WSGI app
     app.wsgi_app = DispatcherMiddleware(app.wsgi_app, {
@@ -47,26 +49,11 @@ def create_app():
     logger.info("Initializing default settings...")
     init_settings()
 
-    # Import blueprints after they've loaded their routes
-    from .blueprints import (
-        bp, api_rules_bp, attendance_bp, audit_bp, rankings_bp,
-        settings_bp, tie_breakers_bp, chatbot_bp, maintenance_bp,
-        visualisations_bp, streaks_bp, history_bp
-    )
-
-    # Register blueprints without prefixes
+    # Initialize template filters first
+    init_app(app)
+    
+    # Register blueprint after filters
     app.register_blueprint(bp)
-    app.register_blueprint(attendance_bp)
-    app.register_blueprint(audit_bp)
-    app.register_blueprint(rankings_bp)
-    app.register_blueprint(settings_bp)
-    app.register_blueprint(tie_breakers_bp)
-    app.register_blueprint(chatbot_bp)
-    app.register_blueprint(maintenance_bp)
-    app.register_blueprint(api_rules_bp)
-    app.register_blueprint(visualisations_bp)
-    app.register_blueprint(streaks_bp)
-    app.register_blueprint(history_bp)
 
     # Initialize SocketIO
     socketio.init_app(

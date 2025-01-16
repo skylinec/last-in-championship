@@ -49,14 +49,41 @@ from .visualisation import (calculate_arrival_patterns, calculate_average_time,
 # Remove this line since we moved it to blueprints.py:
 # bp = Blueprint('bp', __name__)
 
-def minutes_to_time(minutes):
-    """Convert minutes since midnight to HH:MM format."""
-    hours = minutes // 60
-    mins = minutes % 60
-    return f"{hours:02d}:{mins:02d}"
-
-# Register the filter with the blueprint
-bp.add_app_template_filter(minutes_to_time)
+def register_template_filters(app):
+    """Register custom template filters"""
+    
+    @app.template_filter('time_to_minutes')
+    def time_to_minutes(time_str):
+        """Convert time string (HH:MM) to minutes since midnight"""
+        if not time_str:
+            return 0
+        try:
+            hours, minutes = map(int, time_str.split(':'))
+            return hours * 60 + minutes
+        except (ValueError, AttributeError):
+            return 0
+    
+    @app.template_filter('minutes_to_time')
+    def minutes_to_time(minutes):
+        """Convert minutes since midnight to HH:MM format"""
+        if not minutes:
+            return "00:00"
+        try:
+            hours = int(minutes) // 60
+            mins = int(minutes) % 60
+            return f"{hours:02d}:{mins:02d}"
+        except (ValueError, TypeError):
+            return "00:00"
+    
+    @app.template_filter('format_date')
+    def format_date(value):
+        """Format date for template display"""
+        if isinstance(value, str):
+            try:
+                value = datetime.strptime(value, '%Y-%m-%d').date()
+            except ValueError:
+                return value
+        return value.strftime('%d/%m/%Y') if value else ''
 
 rankings_lock = Lock()
 
@@ -351,30 +378,44 @@ def log_attendance():
 
 @HashableCacheWithMetrics
 def load_settings():
+    """Load settings with proper type conversion and defaults"""
     db = SessionLocal()
     try:
         settings = db.query(Settings).first()
         if not settings:
             init_settings()
             settings = db.query(Settings).first()
-        result = {
-            "points": settings.points,
-            "late_bonus": settings.late_bonus,
-            "remote_days": settings.remote_days,
-            "core_users": settings.core_users,
-            "enable_streaks": settings.enable_streaks,
-            "streak_multiplier": settings.streak_multiplier,
-            "streaks_enabled": settings.streaks_enabled,
-            "streak_bonus": settings.streak_bonus,
-            "rules": settings.points.get('rules', []),  # Add rules to response
-            "enable_tiebreakers": settings.enable_tiebreakers,
-            "tiebreaker_points": settings.tiebreaker_points,
-            "tiebreaker_expiry": settings.tiebreaker_expiry,
-            "auto_resolve_tiebreakers": settings.auto_resolve_tiebreakers,
-            "tiebreaker_weekly": settings.tiebreaker_weekly,  # Add this
-            "tiebreaker_monthly": settings.tiebreaker_monthly,  # Add this
+        
+        # Convert database object to dict with proper types
+        settings_dict = {
+            "points": dict(settings.points or {}),
+            "late_bonus": float(settings.late_bonus or 0.0),
+            "remote_days": dict(settings.remote_days or {}),
+            "core_users": list(settings.core_users or []),
+            "enable_streaks": bool(settings.enable_streaks),
+            "streak_multiplier": float(settings.streak_multiplier or 0.5),
+            "streaks_enabled": bool(settings.streaks_enabled),
+            "streak_bonus": float(settings.streak_bonus or 0.5),
+            "enable_tiebreakers": bool(settings.enable_tiebreakers),
+            "tiebreaker_points": int(settings.tiebreaker_points or 5),
+            "tiebreaker_expiry": int(settings.tiebreaker_expiry or 24),
+            "auto_resolve_tiebreakers": bool(settings.auto_resolve_tiebreakers),
+            "tiebreaker_weekly": bool(settings.tiebreaker_weekly),
+            "tiebreaker_monthly": bool(settings.tiebreaker_monthly),
+            "monitoring_start_date": settings.monitoring_start_date
         }
-        return result
+
+        # Ensure points dict has required fields
+        if "daily_shifts" not in settings_dict["points"]:
+            settings_dict["points"]["daily_shifts"] = {
+                day: {"hours": 9, "start": "09:00"}
+                for day in ["monday", "tuesday", "wednesday", "thursday", "friday"]
+            }
+
+        if "rules" not in settings_dict["points"]:
+            settings_dict["points"]["rules"] = []
+
+        return settings_dict
     finally:
         db.close()
 
@@ -1949,3 +1990,8 @@ def internal_error(error):
                          error="Internal Server Error",
                          details="An unexpected error has occurred.", 
                          back_link=url_for('bp.index')), 500
+
+def init_app(app):
+    """Initialize the Flask app with all required settings"""
+    register_template_filters(app)
+    # Add any other initialization code here

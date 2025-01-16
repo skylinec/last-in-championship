@@ -21,7 +21,7 @@ from .caching import (CACHE_HITS,  # Or import the entire caching module
                       CACHE_MISSES)
 # Local modules
 from .database import Base, engine
-from .metrics import metrics_app, start_metrics_updater
+from .metrics import metrics_app, start_metrics_updater, record_request_metric
 from .utils import init_settings
 # Import socketio instance from sockets.py
 from .sockets import socketio

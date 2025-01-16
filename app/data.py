@@ -8,7 +8,6 @@ from .database import SessionLocal
 from .utils import get_settings  # Use utils instead
 from .streaks import calculate_streak_for_date, calculate_current_streak
 from .helpers import in_period, calculate_average_time
-from .app import app
 
 # Create a logger instance
 logger = logging.getLogger(__name__)
@@ -65,7 +64,7 @@ def evaluate_rule(rule, entry, context):
                 return context['streak'] * context.get('streak_multiplier', 0.5)
         return 0
     except (ValueError, KeyError, TypeError) as e:
-        app.logger.error(f"Error evaluating rule: {str(e)}")
+        logger.error(f"Error evaluating rule: {str(e)}")
         return 0
 
 def load_data():

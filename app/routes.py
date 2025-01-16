@@ -823,8 +823,8 @@ def tie_breakers():
                     jsonb_agg(DISTINCT jsonb_build_object(
                         'id', g.id,
                         'game_type', g.game_type,
-                        'player1', g.player1,
-                        'player2', g.status,
+                        'player1', g.player2,
+                        'status', g.status,
                         'game_state', g.game_state,
                         'final_tiebreaker', g.final_tiebreaker
                     )) FILTER (WHERE g.id IS NOT NULL) as games
@@ -1709,7 +1709,11 @@ def day_rankings(date=None):
     
     data = load_data()
     settings = load_settings()
-    mode = request.args.get('mode', 'last-in')
+    # Change default to 'last_in' to match global setting
+    mode = request.args.get('mode', 'last_in')
+    if mode not in ['last_in', 'early_bird']:
+        app.logger.warning(f"Invalid mode provided: {mode}, defaulting to last-in")
+        mode = 'last_in'
     
     # Get entries for the specified date and sort by time
     day_entries = [e for e in data if e["date"] == date]

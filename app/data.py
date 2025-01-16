@@ -328,11 +328,18 @@ def calculate_daily_score(entry, settings, position=None, total_entries=None, mo
     early_bird_bonus = 0
     last_in_bonus = 0
     if position is not None and total_entries is not None and status in ["in_office", "remote"]:
-        # Use early_bonus for early-bird mode and late_bonus for last-in mode
-        position_bonus = position * late_bonus
-        last_in_bonus = position_bonus
-        early_bird_bonus = (total_entries + 1 - position) * early_bonus
-    
+        # Modify bonus calculation to make early-bird exactly inverse of last-in
+        # Now first person (position=1) gets bonus equal to total_entries in early-bird mode
+        # Last person (position=total_entries) gets bonus equal to total_entries in last-in mode
+        if mode == 'last_in':
+            position_bonus = position * late_bonus
+            last_in_bonus = position_bonus
+            early_bird_bonus = 0
+        else:  # early_bird mode
+            position_bonus = (total_entries + 1 - position) * early_bonus
+            early_bird_bonus = position_bonus
+            last_in_bonus = 0
+
     # Calculate streak bonus only if the entry isn't in the future
     streak_bonus = 0
     if settings.get("enable_streaks", False):

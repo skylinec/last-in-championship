@@ -23,7 +23,6 @@ from collections import defaultdict
 from .game import is_valid_move, apply_move, check_winner, create_test_games, check_connect4_winner, check_tictactoe_winner
 from .sockets import socketio, notify_game_update
 from .database import SessionLocal
-from .routes import clear_database
 from .models import (
     Entry, User, Settings, AuditLog, UserStreak,
     TieBreaker, TieBreakerParticipant, TieBreakerGame,

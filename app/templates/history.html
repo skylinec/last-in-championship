@@ -176,6 +176,13 @@ function updateTable(entries) {
     const tbody = document.getElementById('historyBody');
     tbody.innerHTML = '';
     
+    if (!entries || !entries.length) {
+        const row = document.createElement('tr');
+        row.innerHTML = '<td colspan="7" class="no-data">No entries found</td>';
+        tbody.appendChild(row);
+        return;
+    }
+    
     entries.forEach((entry, index) => {
         const row = document.createElement('tr');
         row.className = 'entry-row';
@@ -185,19 +192,19 @@ function updateTable(entries) {
         row.innerHTML = `
             <td>${entryNumber}</td>
             <td>
-                <span class="view-data">${entry.date}</span>
-                <input type="date" class="edit-controls" value="${entry.date}">
+                <span class="view-data">${entry.date || 'N/A'}</span>
+                <input type="date" class="edit-controls" value="${entry.date || ''}">
             </td>
             <td>
-                <span class="view-data">${entry.time}</span>
-                <input type="time" class="edit-controls" value="${entry.time}">
+                <span class="view-data">${entry.time || 'N/A'}</span>
+                <input type="time" class="edit-controls" value="${entry.time || ''}">
             </td>
             <td>
-                <span class="view-data">${entry.name}</span>
-                <input type="text" class="edit-controls" value="${entry.name}">
+                <span class="view-data">${entry.name || 'N/A'}</span>
+                <input type="text" class="edit-controls" value="${entry.name || ''}">
             </td>
             <td>
-                <span class="view-data">${entry.status}</span>
+                <span class="view-data">${entry.status || 'N/A'}</span>
                 <select class="edit-controls">
                     <option value="in-office" ${entry.status === 'in-office' ? 'selected' : ''}>In Office</option>
                     <option value="remote" ${entry.status === 'remote' ? 'selected' : ''}>Remote</option>

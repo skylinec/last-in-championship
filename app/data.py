@@ -183,26 +183,35 @@ def calculate_scores(data, period, current_date):
 
 def calculate_daily_score(entry, settings, position=None, total_entries=None, mode='last-in'):
     """Calculate score for a single day's entry with proper streak handling"""
-    # Get day-specific start time for late calculations
     entry_date = datetime.strptime(entry["date"], '%Y-%m-%d')
     weekday = entry_date.strftime('%A').lower()
     
-    # Get daily shifts configuration
-    daily_shifts = settings.points.get("daily_shifts", {}) if isinstance(settings, Settings) else \
-                  settings.get("points", {}).get("daily_shifts", {})
+    # Fix settings access
+    points_dict = settings.points if isinstance(settings, Settings) else settings.get("points", {})
+    daily_shifts = points_dict.get("daily_shifts", {})
     
     # Get shift configuration for the current day
     day_shift = daily_shifts.get(weekday, {
-        "hours": 9,
+        "hours": points_dict.get("shift_length", 9),
         "start": "09:00"
     })
-    
-    # Access settings properties correctly
-    points = settings.points if hasattr(settings, 'points') else {}
-    late_bonus = float(settings.late_bonus if hasattr(settings, 'late_bonus') else 2.0)
-    early_bonus = float(settings.early_bonus if hasattr(settings, 'early_bonus') else 2.0)
-    streak_multiplier = float(settings.streak_multiplier if hasattr(settings, 'streak_multiplier') else 0.5)
-    
+
+    # Access settings properties safely
+    if isinstance(settings, Settings):
+        points = settings.points
+        late_bonus = float(settings.late_bonus)
+        early_bonus = float(settings.early_bonus)
+        streak_multiplier = float(settings.streak_multiplier)
+        streaks_enabled = settings.enable_streaks
+        tiebreakers_enabled = settings.enable_tiebreakers
+    else:
+        points = settings.get("points", {})
+        late_bonus = float(settings.get("late_bonus", 2.0))
+        early_bonus = float(settings.get("early_bonus", 2.0))
+        streak_multiplier = float(settings.get("streak_multiplier", 0.5))
+        streaks_enabled = settings.get("enable_streaks", False)
+        tiebreakers_enabled = settings.get("enable_tiebreakers", False)
+
     # Get base points based on status
     status = entry["status"].replace("-", "_")
     base_points = float(points.get(status, 0)) if isinstance(points, dict) else 0

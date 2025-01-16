@@ -560,23 +560,25 @@ def view_audit():
         # Build query
         query = db.query(AuditLog)
         
-        # Apply filters
+        # Apply filters with proper SQL syntax
         if action_filter != 'all':
             query = query.filter(AuditLog.action == action_filter)
         if user_filter != 'all':
             query = query.filter(AuditLog.user == user_filter)
         if date_from:
-            query = query.filter(AuditLog.timestamp >= date_from)
+            query = query.filter(AuditLog.timestamp >= f"{date_from} 00:00:00")
         if date_to:
-            query = query.filter(AuditLog.timestamp <= date_to + " 23:59:59")
+            query = query.filter(AuditLog.timestamp <= f"{date_to} 23:59:59")
             
-        # Get total count for pagination
+        # Ensure proper ordering
+        query = query.order_by(AuditLog.timestamp.desc())
+
+        # Get total count first
         total_entries = query.count()
         total_pages = (total_entries + per_page - 1) // per_page
-        
-        # Get paginated results
-        audit_entries = query.order_by(AuditLog.timestamp.desc())\
-                           .offset((page - 1) * per_page)\
+
+        # Then get paginated results
+        audit_entries = query.offset((page - 1) * per_page)\
                            .limit(per_page)\
                            .all()
         
@@ -1709,8 +1711,16 @@ def day_rankings(date=None):
 def history():
     db = SessionLocal()
     try:
-        entries = db.query(Entry).order_by(Entry.date.desc(), Entry.time.desc()).all()
-        return render_template("history.html", entries=entries)
+        # Get all core users for filtering
+        core_users = get_core_users()
+        
+        # Get all distinct statuses for filtering
+        statuses = db.query(Entry.status).distinct().all()
+        status_list = [status[0] for status in statuses]
+
+        return render_template("history.html",
+                             users=core_users,
+                             statuses=status_list)
     finally:
         db.close()
 

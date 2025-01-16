@@ -528,6 +528,14 @@ document.addEventListener('DOMContentLoaded', () => {
         prevButton.disabled = currentPage <= 1;
         nextButton.disabled = currentPage >= totalPages;
     }
+    
+    // Set date inputs if they exist in URL
+    if (params.get('from')) {
+        document.getElementById('from').value = params.get('from');
+    }
+    if (params.get('to')) {
+        document.getElementById('to').value = params.get('to');
+    }
 });
 </script>
 {% endblock %}

@@ -47,28 +47,28 @@
                 <td>{{ rank.name }}</td>
                 <td class="score-cell" 
                     data-tooltip="Score breakdown:
-                    Base points: {{ rank.base_points }}
+                    Base points: {{ rank.base_points|default(0)|round(2) }}
                     {% if mode == 'last-in' %}
-                    Position bonus: {{ rank.position_bonus }}
-                    Streak penalty: {{ rank.streak_bonus * -1 if rank.streak_bonus else 0 }}
+                    Position bonus: {{ rank.position_bonus|default(0)|round(2) }}
+                    Streak penalty: {{ rank.streak_bonus|default(0) * -1 if rank.streak_bonus else 0|round(2) }}
                     {% else %}
-                    Position bonus: {{ rank.position_bonus }}
-                    Streak bonus: {{ rank.streak_bonus }}
+                    Position bonus: {{ rank.position_bonus|default(0)|round(2) }}
+                    Streak bonus: {{ rank.streak_bonus|default(0)|round(2) }}
                     {% endif %}
-                    Total: {{ rank.score }}">
-                    {{ rank.score }}
+                    Total: {{ rank.score|default(0)|round(2) }}">
+                    {{ rank.score|default(0)|round(2) }}
                 </td>
-                <td>{{ rank.average_arrival_time }}</td>
+                <td>{{ rank.average_arrival_time|default('N/A') }}</td>
                 {% if streaks_enabled %}
-                <td>{{ rank.current_streak }} days</td>
-                <td>{{ rank.max_streak }} days</td>
+                <td>{{ rank.current_streak|default(0) }} days</td>
+                <td>{{ rank.max_streak|default(0) }} days</td>
                 {% endif %}
                 <td>
-                    Office: {{ rank.stats.in_office }} days<br>
-                    Remote: {{ rank.stats.remote }} days<br>
-                    Sick: {{ rank.stats.sick }} days<br>
-                    Leave: {{ rank.stats.leave }} days<br>
-                    Total: {{ rank.stats.days }} days
+                    Office: {{ rank.stats.in_office|default(0) }} days<br>
+                    Remote: {{ rank.stats.remote|default(0) }} days<br>
+                    Sick: {{ rank.stats.sick|default(0) }} days<br>
+                    Leave: {{ rank.stats.leave|default(0) }} days<br>
+                    Total: {{ rank.stats.days|default(0) }} days
                 </td>
             </tr>
             {% endfor %}

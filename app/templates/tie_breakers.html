@@ -58,7 +58,7 @@
         </div>
         
         <div class="participants">
-            {% for participant in tie.participants %}
+            {% for participant in tie.participants|default([]) %}
             <div class="participant {% if participant.ready %}ready{% endif %}">
                 <span class="name">{{ participant.username }}</span>
                 {% if participant.game_choice %}

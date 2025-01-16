@@ -54,8 +54,12 @@ class Settings(Base):
     tiebreaker_types = Column(JSON)
     monitoring_start_date = Column(Date)
 
+    def get(self, key, default=None):
+        """Add get method to make Settings behave like a dict"""
+        return getattr(self, key, default)
+
     def to_dict(self):
-        """Convert Settings object to dictionary"""
+        """Improved dictionary conversion"""
         return {
             "points": dict(self.points or {}),
             "late_bonus": float(self.late_bonus or 0.0),

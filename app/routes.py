@@ -1,36 +1,3 @@
-
-# ...existing code...
-
-@bp.route('/rankings/<period>/<date_str>')
-def rankings(period, date_str):
-    try:
-        settings = get_settings()  # This now returns a dictionary
-        mode = request.args.get('mode', 'early-bird')
-        
-        # Get entries for the period
-        entries = get_entries_for_period(period, date_str)
-        
-        # Calculate rankings
-        rankings_data = calculate_rankings(entries, settings, period, mode)
-        
-        return render_template('rankings.html',
-                             rankings=rankings_data,
-                             period=period,
-                             current_date=date_str,
-                             current_display=format_period_display(period, date_str),
-                             current_month_value=format_month_value(date_str),
-                             mode=mode,
-                             streaks_enabled=settings['enable_streaks'],
-                             earliest_hour=7,
-                             latest_hour=20)
-    except Exception as e:
-        logging.error(f"Failed to load rankings: {str(e)}")
-        return render_template('error.html', error=str(e)), 500
-
-# ...existing code...
-from datetime import datetime
-from .utils import load_settings, get_core_users
-
 def init_app(app):
     """Initialize Flask app with filters and context processors"""
     
@@ -771,7 +738,7 @@ def view_rankings(period, date_str=None):
                         rank["current_streak"] = streak.current_streak
                         rank["max_streak"] = streak.max_streak
                 
-                settings = load_settings()
+                settings = get_settings()
                 
                 # Calculate earliest and latest hours from actual data
                 all_times = []

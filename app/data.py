@@ -1,16 +1,13 @@
 from decimal import Decimal
 from datetime import datetime, timedelta
-
 from sqlalchemy import text
 from flask import request
 import logging
 
-from .models import Entry
 from .database import SessionLocal
 from .routes import load_settings
 from .streaks import calculate_streak_for_date, calculate_current_streak
 from .helpers import in_period, calculate_average_time
-
 from .app import app
 
 # Create a logger instance
@@ -73,22 +70,18 @@ def evaluate_rule(rule, entry, context):
 
 def load_data():
     """Load entries from database"""
+    from .models import Entry  # Import moved inside function
     db = SessionLocal()
     try:
-        result = db.execute(text("""
-            SELECT id, date, time, name, status, timestamp
-            FROM entries
-            ORDER BY date DESC, time DESC
-        """))
-        
+        entries = db.query(Entry).all()
         return [{
-            "id": row.id,
-            "date": row.date,
-            "time": row.time,
-            "name": row.name,
-            "status": row.status,
-            "timestamp": row.timestamp.isoformat()
-        } for row in result]
+            "id": entry.id,
+            "date": entry.date,
+            "time": entry.time,
+            "name": entry.name,
+            "status": entry.status,
+            "timestamp": entry.timestamp.isoformat()
+        } for entry in entries]
     finally:
         db.close()
 

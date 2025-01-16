@@ -863,25 +863,25 @@
             {% if session.get('user') %}
             <a href="{{ url_for('bp.index') }}">Home</a>
             <a href="{{ url_for('bp.index') }}" class="nav-item">Log Attendance</a>
-            <a href="/history" class="nav-item">View/Edit History</a>
+            <a href="{{ url_for('bp.history') }}" class="nav-item">View/Edit History</a>
             <div class="dropdown nav-item">
                 <a href="#" class="dropdown-trigger">Rankings ▾</a>
                 <div class="dropdown-content">
-                    <a href="/rankings/day">Daily Rankings</a>
-                    <a href="/rankings/week">Weekly Rankings</a>
-                    <a href="/rankings/month">Monthly Rankings</a>
-                    <a href="/streaks">Streaks</a>
-                    <a href="/tie-breakers">Tie Breakers</a>
+                    <a href="{{ url_for('bp.day_rankings') }}">Daily Rankings</a>
+                    <a href="{{ url_for('bp.view_rankings', period='week') }}">Weekly Rankings</a>
+                    <a href="{{ url_for('bp.view_rankings', period='month') }}">Monthly Rankings</a>
+                    <a href="{{ url_for('bp.view_streaks') }}">Streaks</a>
+                    <a href="{{ url_for('bp.tie_breakers') }}">Tie Breakers</a>
                 </div>
             </div>
-            <a href="/visualisations" class="nav-item">Visualisations</a>
+            <a href="{{ url_for('bp.visualisations') }}" class="nav-item">Visualisations</a>
             <div class="dropdown nav-item">
                 <a href="#" class="dropdown-trigger">Admin ▾</a>
                 <div class="dropdown-content">
-                    <a href="/settings">Settings</a>
-                    <a href="/missing-entries">Missing Entries</a>
-                    <a href="/audit">Audit Trail</a>
-                    <a href="/maintenance">Maintenance</a>
+                    <a href="{{ url_for('bp.manage_settings') }}">Settings</a>
+                    <a href="{{ url_for('bp.missing_entries') }}">Missing Entries</a>
+                    <a href="{{ url_for('bp.view_audit') }}">Audit Trail</a>
+                    <a href="{{ url_for('bp.maintenance') }}">Maintenance</a>
                     <a href="/grafana">Grafana</a>
                 </div>
             </div>

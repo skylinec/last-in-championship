@@ -128,6 +128,22 @@ services:
       - db
       - monitoring
 
+  matomo:
+    image: matomo:latest
+    environment:
+      - MATOMO_DATABASE_HOST=db
+      - MATOMO_DATABASE_ADAPTER=mysql
+      - MATOMO_DATABASE_TABLES_PREFIX=matomo_
+      - MATOMO_DATABASE_USERNAME=user
+      - MATOMO_DATABASE_PASSWORD=password
+      - MATOMO_DATABASE_DBNAME=matomo
+      - MATOMO_WEBSITE_HOST=lic.mattdh.me
+      - MATOMO_WEBSITE_NAME=Last In Championship
+    volumes:
+      - matomo_data:/var/www/html/matomo
+    depends_on:
+      - db
+
 volumes:
   postgres_data:
   prometheus_data:
@@ -137,3 +153,4 @@ volumes:
   mattermost_logs:
   mattermost_config:
   bugzilla_db:
+  matomo_data:

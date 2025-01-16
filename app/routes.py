@@ -666,10 +666,10 @@ def view_rankings(period, date_str=None):
     db = SessionLocal()
     try:
         # Validate and normalize mode parameter
-        mode = request.args.get('mode', 'last-in')
-        if mode not in ['last-in', 'early-bird']:
+        mode = request.args.get('mode', 'last_in')
+        if mode not in ['last_in', 'early_bird']:
             app.logger.warning(f"Invalid mode provided: {mode}, defaulting to last-in")
-            mode = 'last-in'
+            mode = 'last_in'
             
         app.logger.debug(f"Rankings request - Period: {period}, Date: {date_str}, Mode: {mode}")
         
@@ -1195,7 +1195,7 @@ def seed_test_data():
         # Create monthly tie breaker
         month_end = datetime.now().replace(day=1) - timedelta(days=1)
         app.logger.info(f"Creating monthly tie breaker ending {month_end}")
-        tie_id = create_test_tie_breaker(db, 'monthly', month_end, 15.0, 'early-bird', test_users)
+        tie_id = create_test_tie_breaker(db, 'monthly', month_end, 15.0, 'early_bird', test_users)
         if tie_id:
             app.logger.info(f"Created monthly tie breaker with ID: {tie_id}")
             created_ties.append(tie_id)

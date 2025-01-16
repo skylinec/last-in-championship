@@ -86,12 +86,12 @@ def load_data():
     finally:
         db.close()
 
-def calculate_scores(data, period, current_date, mode='last-in'):
+def calculate_scores(data, period, current_date, mode='last_in'):
     """Calculate scores with proper date validation"""
     # Validate mode parameter
-    if mode not in ['last-in', 'early-bird']:
-        logging.warning(f"Invalid mode '{mode}' provided to calculate_scores, defaulting to last-in")
-        mode = 'last-in'
+    if mode not in ['last_in', 'early_bird']:
+        logging.warning(f"Invalid mode '{mode}' provided to calculate_scores, defaulting to last_in")
+        mode = 'last_in'
         
     # Ensure current_date is not in the future
     now = datetime.now()
@@ -155,15 +155,15 @@ def calculate_scores(data, period, current_date, mode='last-in'):
             
             if status in ["in_office", "remote"]:
                 daily_scores[name]["active_days"] += 1
-                daily_scores[name]["early_bird_total"] += scores["early-bird"]
-                daily_scores[name]["last_in_total"] += scores["last-in"]
+                daily_scores[name]["early_bird_total"] += scores["early_bird"]  # Changed from "early-bird"
+                daily_scores[name]["last_in_total"] += scores["last_in"]  # This matches what we return
                 daily_scores[name]["base_points_total"] += scores["base"]
                 daily_scores[name]["position_bonus_total"] += scores["position_bonus"]
                 daily_scores[name]["streak_bonus_total"] += scores["streak"]
                 
                 # Track achievements based on mode
-                if (mode == 'last-in' and position == total_entries) or \
-                   (mode == 'early-bird' and position == 1):
+                if (mode == 'last_in' and position == total_entries) or \
+                   (mode == 'early_bird' and position == 1):
                     daily_scores[name]["stats"]["latest_arrivals"] += 1
                 
                 arrival_time = datetime.strptime(entry["time"], "%H:%M")
@@ -179,7 +179,7 @@ def calculate_scores(data, period, current_date, mode='last-in'):
             
             rankings.append({
                 "name": name,
-                "score": round(last_in_avg if mode == 'last-in' else early_bird_avg, 2),
+                "score": round(last_in_avg if mode == 'last_in' else early_bird_avg, 2),
                 "streak": calculate_current_streak(name),
                 "stats": scores["stats"],
                 "average_arrival_time": calculate_average_time(arrival_times) if arrival_times else "N/A",
@@ -226,7 +226,7 @@ def get_settings():
     finally:
         db.close()
 
-def calculate_daily_score(entry, settings, position=None, total_entries=None, mode='last-in'):
+def calculate_daily_score(entry, settings, position=None, total_entries=None, mode='last_in'):
     """Calculate score for a single day's entry with proper streak handling"""
     # Ensure settings is a dict
     if not isinstance(settings, dict):
@@ -286,8 +286,8 @@ def calculate_daily_score(entry, settings, position=None, total_entries=None, mo
     # If it's not a working day for this user, return zero points
     if day_name not in user_working_days:
         return {
-            "early-bird": 0,
-            "last-in": 0,
+            "early_bird": 0,
+            "last_in": 0,
             "base": 0,
             "streak": 0,
             "position_bonus": 0,
@@ -348,7 +348,7 @@ def calculate_daily_score(entry, settings, position=None, total_entries=None, mo
                     multiplier = settings.get("streak_multiplier", 0.5)
                     # Reverse logic: In last-in mode, streak subtracts points (penalizes consistent lateness)
                     # In early-bird mode, streak adds points (rewards consistent earliness)
-                    streak_bonus = -streak * multiplier if mode == 'last-in' else streak * multiplier
+                    streak_bonus = -streak * multiplier if mode == 'last_in' else streak * multiplier
             finally:
                 db.close()
 
@@ -372,9 +372,9 @@ def calculate_daily_score(entry, settings, position=None, total_entries=None, mo
             
             if wins > 0:
                 base_points = settings.get("tiebreaker_points", 5) * wins
-                # In last-in mode, subtract points for winning (penalize)
-                # In early-bird mode, add points for winning (reward)
-                tie_breaker_points = -base_points if mode == 'last-in' else base_points
+                # In last_in mode, subtract points for winning (penalize)
+                # In early_bird mode, add points for winning (reward)
+                tie_breaker_points = -base_points if mode == 'last_in' else base_points
         finally:
             db.close()
 
@@ -383,11 +383,11 @@ def calculate_daily_score(entry, settings, position=None, total_entries=None, mo
         "early_bird": context['current_points'] + early_bird_bonus - streak_bonus + tie_breaker_points,
         "base": context['current_points'],
         "streak": streak_bonus,
-        "position_bonus": last_in_bonus if mode == 'last-in' else early_bird_bonus,
+        "position_bonus": last_in_bonus if mode == 'last_in' else early_bird_bonus,
         "tie_breaker": tie_breaker_points,
         "breakdown": {
             "base_points": context['current_points'],
-            "position_bonus": last_in_bonus if mode == 'last-in' else early_bird_bonus,
+            "position_bonus": last_in_bonus if mode == 'last_in' else early_bird_bonus,
             "streak_bonus": streak_bonus,
             "tie_breaker_points": tie_breaker_points
         }

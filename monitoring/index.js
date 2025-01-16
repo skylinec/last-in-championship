@@ -418,7 +418,7 @@ async function checkForTieBreakers() {
           s.period_start,
           s.period_end,
           s.early_bird_score as points,
-          'early-bird' as mode,
+          'early_bird' as mode,
           array_agg(s.username) as usernames,
           COUNT(*) as tied_count,
           au.active_user_count

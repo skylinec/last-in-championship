@@ -367,7 +367,7 @@
 async function updatePodium() {
     const period = document.getElementById('podiumPeriod').value;
     // Get current mode from toggle
-    const mode = document.getElementById('championshipToggle').checked ? 'last-in' : 'early-bird';
+    const mode = document.getElementById('championshipToggle').checked ? 'last_in' : 'early_bird';
     const response = await fetch(`/rankings/${period}?mode=${mode}`);
     const data = await response.text();
     

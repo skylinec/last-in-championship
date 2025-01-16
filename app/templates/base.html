@@ -1099,17 +1099,17 @@
                 document.body.className = mode.class;
 
                 // Store the mode preference
-                localStorage.setItem('championshipMode', isLastIn ? 'last-in' : 'early-bird');
+                localStorage.setItem('championshipMode', isLastIn ? 'last_in' : 'early_bird');
 
                 // Update current URL with new mode
                 const url = new URL(window.location.href);
-                url.searchParams.set('mode', isLastIn ? 'last-in' : 'early-bird');
+                url.searchParams.set('mode', isLastIn ? 'last_in' : 'early_bird');
                 history.replaceState(null, '', url.toString());
 
                 // Update all ranking links to include the mode
                 document.querySelectorAll('a[href*="/rankings/"]').forEach(link => {
                     const url = new URL(link.href, window.location.origin);
-                    url.searchParams.set('mode', isLastIn ? 'last-in' : 'early-bird');
+                    url.searchParams.set('mode', isLastIn ? 'last_in' : 'early_bird');
                     link.href = url.toString();
                 });
             }

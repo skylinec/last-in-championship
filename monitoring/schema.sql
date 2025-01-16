@@ -218,6 +218,18 @@ BEGIN
         OR tiebreaker_monthly IS NULL;
 END $$;
 
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'settings'
+        AND column_name = 'early_bonus'
+    ) THEN
+        ALTER TABLE settings 
+        ADD COLUMN early_bonus NUMERIC(10,2) DEFAULT 2.0;
+    END IF;
+END $$;
+
 ------------------------------------------
 -- SECTION 5: RANKINGS SYSTEM
 ------------------------------------------
@@ -296,28 +308,33 @@ scored_entries AS (
         period,
         period_start,
         period_end,
-        SUM(base_points + (
-            CASE 
-                WHEN early_position = 1 THEN 
-                    total_entries * (SELECT late_bonus FROM settings LIMIT 1)
-                ELSE 0
-            END
-        )) OVER (
+        SUM(
+            base_points + (
+                CASE 
+                    WHEN early_position = 1 THEN total_entries * (SELECT early_bonus FROM settings LIMIT 1)
+                    ELSE 0
+                END
+            )
+        )
+        OVER (
             PARTITION BY username, period, period_start
             ORDER BY date
             ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
-        ) as early_bird_points,
-        SUM(base_points + (
-            CASE 
-                WHEN late_position = 1 THEN 
-                    total_entries * (SELECT late_bonus FROM settings LIMIT 1)
-                ELSE 0
-            END
-        )) OVER (
+        ) AS early_bird_points,
+
+        SUM(
+            base_points + (
+                CASE 
+                    WHEN late_position = 1 THEN total_entries * (SELECT late_bonus FROM settings LIMIT 1)
+                    ELSE 0
+                END
+            )
+        )
+        OVER (
             PARTITION BY username, period, period_start
             ORDER BY date
             ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
-        ) as last_in_points,
+        ) AS last_in_points,
         early_position,
         late_position,
         total_entries,

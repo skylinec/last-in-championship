@@ -11,16 +11,12 @@ from .database import Base, SessionLocal
 
 # ...existing code...
 
-def migrate_database():
+def get_core_users():
+    """Get list of core users from settings"""
     db = SessionLocal()
     try:
-        # Create or recreate objects safely
-        db.execute("CREATE INDEX IF NOT EXISTS idx_rankings_period_end ON tie_breakers (period_end)")
-        db.execute("DROP TRIGGER IF EXISTS trg_refresh_rankings ON tie_breakers")
-        db.execute("CREATE TRIGGER trg_refresh_rankings "
-                   "AFTER INSERT ON tie_breakers "
-                   "FOR EACH ROW EXECUTE PROCEDURE refresh_rankings()")
-        db.commit()
+        settings = db.query(Settings).first()
+        return settings.core_users if settings else []
     finally:
         db.close()
 

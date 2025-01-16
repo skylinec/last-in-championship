@@ -1655,3 +1655,15 @@ def day_rankings(date=None):
                          latest_hour=latest_hour)
 
 # ...existing code...
+
+@bp.route("/history")
+@login_required
+def history():
+    db = SessionLocal()
+    try:
+        entries = db.query(Entry).order_by(Entry.date.desc(), Entry.time.desc()).all()
+        return render_template("history.html", entries=entries)
+    finally:
+        db.close()
+
+# ...existing code...

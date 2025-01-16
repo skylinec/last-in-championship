@@ -24,14 +24,14 @@ from .game import is_valid_move, apply_move, check_winner, create_test_games, ch
 from .sockets import socketio, notify_game_update
 from .database import SessionLocal
 from .routes import clear_database
-from models import (
+from .models import (
     Entry, User, Settings, AuditLog, UserStreak,
     TieBreaker, TieBreakerParticipant, TieBreakerGame,
     EnhancedQueryProcessor, get_core_users, init_settings
 )
 from .data import load_data, load_settings, decimal_to_float, calculate_scores, calculate_daily_score
-from caching import HashableCacheWithMetrics
-from metrics import (
+from .caching import HashableCacheWithMetrics
+from .metrics import (
     REQUEST_TIME, REQUEST_COUNT, IN_PROGRESS, ATTENDANCE_COUNT,
     RESPONSE_TIME, AUDIT_ACTIONS, RANKING_CALLS
 )

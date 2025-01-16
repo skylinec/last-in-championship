@@ -16,11 +16,11 @@ from gevent import monkey
 monkey.patch_all()
 
 # Local modules
-from database import engine, SessionLocal, Base
-from models import init_settings
-from metrics import metrics_app, start_metrics_updater, record_request_metric  # Our custom metrics module
-from caching import CACHE_HITS, CACHE_MISSES  # Or import the entire caching module
-from routes import bp as main_blueprint  # Single blueprint with all routes
+from .database import engine, SessionLocal, Base
+from .models import init_settings
+from .metrics import metrics_app, start_metrics_updater, record_request_metric  # Our custom metrics module
+from .caching import CACHE_HITS, CACHE_MISSES  # Or import the entire caching module
+from .routes import bp as main_blueprint  # Single blueprint with all routes
 
 # Create Flask app
 app = Flask(__name__)

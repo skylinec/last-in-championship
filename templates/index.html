@@ -51,7 +51,8 @@
     <div class="podium-container">
         <div class="podium-controls">
             <select id="podiumPeriod">
-                <option value="day">Today</option>
+                <option value="today_time" selected>Today (Time)</option>
+                <option value="today_points">Today (Points)</option>
                 <option value="week">This Week</option>
                 <option value="month">This Month</option>
             </select>
@@ -366,9 +367,32 @@
 <script>
 async function updatePodium() {
     const period = document.getElementById('podiumPeriod').value;
-    // Get current mode from toggle
     const mode = document.getElementById('championshipToggle').checked ? 'last-in' : 'early-bird';
-    const response = await fetch(`/rankings/${period}?mode=${mode}`);
+    
+    // Handle time-based podium differently
+    if (period === 'today_time') {
+        const response = await fetch('/rankings/today');
+        const data = await response.json();
+        
+        // Sort by time for time-based view
+        data.sort((a, b) => a.time.localeCompare(b.time));
+        
+        const places = ['first', 'second', 'third'];
+        places.forEach((place, index) => {
+            if (data[index]) {
+                document.getElementById(`${place}Name`).textContent = data[index].name;
+                document.getElementById(`${place}Points`).textContent = data[index].time;
+            } else {
+                document.getElementById(`${place}Name`).textContent = '-';
+                document.getElementById(`${place}Points`).textContent = '-';
+            }
+        });
+        return;
+    }
+    
+    // For points-based views, use the existing rankings endpoint
+    const actualPeriod = period.replace('_points', '');
+    const response = await fetch(`/rankings/${actualPeriod}?mode=${mode}`);
     const data = await response.text();
     
     const parser = new DOMParser();
@@ -380,7 +404,8 @@ async function updatePodium() {
         if (rows[index]) {
             const cells = rows[index].querySelectorAll('td');
             document.getElementById(`${place}Name`).textContent = cells[1].textContent;
-            document.getElementById(`${place}Points`).textContent = cells[2].textContent;
+            document.getElementById(`${place}Points`).textContent = 
+                period === 'today_points' ? `${cells[2].textContent} pts` : cells[2].textContent;
         } else {
             document.getElementById(`${place}Name`).textContent = '-';
             document.getElementById(`${place}Points`).textContent = '-';

@@ -48,11 +48,12 @@ def create_app():
     init_settings()
 
     # Register routes (Blueprints)
-    from .routes import (api_rules_bp, attendance_bp, audit_bp, chatbot_bp,
-                         main_bp, maintenance_bp, rankings_bp, settings_bp,
-                         tie_breakers_bp)
+    from .blueprints import (
+        bp, api_rules_bp, attendance_bp, audit_bp, rankings_bp,
+        settings_bp, tie_breakers_bp, chatbot_bp, maintenance_bp
+    )
 
-    app.register_blueprint(main_bp)
+    app.register_blueprint(bp)
     app.register_blueprint(attendance_bp, url_prefix="/attendance")
     app.register_blueprint(audit_bp)
     app.register_blueprint(rankings_bp, url_prefix="/rankings")

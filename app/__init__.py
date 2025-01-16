@@ -83,4 +83,6 @@ def create_app():
 
     return app
 
-create_app()
+# Create and configure the application instance
+app = create_app()
+application = app  # Add this line to expose the application for Gunicorn

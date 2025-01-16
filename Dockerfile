@@ -15,7 +15,7 @@ RUN python -c "import nltk; nltk.download('punkt'); nltk.download('stopwords'); 
 
 COPY . .
 
-ENV FLASK_APP=main
+ENV FLASK_APP=wsgi.py
 ENV FLASK_ENV=production
 ENV PORT=9000
 
@@ -24,7 +24,7 @@ EXPOSE 9000
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD curl -f http://localhost:9000/health || exit 1
 
-CMD ["gunicorn", "--bind", "0.0.0.0:9000", "--workers", "4", "-k", "gevent", "--timeout", "120", "app"]
+CMD ["gunicorn", "--bind", "0.0.0.0:9000", "--workers", "4", "-k", "gevent", "--timeout", "120", "wsgi:application"]
 
 # Add prometheus_client to the requirements
 RUN pip install prometheus_client

@@ -133,16 +133,16 @@ async function generateStreaks() {
     const settingsResult = await client.query('SELECT points FROM settings LIMIT 1');
     const workingDays = settingsResult.rows[0]?.points?.working_days || {};
 
-    // Get all entries ordered by user and date
+    // Get all entries ordered by user and date, excluding weekends
     const entries = await client.query(`
       SELECT 
         e.name, 
         e.date::date, 
         e.timestamp,
-        e.status,
-        EXTRACT(DOW FROM e.date::date) as day_of_week
+        e.status
       FROM entries e
       WHERE e.status IN ('in-office', 'remote')
+        AND EXTRACT(DOW FROM e.date::date) NOT IN (0, 6)  -- Exclude weekends
       ORDER BY e.name, e.date DESC
     `);
 
@@ -154,11 +154,6 @@ async function generateStreaks() {
     let lastTimestamp = null;
 
     for (const entry of entries.rows) {
-      // Skip if date is a weekend (0 = Sunday, 6 = Saturday)
-      if (entry.day_of_week === 0 || entry.day_of_week === 6) {
-        continue;
-      }
-
       if (entry.name !== currentUser) {
         // Save previous user's streak if valid
         if (currentUser && currentStreak > 0) {
@@ -182,23 +177,24 @@ async function generateStreaks() {
       
       // Get user's working days
       const userWorkingDays = workingDays[entry.name] || ['mon', 'tue', 'wed', 'thu', 'fri'];
-      const dayMap = {0: 'sun', 1: 'mon', 2: 'tue', 3: 'wed', 4: 'thu', 5: 'fri', 6: 'sat'};
+      const dayMap = {1: 'mon', 2: 'tue', 3: 'wed', 4: 'thu', 5: 'fri'};
       
-      // Only continue streak if all days between were weekends or non-working days
-      let onlyNonWorkingDays = true;
+      // Count only weekdays between dates
+      let workingDaysMissed = 0;
       for (let d = 1; d < daysBetween; d++) {
         const checkDate = new Date(lastDate);
         checkDate.setDate(checkDate.getDate() - d);
         const checkDayOfWeek = checkDate.getDay();
-        // Break if we find a working day in between
-        if (checkDayOfWeek !== 0 && checkDayOfWeek !== 6 && 
+        
+        // Only count if it's a weekday (Monday-Friday) and a working day for the user
+        if (checkDayOfWeek > 0 && checkDayOfWeek < 6 && 
             userWorkingDays.includes(dayMap[checkDayOfWeek])) {
-          onlyNonWorkingDays = false;
-          break;
+          workingDaysMissed++;
         }
       }
 
-      if (onlyNonWorkingDays) {
+      // Continue streak only if no working days were missed
+      if (workingDaysMissed === 0) {
         currentStreak++;
         maxStreak = Math.max(maxStreak, currentStreak);
       } else {

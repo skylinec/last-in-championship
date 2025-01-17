@@ -1871,26 +1871,14 @@ def history():
         page = request.args.get("page", 1, type=int)
         per_page = request.args.get("per_page", 50, type=int)
         per_page = min(max(per_page, 1), 500)
-        offset = (page - 1) * per_page
-
-        query = db.execute(text("SELECT * FROM entries ORDER BY date DESC, time DESC"))
-        total_entries = len(query.fetchall())  # Or use COUNT(*) if needed
-
-        # Re-run the query with limit/offset
-        paginated_query = db.execute(
-            text("SELECT * FROM entries ORDER BY date DESC, time DESC LIMIT :limit OFFSET :offset"),
-            {"limit": per_page, "offset": offset}
-        ).fetchall()
-
+        query = db.query(Entry).order_by(Entry.timestamp.desc())
+        total_entries = query.count()
         total_pages = (total_entries + per_page - 1) // per_page
+        offset = (page - 1) * per_page
+        results = query.offset(offset).limit(per_page).all()
 
-        results = []
-        for i, row in enumerate(paginated_query):
-            item_dict = dict(row)
-            item_dict["absolute_id"] = offset + i + 1
-            results.append(item_dict)
-
-        return render_template("history.html",
+        return render_template(
+            "history.html",
             entries=results,
             current_page=page,
             total_pages=total_pages,

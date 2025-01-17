@@ -24,7 +24,9 @@
                 <td>{{ loop.index }}</td>
                 <td class="name-cell">
                     {% if entry.streak > 0 %}
-                    <div class="streak-flame" data-streak="{{ entry.streak }}">
+                    <div class="streak-flame" data-streak="{{ entry.streak }}" 
+                         title="Streak: {{ entry.streak }} working day{% if entry.streak != 1 %}s{% endif %}
+                                {% if entry.streak_start %}(started {{ entry.streak_start.strftime('%d/%m/%Y') }}){% endif %}">
                         🔥<span class="streak-count">{{ entry.streak }}</span>
                     </div>
                     {% endif %}
@@ -330,6 +332,29 @@ window.addEventListener('resize', adjustTimelineBars);
         font-size: 0.5em;
         padding: 1px 3px;
     }
+}
+
+.streak-flame::after {
+    content: attr(title);
+    position: absolute;
+    bottom: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(0, 0, 0, 0.8);
+    color: white;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 0.7em;
+    white-space: pre;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.2s;
+    z-index: 10;
+}
+
+.streak-flame:hover::after {
+    opacity: 1;
+    visibility: visible;
 }
 </style>
 {% endblock %}

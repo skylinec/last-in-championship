@@ -308,6 +308,29 @@
 .streak-flame[data-streak^="4"] .streak-count { background: #E64A19; }
 .streak-flame[data-streak^="5"] .streak-count { background: #D84315; }
 
+.streak-flame::after {
+    content: attr(title);
+    position: absolute;
+    bottom: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(0, 0, 0, 0.8);
+    color: white;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 0.7em;
+    white-space: pre;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.2s;
+    z-index: 10;
+}
+
+.streak-flame:hover::after {
+    opacity: 1;
+    visibility: visible;
+}
+
 @media (max-width: 768px) {
     .dashboard-container {
         grid-template-columns: 1fr;
@@ -415,9 +438,10 @@ async function updatePodium() {
             let nameHtml = userName;
             if (streakFlame) {
                 const streak = streakFlame.getAttribute('data-streak');
+                const tooltip = streakFlame.getAttribute('title') || `${streak} day streak`;
                 nameHtml = `
                     <div class="podium-name-with-streak">
-                        <div class="streak-flame" data-streak="${streak}">
+                        <div class="streak-flame" data-streak="${streak}" title="${tooltip}">
                             🔥<span class="streak-count">${streak}</span>
                         </div>
                         ${userName}

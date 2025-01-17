@@ -12,6 +12,7 @@
                 <h2>{{ streak.username }}</h2>
                 <div class="streak-count {% if streak.current_streak > 0 %}active{% endif %}"
                      {% if streak.current_streak > 0 %}
+                     title="Active streak since {{ streak.current_start.strftime('%d/%m/%Y') }}"
                      onclick="showStreakCalendar('{{ streak.current_start.strftime('%Y-%m-%d') }}', 
                                                '{{ today.strftime('%Y-%m-%d') }}', 
                                                '{{ streak.username }}', 

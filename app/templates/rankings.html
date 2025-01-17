@@ -64,9 +64,11 @@
             <tr>
                 <td>{{ loop.index }}</td>
                 <td class="name-cell">
-                    {% if rank.current_streak > 0 %}
-                    <div class="streak-flame" data-streak="{{ rank.current_streak }}">
-                        🔥<span class="streak-count">{{ rank.current_streak }}</span>
+                    {% if rank.streak > 0 %}
+                    <div class="streak-flame" data-streak="{{ rank.streak }}"
+                         title="Streak: {{ rank.streak }} working day{% if rank.streak != 1 %}s{% endif %}
+                                {% if rank.streak_start %}(since {{ rank.streak_start.strftime('%d/%m/%Y') }}){% endif %}">
+                        🔥<span class="streak-count">{{ rank.streak }}</span>
                     </div>
                     {% endif %}
                     {{ rank.name }}

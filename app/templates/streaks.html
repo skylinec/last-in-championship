@@ -30,7 +30,11 @@
                         {% for past in streak.past_streaks %}
                         <li>
                             <span class="streak-length">{{ past.length }} days</span>
-                            <span class="streak-dates" title="Streak broken: {{ past.break_reason }}">
+                            <span class="streak-dates" title="Streak broken: {{ past.break_reason }}"
+                                  onclick="showStreakCalendar('{{ past.start.strftime('%Y-%m-%d') }}', 
+                                                            '{{ past.end.strftime('%Y-%m-%d') }}',
+                                                            '{{ streak.username }}',
+                                                            '{{ past.break_reason }}')">
                                 {{ past.start.strftime('%d/%m/%Y') }} - {{ past.end.strftime('%d/%m/%Y') }}
                             </span>
                         </li>
@@ -41,6 +45,15 @@
             </div>
         </div>
         {% endfor %}
+    </div>
+</div>
+
+<!-- Add Modal -->
+<div id="streakModal" class="modal">
+    <div class="modal-content">
+        <span class="close">&times;</span>
+        <h3 id="modalTitle">Streak Calendar</h3>
+        <div id="streakCalendar"></div>
     </div>
 </div>
 
@@ -183,7 +196,121 @@
     z-index: 1000;
 }
 
+.streak-dates {
+    cursor: pointer;
+    transition: color 0.2s ease;
+}
+
+.streak-dates:hover {
+    color: var(--accent-color);
+}
+
+.modal {
+    display: none;
+    position: fixed;
+    z-index: 1000;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0,0,0,0.5);
+    animation: fadeIn 0.3s ease;
+}
+
+.modal-content {
+    background-color: #fefefe;
+    margin: 10% auto;
+    padding: 20px;
+    border-radius: 8px;
+    width: 80%;
+    max-width: 600px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+    animation: slideIn 0.3s ease;
+}
+
+.close {
+    color: #aaa;
+    float: right;
+    font-size: 28px;
+    font-weight: bold;
+    cursor: pointer;
+}
+
+.close:hover {
+    color: var(--accent-color);
+}
+
+#streakCalendar {
+    margin-top: 20px;
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 5px;
+    padding: 10px;
+}
+
+.calendar-day {
+    aspect-ratio: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+    font-size: 0.9em;
+    border: 1px solid #eee;
+}
+
+.calendar-header {
+    font-weight: bold;
+    color: #666;
+    padding: 5px;
+    text-align: center;
+}
+
+.streak-day {
+    background-color: var(--accent-color);
+    color: white;
+}
+
+.streak-start {
+    background-color: #27ae60;
+    color: white;
+}
+
+.streak-end {
+    background-color: #e74c3c;
+    color: white;
+}
+
+.month-divider {
+    grid-column: 1 / -1;
+    text-align: center;
+    padding: 5px;
+    background: #f8f9fa;
+    margin: 5px 0;
+    border-radius: 4px;
+    font-weight: 500;
+    color: #666;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+@keyframes slideIn {
+    from { transform: translateY(-20px); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
+}
+
 @media (max-width: 768px) {
+    .modal-content {
+        width: 95%;
+        margin: 5% auto;
+    }
+
+    .calendar-day {
+        font-size: 0.8em;
+    }
+
     .past-streaks li {
         flex-direction: column;
         align-items: flex-start;
@@ -191,4 +318,105 @@
     }
 }
 </style>
+
+<script>
+function showStreakCalendar(startDate, endDate, username, breakReason) {
+    const modal = document.getElementById('streakModal');
+    const calendar = document.getElementById('streakCalendar');
+    const modalTitle = document.getElementById('modalTitle');
+    
+    // Clear previous calendar
+    calendar.innerHTML = '';
+    
+    // Set title
+    modalTitle.textContent = `${username}'s Streak Calendar`;
+    
+    // Convert dates to Date objects
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    
+    // Add day headers
+    const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    days.forEach(day => {
+        const header = document.createElement('div');
+        header.className = 'calendar-header';
+        header.textContent = day;
+        calendar.appendChild(header);
+    });
+    
+    // Fill in calendar
+    let currentDate = new Date(start);
+    let currentMonth = currentDate.getMonth();
+    
+    // Add month divider
+    const monthNames = ['January', 'February', 'March', 'April', 'May', 'June',
+                       'July', 'August', 'September', 'October', 'November', 'December'];
+    let monthDivider = document.createElement('div');
+    monthDivider.className = 'month-divider';
+    monthDivider.textContent = monthNames[currentMonth] + ' ' + currentDate.getFullYear();
+    calendar.appendChild(monthDivider);
+    
+    // Add padding for first day
+    let firstDay = currentDate.getDay();
+    for(let i = 0; i < firstDay; i++) {
+        const padding = document.createElement('div');
+        padding.className = 'calendar-day';
+        calendar.appendChild(padding);
+    }
+
+    while(currentDate <= end) {
+        // Check if we need to add a new month divider
+        if(currentDate.getMonth() !== currentMonth) {
+            currentMonth = currentDate.getMonth();
+            const newMonthDivider = document.createElement('div');
+            newMonthDivider.className = 'month-divider';
+            newMonthDivider.textContent = monthNames[currentMonth] + ' ' + currentDate.getFullYear();
+            calendar.appendChild(newMonthDivider);
+        }
+        
+        const dayElement = document.createElement('div');
+        dayElement.className = 'calendar-day';
+        dayElement.textContent = currentDate.getDate();
+        
+        // Add appropriate classes
+        if(currentDate.toISOString().split('T')[0] === startDate) {
+            dayElement.classList.add('streak-start');
+            dayElement.title = 'Streak Start';
+        } else if(currentDate.toISOString().split('T')[0] === endDate) {
+            dayElement.classList.add('streak-end');
+            dayElement.title = breakReason;
+        } else {
+            dayElement.classList.add('streak-day');
+        }
+        
+        calendar.appendChild(dayElement);
+        
+        currentDate.setDate(currentDate.getDate() + 1);
+    }
+    
+    // Show modal
+    modal.style.display = 'block';
+    
+    // Close modal when clicking X or outside
+    const closeBtn = document.getElementsByClassName('close')[0];
+    closeBtn.onclick = () => modal.style.display = 'none';
+    window.onclick = (event) => {
+        if (event.target === modal) modal.style.display = 'none';
+    }
+}
+
+// Add event listener for current streak clicking
+document.querySelectorAll('.streak-count').forEach(element => {
+    if(element.querySelector('.current').textContent > 0) {
+        element.style.cursor = 'pointer';
+        element.onclick = () => {
+            const username = element.closest('.streak-card').querySelector('h2').textContent;
+            const days = parseInt(element.querySelector('.current').textContent);
+            const endDate = new Date().toISOString().split('T')[0];
+            const startDate = new Date(Date.now() - (days - 1) * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+            showStreakCalendar(startDate, endDate, username, 'Current active streak');
+        };
+    }
+});
+</script>
 {% endblock %}

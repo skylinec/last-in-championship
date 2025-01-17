@@ -896,7 +896,13 @@
                 </div>
             </div>
             <div class="user-info nav-item">
-                {{ session.user }} | <a href="{{ url_for('bp.logout') }}">Logout</a>
+                <div class="dropdown">
+                    <a href="#" class="dropdown-trigger">{{ session.user }}</a>
+                    <div class="dropdown-content">
+                        <a href="{{ url_for('bp.profile') }}">Profile Settings</a>
+                        <a href="{{ url_for('bp.logout') }}">Logout</a>
+                    </div>
+                </div>
             </div>
             {% else %}
             <div class="auth-links">

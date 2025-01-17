@@ -9,8 +9,6 @@ from sqlalchemy.orm import relationship
 
 from .database import Base, SessionLocal
 
-# ...existing code...
-
 def get_core_users():
     """Get list of core users from settings"""
     db = SessionLocal()
@@ -132,5 +130,3 @@ class TieBreakerGame(Base):
     final_tiebreaker = Column(Boolean, default=False)
     created_at = Column(DateTime, default=datetime.now)
     completed_at = Column(DateTime, nullable=True)
-
-# ...existing code...

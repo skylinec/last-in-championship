@@ -935,8 +935,6 @@ def tie_breakers():
     finally:
         db.close()
 
-# ...existing code...
-
 @bp.route("/tie-breaker/<int:tie_id>/choose-game", methods=["POST"])
 @login_required
 def choose_game(tie_id):
@@ -1693,42 +1691,24 @@ def get_history():
         statuses = request.args.getlist('status[]')
         from_date = request.args.get('fromDate')
         to_date = request.args.get('toDate')
-        period = request.args.get('period', 'all')
 
         # Build base query
         query = db.query(Entry)
 
-        # Apply period filter
-        if period != 'all':
-            today = datetime.now().date()
-            if period == 'today':
-                query = query.filter(Entry.date == today.isoformat())
-            elif period == 'week':
-                week_start = today - timedelta(days=today.weekday())
-                query = query.filter(Entry.date >= week_start.isoformat())
-            elif period == 'month':
-                month_start = today.replace(day=1)
-                query = query.filter(Entry.date >= month_start.isoformat())
-
-        # Apply custom date range if provided
+        # Apply filters
+        if users and 'all' not in users:
+            query = query.filter(Entry.name.in_(users))
+        if statuses and 'all' not in statuses:
+            query = query.filter(Entry.status.in_(statuses))
         if from_date:
             query = query.filter(Entry.date >= from_date)
         if to_date:
             query = query.filter(Entry.date <= to_date)
 
-        # Apply user filter
-        if users and not ('all' in users):
-            query = query.filter(Entry.name.in_(users))
-
-        # Apply status filter
-        if statuses and not ('all' in statuses):
-            statuses = [s.replace('-', '_') for s in statuses]  # Convert to database format
-            query = query.filter(Entry.status.in_(statuses))
-
         # Get total count
         total_count = query.count()
 
-        # Get paginated results with proper ordering
+        # Get paginated results
         entries = query.order_by(Entry.date.desc(), Entry.time.desc())\
                       .offset((page - 1) * per_page)\
                       .limit(per_page)\
@@ -1851,8 +1831,6 @@ def day_rankings(date=None):
                          earliest_hour=earliest_hour,
                          latest_hour=latest_hour)
 
-# ...existing code...
-
 @bp.route("/history")
 @login_required
 def history():
@@ -1870,8 +1848,6 @@ def history():
                              statuses=status_list)
     finally:
         db.close()
-
-# ...existing code...
 
 @bp.route("/streaks")
 @login_required
@@ -2132,8 +2108,6 @@ def internal_error(error):
                          details="An unexpected error has occurred.", 
                          back_link=url_for('bp.index')), 500
 
-# ...existing code...
-
 @bp.route('/games/<int:game_id>/resign', methods=['POST'])
 @login_required
 def resign_game(game_id):
@@ -2315,4 +2289,51 @@ def game_status(game_id):
     finally:
         db.close()
 
-# ...existing code...
+@bp.route("/profile")
+@login_required
+def profile():
+    db = SessionLocal()
+    try:
+        user = db.query(User).filter_by(username=session['user']).first()
+        if not user:
+            return redirect(url_for('bp.logout'))
+        return render_template("profile.html", user=user)
+    finally:
+        db.close()
+
+@bp.route("/profile/change-password", methods=["POST"])
+@login_required
+def change_password():
+    if not request.is_json:
+        return jsonify({"message": "Invalid request"}), 400
+        
+    current_password = request.json.get("current_password")
+    new_password = request.json.get("new_password")
+    
+    if not current_password or not new_password:
+        return jsonify({"message": "Missing required fields"}), 400
+        
+    db = SessionLocal()
+    try:
+        user = db.query(User).filter_by(username=session['user']).first()
+        
+        if not user or user.password != current_password:  # In production, use proper password hashing
+            return jsonify({"message": "Current password is incorrect"}), 401
+            
+        user.password = new_password  # In production, hash the password
+        db.commit()
+        
+        log_audit(
+            "change_password",
+            session['user'],
+            "Password changed successfully"
+        )
+        
+        return jsonify({"message": "Password updated successfully"})
+        
+    except Exception as e:
+        db.rollback()
+        app.logger.error(f"Error changing password: {str(e)}")
+        return jsonify({"message": "Error updating password"}), 500
+    finally:
+        db.close()

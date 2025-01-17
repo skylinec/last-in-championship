@@ -109,7 +109,7 @@ from .visualisation import (calculate_arrival_patterns, calculate_average_time,
                             calculate_status_counts, calculate_user_comparison,
                             calculate_weekly_patterns, analyze_early_arrivals,
                             analyze_late_arrivals)
-from .streaks import calculate_current_streak, calculate_streak_for_date
+from .streaks import calculate_current_streak, get_streak_history
 
 # If you need to call methods from your main app or from 'app.py' directly, 
 # you typically do that through current_app from flask, or separate your code further.
@@ -1871,7 +1871,6 @@ def view_streaks():
     """View streaks for all users"""
     db = SessionLocal()
     try:
-        # Get all users who have had entries in the past 30 days
         recent_users = db.query(Entry.name).distinct().filter(
             Entry.date >= (datetime.now() - timedelta(days=30)).strftime('%Y-%m-%d')
         ).all()
@@ -1879,53 +1878,18 @@ def view_streaks():
         
         streak_data = []
         for username in recent_users:
-            # Get current streak
+            # Calculate current streak using the standardized logic
             current_streak = calculate_current_streak(username)
             
-            # Get streak history
-            entries = db.query(Entry).filter(
-                Entry.name == username,
-                Entry.status.in_(['in-office', 'remote'])
-            ).order_by(Entry.date.asc()).all()
+            # Get past streaks using same logic
+            past_streaks = get_streak_history(username, db)
             
-            past_streaks = []
-            current_run = 0
-            streak_start = None
-            
-            for i, entry in enumerate(entries):
-                entry_date = datetime.strptime(entry.date, '%Y-%m-%d').date()
-                
-                if i == 0:
-                    current_run = 1
-                    streak_start = entry_date
-                    continue
-                
-                prev_date = datetime.strptime(entries[i-1].date, '%Y-%m-%d').date()
-                days_diff = (entry_date - prev_date).days
-                
-                if days_diff <= 3:  # Allow for weekends
-                    current_run += 1
-                else:
-                    if current_run >= 3:  # Only record significant streaks
-                        past_streaks.append({
-                            'length': current_run,
-                            'start': streak_start,
-                            'end': prev_date
-                        })
-                    current_run = 1
-                    streak_start = entry_date
-            
-            # Add the final streak if significant
-            if current_run >= 3:
-                past_streaks.append({
-                    'length': current_run,
-                    'start': streak_start,
-                    'end': entry_date
-                })
-            
-            # Sort past streaks by length descending
-            past_streaks.sort(key=lambda x: x['length'], reverse=True)
-            
+            # Current streak should match most recent past streak if dates overlap
+            if past_streaks and current_streak > 0:
+                last_streak = past_streaks[0]
+                if last_streak['end'] == datetime.now().date():
+                    current_streak = last_streak['length']
+
             streak_data.append({
                 'username': username,
                 'current_streak': current_streak,

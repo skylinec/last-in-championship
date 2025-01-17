@@ -30,8 +30,8 @@ def calculate_streak_for_date(username, target_date, db):
             
         # Get user's working days from settings JSON
         working_days = settings.points.get('working_days', {}).get(username, ['mon', 'tue', 'wed', 'thu', 'fri'])
-        
-        # Query entries using raw table - get entries up to target date
+
+        # Query entries in reverse chronological order, including up to target date
         entries = db.execute(
             Entry.select().where(
                 Entry.c.name == username,
@@ -39,34 +39,33 @@ def calculate_streak_for_date(username, target_date, db):
                 Entry.c.date <= target_date.isoformat()
             ).order_by(Entry.c.date.desc())
         ).fetchall()
-        
+
         if not entries:
             return 0
 
-        streak = 0
-        current_date = target_date
-
-        # Process entries starting from target_date backwards
-        for entry in entries:
+        # Start counting streak
+        streak = 1  # Start with 1 since we have at least one entry
+        last_date = datetime.strptime(entries[0].date, '%Y-%m-%d').date()
+        
+        # Process subsequent entries
+        for entry in entries[1:]:
             entry_date = datetime.strptime(entry.date, '%Y-%m-%d').date()
-            
-            # If we've moved too far back, break
-            if (current_date - entry_date).days > 10:  # Allow for long weekends/holidays
-                break
+            days_diff = (last_date - entry_date).days
 
-            # Count working days between current_date and entry_date
-            missed_working_days = 0
-            check_date = current_date
-            while check_date > entry_date:
-                check_date -= timedelta(days=1)
-                if check_date.strftime('%a').lower() in working_days:
-                    missed_working_days += 1
-                if missed_working_days > 1:  # More than one working day gap
-                    return streak
-            
-            # If we get here, this entry continues the streak
-            streak += 1
-            current_date = entry_date
+            # Check if gap only contains non-working days
+            only_non_working_days = True
+            check_date = entry_date
+            while check_date < last_date:
+                check_date += timedelta(days=1)
+                if check_date.strftime('%a').lower()[:3] in working_days:
+                    only_non_working_days = False
+                    break
+
+            if days_diff <= 3 and only_non_working_days:
+                streak += 1
+                last_date = entry_date
+            else:
+                break
 
         return streak
 
@@ -175,3 +174,67 @@ def calculate_current_streak(name):
         return 0
     finally:
         db.close()
+
+def get_streak_history(username, db):
+    """Get complete streak history for a user using same logic as current streak"""
+    try:
+        entries = db.query(Entry).filter(
+            Entry.name == username,
+            Entry.status.in_(['in-office', 'remote'])
+        ).order_by(Entry.date.asc()).all()
+
+        settings = db.query(Settings).first()
+        working_days = settings.points.get('working_days', {}).get(username, ['mon', 'tue', 'wed', 'thu', 'fri'])
+        
+        streaks = []
+        current_run = 0
+        streak_start = None
+        prev_date = None
+
+        for entry in entries:
+            entry_date = datetime.strptime(entry.date, '%Y-%m-%d').date()
+
+            if prev_date is None:
+                current_run = 1
+                streak_start = entry_date
+                prev_date = entry_date
+                continue
+
+            days_diff = (entry_date - prev_date).days
+
+            # Use same logic as calculate_streak_for_date
+            only_non_working_days = True
+            check_date = prev_date
+            while check_date < entry_date:
+                check_date += timedelta(days=1)
+                if check_date.strftime('%a').lower()[:3] in working_days:
+                    only_non_working_days = False
+                    break
+
+            if days_diff <= 3 and only_non_working_days:
+                current_run += 1
+            else:
+                if current_run >= 3:  # Only record significant streaks
+                    streaks.append({
+                        'length': current_run,
+                        'start': streak_start,
+                        'end': prev_date
+                    })
+                current_run = 1
+                streak_start = entry_date
+
+            prev_date = entry_date
+
+        # Add final streak if significant
+        if current_run >= 3:
+            streaks.append({
+                'length': current_run,
+                'start': streak_start,
+                'end': prev_date
+            })
+
+        return sorted(streaks, key=lambda x: (-x['length'], -x['end'].toordinal()))
+
+    except Exception as e:
+        logger.error(f"Error getting streak history: {str(e)}")
+        return []

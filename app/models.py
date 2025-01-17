@@ -30,9 +30,8 @@ class Entry(Base):
     timestamp = Column(DateTime, default=datetime.now)
 
 class User(Base):
-    __tablename__ = 'users'
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    username = Column(String, nullable=False)
+    __tablename__ = "users"
+    username = Column(String, primary_key=True)
     password = Column(String, nullable=False)
 
 class Settings(Base):

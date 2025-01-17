@@ -135,17 +135,16 @@ async function generateStreaks() {
     const settingsResult = await client.query('SELECT points FROM settings LIMIT 1');
     const workingDays = settingsResult.rows[0]?.points?.working_days || {};
 
-    // Get all entries with proper sorting
+    // Get only valid attendance entries
     const entries = await client.query(`
       WITH grouped_entries AS (
         SELECT DISTINCT ON (name, date::date)
           name, 
           date::date,
           timestamp,
-          status,
           EXTRACT(DOW FROM date::date) as day_of_week
         FROM entries 
-        WHERE status IN ('in-office', 'remote')
+        WHERE status IN ('in-office', 'remote')  -- Only valid attendance
         ORDER BY name, date::date DESC, timestamp DESC
       )
       SELECT * FROM grouped_entries
@@ -160,90 +159,44 @@ async function generateStreaks() {
     let lastTimestamp = null;
     let streakStart = null;
 
-    // Add helper function inside generateStreaks
-    async function getLastValidDay(username, beforeDate, userWorkingDays, dayMap) {
-      const result = await client.query(`
-        SELECT date, status
-        FROM entries
-        WHERE name = $1
-          AND date < $2
-          AND status IN ('in-office', 'remote')
-          AND EXTRACT(DOW FROM date) BETWEEN 1 AND 5
-        ORDER BY date DESC
-        LIMIT 1
-      `, [username, beforeDate]);
-
-      if (result.rows.length === 0) return null;
-      
-      const lastDay = result.rows[0];
-      const dow = new Date(lastDay.date).getDay();
-      // Check if it was a working day for the user
-      if (userWorkingDays.includes(dayMap[dow])) {
-        return lastDay.date;
-      }
-      return null;
-    }
-
     for (const entry of entries.rows) {
-      // Skip weekends entirely
+      // Skip non-working days
       if (entry.day_of_week === 0 || entry.day_of_week === 6) continue;
 
       // Handle user change
       if (entry.name !== currentUser) {
+        // Save previous user's streak
         if (currentUser && currentStreak > 0) {
           streaks.set(currentUser, {
             username: currentUser,
-            currentStreak: Math.max(0, currentStreak - 1), // Subtract 1 to not count last day
+            currentStreak: Math.max(0, currentStreak - 1),
             maxStreak: Math.max(maxStreak, currentStreak - 1),
             lastAttendance: lastTimestamp,
             streakStartDate: streakStart
           });
         }
+        
+        // Initialize new user
         currentUser = entry.name;
-        
-        // Check for streak continuation from previous valid day
-        const lastValidDay = await getLastValidDay(
-          entry.name, 
-          entry.date, 
-          workingDays[entry.name] || ['mon', 'tue', 'wed', 'thu', 'fri'],
-          dayMap
-        );
-        
-        if (lastValidDay) {
-          const daysBetween = Math.floor((entry.date - lastValidDay) / (1000 * 60 * 60 * 24));
-          if (daysBetween <= 3) { // Allow for weekend gap
-            currentStreak = 1;
-            streakStart = lastValidDay;
-          } else {
-            currentStreak = 1;
-            streakStart = entry.date;
-          }
-        } else {
-          currentStreak = 1;
-          streakStart = entry.date;
-        }
-        
+        currentStreak = 1;
         maxStreak = 1;
+        streakStart = entry.date;
         lastDate = entry.date;
         lastTimestamp = entry.timestamp;
         continue;
       }
 
-      // Skip if this is the same date
-      if (lastDate?.getTime() === entry.date.getTime()) {
-        continue;
-      }
+      // Skip same-day entries
+      if (lastDate?.getTime() === entry.date.getTime()) continue;
 
       // Get user's working days
       const userWorkingDays = workingDays[entry.name] || ['mon', 'tue', 'wed', 'thu', 'fri'];
       const dayMap = {1: 'mon', 2: 'tue', 3: 'wed', 4: 'thu', 5: 'fri'};
       
-      // Skip if not a working day for this user
-      if (!userWorkingDays.includes(dayMap[entry.day_of_week])) {
-        continue;
-      }
+      // Skip if not a working day
+      if (!userWorkingDays.includes(dayMap[entry.day_of_week])) continue;
 
-      // Calculate days between entries (excluding weekends and non-working days)
+      // Calculate working days between entries
       let missedWorkingDays = 0;
       if (lastDate) {
         let checkDate = new Date(lastDate);
@@ -251,7 +204,6 @@ async function generateStreaks() {
         
         while (checkDate < entry.date) {
           const dow = checkDate.getDay();
-          // Only count as missed if it's a working day for this user
           if (dow > 0 && dow < 6 && userWorkingDays.includes(dayMap[dow])) {
             missedWorkingDays++;
           }
@@ -260,11 +212,9 @@ async function generateStreaks() {
       }
 
       if (missedWorkingDays === 0) {
-        // Consecutive working day
         currentStreak++;
         maxStreak = Math.max(maxStreak, currentStreak);
       } else {
-        // Break in streak - start new one
         maxStreak = Math.max(maxStreak, currentStreak);
         currentStreak = 1;
         streakStart = entry.date;

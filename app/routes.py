@@ -109,7 +109,7 @@ from .visualisation import (calculate_arrival_patterns, calculate_average_time,
                             calculate_status_counts, calculate_user_comparison,
                             calculate_weekly_patterns, analyze_early_arrivals,
                             analyze_late_arrivals)
-from .streaks import calculate_current_streak, ge
+from .streaks import calculate_current_streak, get_streak_history
 
 # If you need to call methods from your main app or from 'app.py' directly, 
 # you typically do that through current_app from flask, or separate your code further.

@@ -287,7 +287,12 @@ def log_audit(action, user, details, old_data=None, new_data=None):
 @bp.route("/")
 @login_required
 def index():
-    return render_template("index.html", core_users=get_core_users())
+    # Get core users and calculate current streaks
+    core_users = get_core_users()
+    
+    # Return template with core users for form and podium display
+    return render_template("index.html", 
+                         core_users=core_users)
 
 @bp.route("/login", methods=["GET", "POST"])
 def login():
@@ -833,11 +838,15 @@ def daily_rankings():
         mode = request.args.get('mode', 'last-in')
         points = scores["last_in"] if mode == 'last-in' else scores["early_bird"]
         
+        # Calculate streak for each user
+        streak = calculate_current_streak(entry["name"])
+        
         rankings.append({
             "name": entry["name"],
             "time": entry["time"],
             "status": entry["status"],
-            "points": points  # Now points is a number, not a dict
+            "points": points,  # Now points is a number, not a dict
+            "streak": streak  # Add streak information
         })
     
     # Sort by points descending

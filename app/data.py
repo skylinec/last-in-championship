@@ -357,8 +357,10 @@ def calculate_daily_score(entry, settings, position=None, total_entries=None, mo
             early_bird_bonus = position_bonus
             last_in_bonus = 0
 
-    # Calculate streak bonus regardless of settings being enabled
+    # Initialize streak variable with default value
+    streak = 0
     streak_bonus = 0
+    
     if entry_date <= current_date:  # Only calculate streak for non-future dates
         db = SessionLocal()
         try:
@@ -399,11 +401,11 @@ def calculate_daily_score(entry, settings, position=None, total_entries=None, mo
 
     return {
         "last_in": context['current_points'] + last_in_bonus + (streak_bonus if settings.get("enable_streaks", False) else 0),
-        "early_bird": context['current_points'] + early_bird_bonus - (streak_bonus if settings.get("enable_streaks", False) else 0),
+        "early_bird": context['current_points'] + early_bird_bonus + (streak_bonus if settings.get("enable_streaks", False) else 0),
         "base": context['current_points'],
         "streak": streak_bonus,
+        "current_streak": streak,  # Now streak is always defined
         "position_bonus": last_in_bonus if mode == 'last_in' else early_bird_bonus,
-        "current_streak": streak,  # Add current streak to return value
         "breakdown": {
             "base_points": context['current_points'],
             "position_bonus": last_in_bonus if mode == 'last_in' else early_bird_bonus,

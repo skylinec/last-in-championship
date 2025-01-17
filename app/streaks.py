@@ -17,9 +17,12 @@ def calculate_streak_for_date(username, target_date, db):
         if not username or not target_date:
             return 0
             
+        # Ensure target_date is a date object, not datetime
         target_date = (datetime.strptime(target_date, '%Y-%m-%d').date() 
-                      if isinstance(target_date, str) else target_date)
-        
+                      if isinstance(target_date, str) 
+                      else target_date.date() if isinstance(target_date, datetime) 
+                      else target_date)
+
         # Get settings using raw table
         settings = db.execute(Settings.select()).first()
         if not settings:

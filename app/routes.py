@@ -516,7 +516,22 @@ def manage_settings():
                 if user not in settings_data['points']['working_days']:
                     settings_data['points']['working_days'][user] = ['mon', 'tue', 'wed', 'thu', 'fri']
 
-            # ...rest of GET handler...
+            # Get list of registered users for core users selection
+            registered_users = [user[0] for user in db.query(User.username).all()]
+
+            # Get today's date for template
+            today = datetime.now().date()
+
+            # Return the template with all required data
+            return render_template(
+                "settings.html",
+                settings=settings_data,
+                settings_data=settings_data,
+                registered_users=registered_users,
+                core_users=core_users,
+                rules=settings_data.get("points", {}).get("rules", []),
+                today=today
+            )
 
         else:  # POST
             try:

@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 from sqlalchemy import text
 import logging
 
@@ -86,54 +86,59 @@ def get_streak_history(username, db):
         current_streak = 0
         streak_start = None
         last_date = None
+        working_days = get_working_days(db, username)
         
         for entry in entries:
             entry_date = entry.date if isinstance(entry.date, date) else datetime.strptime(entry.date, '%Y-%m-%d').date()
             status = entry.status.replace('-', '_')
             
-            # Check if this is a valid attendance day
-            is_valid = status in ['in_office', 'remote']
-            
-            if is_valid:
-                if current_streak == 0:
-                    streak_start = entry_date
-                    current_streak = 1
-                else:
-                    # Check if this is the next consecutive working day
-                    if last_date:
-                        days_between = (entry_date - last_date).days
-                        working_days = get_working_days(db, username)
-                        
-                        # Count actual working days between dates
-                        working_day_count = sum(1 for d in range(1, days_between)
-                            if (last_date + timedelta(days=d)).strftime('%a').lower() in working_days)
-                        
-                        if working_day_count == 0:
-                            current_streak += 1
-                        else:
-                            # Streak broken - save it and start new one
-                            if current_streak > 1:
-                                streaks.append({
-                                    'start': streak_start,
-                                    'end': last_date,
-                                    'length': current_streak,
-                                    'break_reason': f"Missed {working_day_count} working day(s)"
-                                })
-                            streak_start = entry_date
-                            current_streak = 1
+            # Only process if it's a working day for this user
+            if entry_date.strftime('%a').lower() in working_days:
+                # Check if this is a valid attendance day
+                is_valid = status in ['in_office', 'remote']
+                
+                if is_valid:
+                    if current_streak == 0:
+                        streak_start = entry_date
+                        current_streak = 1
+                    else:
+                        # Check if this is the next consecutive working day
+                        if last_date:
+                            days_between = []
+                            current_date = last_date + timedelta(days=1)
                             
-                last_date = entry_date
-            else:
-                # Non-working status breaks the streak
-                if current_streak > 1:
-                    streaks.append({
-                        'start': streak_start,
-                        'end': last_date,
-                        'length': current_streak,
-                        'break_reason': f"Status changed to {status}"
-                    })
-                current_streak = 0
-                last_date = entry_date
+                            # Find working days between last attendance and current date
+                            while current_date < entry_date:
+                                if current_date.strftime('%a').lower() in working_days:
+                                    days_between.append(current_date)
+                                current_date += timedelta(days=1)
+                            
+                            if not days_between:  # No missed working days
+                                current_streak += 1
+                            else:
+                                # Streak broken - save it and start new one
+                                if current_streak > 1:
+                                    streaks.append({
+                                        'start': streak_start,
+                                        'end': last_date,
+                                        'length': current_streak,
+                                        'break_reason': f"Missed {len(days_between)} working day(s)"
+                                    })
+                                streak_start = entry_date
+                                current_streak = 1
+                                
+                    last_date = entry_date
+                else:
+                    # Non-working status breaks the streak
+                    if current_streak > 1:
+                        streaks.append({
+                            'start': streak_start,
+                            'end': last_date,
+                            'length': current_streak,
+                            'break_reason': f"Status changed to {status}"
+                        })
+                    current_streak = 0
+                    last_date = entry_date
 
         # Add final active streak if it exists
         if current_streak > 1:

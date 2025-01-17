@@ -97,12 +97,6 @@
 let currentPage = 1;
 let ITEMS_PER_PAGE = 50;
 
-document.getElementById('entriesPerPage').addEventListener('change', function() {
-    ITEMS_PER_PAGE = parseInt(this.value);
-    currentPage = 1;
-    loadHistory();
-});
-
 async function loadHistory() {
     const periodSelect = document.getElementById('periodFilter');
     const nameSelect = document.getElementById('nameFilter');
@@ -110,29 +104,108 @@ async function loadHistory() {
     const fromDate = document.getElementById('fromDate').value;
     const toDate = document.getElementById('toDate').value;
 
-    const params = new URLSearchParams({
-        page: currentPage,
-        per_page: ITEMS_PER_PAGE,
-        fromDate: fromDate,
-        toDate: toDate
-    });
+    // Build query parameters
+    const params = new URLSearchParams();
+    params.append('page', currentPage);
+    params.append('per_page', ITEMS_PER_PAGE);
 
-    // Add multi-select values
+    // Add period if not 'all'
+    const selectedPeriod = Array.from(periodSelect.selectedOptions).map(opt => opt.value);
+    if (!selectedPeriod.includes('all')) {
+        params.append('period', selectedPeriod[0]);
+    }
+
+    // Add date range if provided
+    if (fromDate) params.append('fromDate', fromDate);
+    if (toDate) params.append('toDate', toDate);
+
+    // Add selected users
     const selectedUsers = Array.from(nameSelect.selectedOptions).map(opt => opt.value);
-    selectedUsers.forEach(user => params.append('users[]', user));
+    if (!selectedUsers.includes('all')) {
+        selectedUsers.forEach(user => params.append('users[]', user));
+    }
 
+    // Add selected statuses
     const selectedStatuses = Array.from(statusSelect.selectedOptions).map(opt => opt.value);
-    selectedStatuses.forEach(status => params.append('status[]', status));
+    if (!selectedStatuses.includes('all')) {
+        selectedStatuses.forEach(status => params.append('status[]', status));
+    }
 
     try {
-        const response = await fetch(`/api/history?${params}`);
+        const response = await fetch(`/api/history?${params.toString()}`);
+        if (!response.ok) throw new Error('Network response was not ok');
         const data = await response.json();
+        
         updateTable(data.entries);
         updatePagination(data.total_pages);
+
+        // Show total results count
+        const totalResults = document.createElement('div');
+        totalResults.className = 'total-results';
+        totalResults.textContent = `Total entries: ${data.total}`;
+        document.getElementById('historyTable').parentNode.insertBefore(
+            totalResults, 
+            document.getElementById('historyTable')
+        );
     } catch (error) {
         console.error('Error loading history:', error);
+        // Show error message to user
+        const errorDiv = document.createElement('div');
+        errorDiv.className = 'error-message';
+        errorDiv.textContent = 'Error loading history. Please try again.';
+        document.getElementById('historyTable').parentNode.insertBefore(
+            errorDiv, 
+            document.getElementById('historyTable')
+        );
     }
 }
+
+// Add this helper function to clear selections
+function clearMultiSelect(selectElement) {
+    Array.from(selectElement.options).forEach(opt => opt.selected = false);
+    selectElement.options[0].selected = true;  // Select 'All' option
+}
+
+function resetFilters() {
+    currentPage = 1;
+    document.getElementById('fromDate').value = '';
+    document.getElementById('toDate').value = '';
+    
+    // Reset all multi-selects to 'All'
+    clearMultiSelect(document.getElementById('periodFilter'));
+    clearMultiSelect(document.getElementById('nameFilter'));
+    clearMultiSelect(document.getElementById('statusFilter'));
+    
+    loadHistory();
+}
+
+// Update event listeners
+document.addEventListener('DOMContentLoaded', () => {
+    ['periodFilter', 'nameFilter', 'statusFilter'].forEach(id => {
+        const element = document.getElementById(id);
+        element.addEventListener('change', () => {
+            currentPage = 1;  // Reset to first page when filters change
+            loadHistory();
+        });
+    });
+
+    ['fromDate', 'toDate'].forEach(id => {
+        const element = document.getElementById(id);
+        element.addEventListener('change', () => {
+            currentPage = 1;
+            loadHistory();
+        });
+    });
+
+    document.getElementById('entriesPerPage').addEventListener('change', function() {
+        ITEMS_PER_PAGE = parseInt(this.value);
+        currentPage = 1;
+        loadHistory();
+    });
+
+    // Initial load
+    loadHistory();
+});
 
 async function loadDailyRankings() {
     const response = await fetch('/rankings/today');
@@ -287,22 +360,6 @@ function applyFilters() {
     loadHistory();
 }
 
-function resetFilters() {
-    document.getElementById('periodFilter').value = 'today';
-    document.getElementById('nameFilter').value = 'all';
-    document.getElementById('statusFilter').value = 'all';
-    document.getElementById('fromDate').value = '';
-    document.getElementById('toDate').value = '';
-    currentPage = 1;
-    loadHistory();
-}
-
-document.getElementById('periodFilter').addEventListener('change', () => {
-    currentPage = 1;
-    loadHistory();
-});
-
-loadHistory();
 </script>
 
 <style>
@@ -522,6 +579,22 @@ loadHistory();
     .action-buttons button {
         width: 100%;
     }
+}
+
+/* Add these new styles */
+.error-message {
+    color: #dc3545;
+    padding: 10px;
+    margin: 10px 0;
+    background: #f8d7da;
+    border-radius: 4px;
+    text-align: center;
+}
+
+.total-results {
+    margin: 10px 0;
+    font-weight: 500;
+    color: var(--primary-color);
 }
 </style>
 {% endblock %}

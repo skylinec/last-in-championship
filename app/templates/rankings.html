@@ -34,6 +34,18 @@
                onchange="loadPeriod(this.value)">
     {% endif %}
     <button onclick="changePeriod(1)">Next {{ period|title }}</button>
+    {% if period in ['week', 'month'] %}
+    <div class="points-mode">
+        <label class="switch points-switch">
+            <input type="checkbox" id="pointsToggle" {% if request.args.get('points_mode') == 'cumulative' %}checked{% endif %}>
+            <span class="slider"></span>
+        </label>
+        <div class="mode-info">
+            <span class="mode-label">Average Points</span>
+            <div class="mode-description"></div>
+        </div>
+    </div>
+    {% endif %}
 </div>
 
 <div class="rankings-container">
@@ -42,7 +54,7 @@
             <tr>
                 <th>Rank</th>
                 <th>Name</th>
-                <th>Score</th>
+                <th>Score {% if period in ['week', 'month'] %}(<span id="pointsMode">Average</span>){% endif %}</th>
                 <th>Average Arrival Time</th>
                 {% if streaks_enabled %}
                 <th>Current Streak</th>
@@ -422,6 +434,35 @@
         left: -100px;
         transform: translateX(0);
     }
+    .points-mode {
+        border-left: none;
+        border-top: 1px solid #ddd;
+        padding: 10px 0;
+    }
+}
+
+.points-mode {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 0 20px;
+    border-left: 1px solid #ddd;
+}
+
+.points-switch {
+    width: 50px;
+    height: 25px;
+}
+
+.points-switch .slider:before {
+    height: 17px;
+    width: 17px;
+    left: 4px;
+    bottom: 4px;
+}
+
+.points-switch input:checked + .slider:before {
+    transform: translateX(25px);
 }
 </style>
 
@@ -491,6 +532,32 @@ document.addEventListener('DOMContentLoaded', () => {
             const mode = document.getElementById('championshipToggle').checked ? 'last_in' : 'early_bird';
             loadPeriod(e.target.value, mode);
         });
+    }
+
+    // Add points mode toggle handler
+    const pointsToggle = document.getElementById('pointsToggle');
+    if (pointsToggle) {
+        pointsToggle.addEventListener('change', function() {
+            const pointsMode = this.checked ? 'cumulative' : 'average';
+            const url = new URL(window.location);
+            url.searchParams.set('points_mode', pointsMode);
+            window.location.href = url.toString();
+        });
+
+        // Update toggle label
+        const modeLabel = document.querySelector('.points-mode .mode-label');
+        const modeDesc = document.querySelector('.points-mode .mode-description');
+        const pointsModeText = document.getElementById('pointsMode');
+        
+        if (pointsToggle.checked) {
+            modeLabel.textContent = 'Cumulative Points';
+            modeDesc.textContent = 'Total points earned in period';
+            pointsModeText.textContent = 'Cumulative';
+        } else {
+            modeLabel.textContent = 'Average Points';
+            modeDesc.textContent = 'Points averaged per day';
+            pointsModeText.textContent = 'Average';
+        }
     }
 });
 

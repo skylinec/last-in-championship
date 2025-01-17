@@ -132,6 +132,7 @@ def calculate_scores(data, period, current_date, mode='last_in'):
                     "early_bird_total": 0,
                     "last_in_total": 0,
                     "active_days": 0,
+                    "daily_scores": [],  # Add this line to store daily scores
                     "base_points_total": 0,
                     "position_bonus_total": 0,
                     "streak_bonus_total": 0,
@@ -155,13 +156,20 @@ def calculate_scores(data, period, current_date, mode='last_in'):
             
             if status in ["in_office", "remote"]:
                 daily_scores[name]["active_days"] += 1
-                daily_scores[name]["early_bird_total"] += scores["early_bird"]  # Changed from "early-bird"
-                daily_scores[name]["last_in_total"] += scores["last_in"]  # This matches what we return
+                
+                # Store individual daily scores
+                daily_scores[name]["daily_scores"].append({
+                    'date': date,
+                    'early_bird': scores["early_bird"],
+                    'last_in': scores["last_in"]
+                })
+                
+                daily_scores[name]["early_bird_total"] += scores["early_bird"]
+                daily_scores[name]["last_in_total"] += scores["last_in"]
                 daily_scores[name]["base_points_total"] += scores["base"]
                 daily_scores[name]["position_bonus_total"] += scores["position_bonus"]
                 daily_scores[name]["streak_bonus_total"] += scores["streak"]
                 
-                # Track achievements based on mode
                 if (mode == 'last_in' and position == total_entries) or \
                    (mode == 'early_bird' and position == 1):
                     daily_scores[name]["stats"]["latest_arrivals"] += 1
@@ -173,22 +181,28 @@ def calculate_scores(data, period, current_date, mode='last_in'):
     rankings = []
     for name, scores in daily_scores.items():
         if scores["active_days"] > 0:
-            early_bird_avg = scores["early_bird_total"] / scores["active_days"]
-            last_in_avg = scores["last_in_total"] / scores["active_days"]
+            # Calculate cumulative and average scores
+            early_bird_total = sum(day['early_bird'] for day in scores["daily_scores"])
+            last_in_total = sum(day['last_in'] for day in scores["daily_scores"])
+            early_bird_avg = early_bird_total / scores["active_days"]
+            last_in_avg = last_in_total / scores["active_days"]
+            
             arrival_times = scores["stats"]["arrival_times"]
             
             rankings.append({
                 "name": name,
-                "score": round(last_in_avg if mode == 'last_in' else early_bird_avg, 2),
+                "score": last_in_avg if mode == 'last_in' else early_bird_avg,
+                "total_score": last_in_total if mode == 'last_in' else early_bird_total,  # Add total score
                 "streak": calculate_current_streak(name),
                 "stats": scores["stats"],
                 "average_arrival_time": calculate_average_time(arrival_times) if arrival_times else "N/A",
-                "base_points": scores["base_points_total"] / scores["active_days"] if scores["active_days"] > 0 else 0,
-                "position_bonus": scores["position_bonus_total"] / scores["active_days"] if scores["active_days"] > 0 else 0,
-                "streak_bonus": scores["streak_bonus_total"] / scores["active_days"] if scores["active_days"] > 0 else 0
+                "base_points": scores["base_points_total"] / scores["active_days"],
+                "position_bonus": scores["position_bonus_total"] / scores["active_days"],
+                "streak_bonus": scores["streak_bonus_total"] / scores["active_days"],
+                "days": scores["active_days"]  # Add number of active days
             })
     
-    # Always sort by descending score (scores are already mode-specific)
+    # Sort by average score by default
     rankings.sort(key=lambda x: (-x["score"], x["name"]))
     return rankings
 

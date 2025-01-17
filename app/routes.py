@@ -767,6 +767,18 @@ def view_rankings(period, date_str=None):
                     earliest_hour = max(7, earliest_time.hour)  # Don't go earlier than 7am
                     latest_hour = min(19, latest_time.hour + 1)  # Don't go later than 7pm
 
+                # Get points mode from request
+                points_mode = request.args.get('points_mode', 'average')  # default to average
+                
+                for rank in rankings:
+                    if period in ['week', 'month'] and points_mode == 'cumulative':
+                        # Use the total score instead of calculating from average
+                        rank['score'] = round(rank['total_score'], 2)
+
+                # Sort rankings again if using cumulative mode
+                if points_mode == 'cumulative':
+                    rankings.sort(key=lambda x: (-x['score'], x['name']))
+
                 template_data = {
                     'rankings': rankings,
                     'period': period,
@@ -774,6 +786,7 @@ def view_rankings(period, date_str=None):
                     'current_display': format_date_range(current_date, period_end, period),
                     'current_month_value': current_date.strftime('%Y-%m'),
                     'mode': mode,
+                    'points_mode': points_mode,  # Add points_mode to template data
                     'streaks_enabled': settings.get("enable_streaks", False),
                     'earliest_hour': earliest_hour,
                     'latest_hour': latest_hour,
@@ -1675,29 +1688,47 @@ def get_history():
     try:
         # Get query parameters with defaults
         page = request.args.get('page', 1, type=int)
-        per_page = min(int(request.args.get('per_page', 50)), 500)  # Limit max per_page
+        per_page = min(int(request.args.get('per_page', 50)), 500)
         users = request.args.getlist('users[]')
         statuses = request.args.getlist('status[]')
         from_date = request.args.get('fromDate')
         to_date = request.args.get('toDate')
+        period = request.args.get('period', 'all')
 
         # Build base query
         query = db.query(Entry)
 
-        # Apply filters
-        if users and 'all' not in users:
-            query = query.filter(Entry.name.in_(users))
-        if statuses and 'all' not in statuses:
-            query = query.filter(Entry.status.in_(statuses))
+        # Apply period filter
+        if period != 'all':
+            today = datetime.now().date()
+            if period == 'today':
+                query = query.filter(Entry.date == today.isoformat())
+            elif period == 'week':
+                week_start = today - timedelta(days=today.weekday())
+                query = query.filter(Entry.date >= week_start.isoformat())
+            elif period == 'month':
+                month_start = today.replace(day=1)
+                query = query.filter(Entry.date >= month_start.isoformat())
+
+        # Apply custom date range if provided
         if from_date:
             query = query.filter(Entry.date >= from_date)
         if to_date:
             query = query.filter(Entry.date <= to_date)
 
+        # Apply user filter
+        if users and not ('all' in users):
+            query = query.filter(Entry.name.in_(users))
+
+        # Apply status filter
+        if statuses and not ('all' in statuses):
+            statuses = [s.replace('-', '_') for s in statuses]  # Convert to database format
+            query = query.filter(Entry.status.in_(statuses))
+
         # Get total count
         total_count = query.count()
 
-        # Get paginated results
+        # Get paginated results with proper ordering
         entries = query.order_by(Entry.date.desc(), Entry.time.desc())\
                       .offset((page - 1) * per_page)\
                       .limit(per_page)\

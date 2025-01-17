@@ -24,8 +24,8 @@ def get_attendance_for_period(username, start_date, end_date, db):
         entries = db.execute(
             Entry.select().where(
                 Entry.c.name == username,
-                Entry.c.date >= start_date.strftime('%Y-%m-%d'),
-                Entry.c.date <= end_date.strftime('%Y-%m-%d')
+                (Entry.c.date.cast(Date)) >= start_date.strftime('%Y-%m-%d'),
+                (Entry.c.date.cast(Date)) <= end_date.strftime('%Y-%m-%d')
             ).order_by(Entry.c.date.asc())
         ).fetchall()
         
@@ -50,7 +50,7 @@ def calculate_current_streak(name):
                     SELECT status
                     FROM entries
                     WHERE name = :name
-                      AND date = :check_date
+                      AND (entries.date)::date = :check_date
                 """), {"name": name, "check_date": check_date}).fetchone()
 
                 if not row or row.status in ("sick", "leave"):

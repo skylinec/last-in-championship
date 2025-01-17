@@ -35,16 +35,29 @@ def get_attendance_for_period(username, start_date, end_date, db):
         return {}
 
 def calculate_current_streak(name):
-    """Get current streak for a user from the database"""
     db = SessionLocal()
     try:
-        streak = db.execute(text("""
-            SELECT current_streak FROM user_streaks WHERE username = :name
-        """), {"name": name}).scalar()
-        return streak or 0
-    except Exception as e:
-        logger.error(f"Error getting current streak: {str(e)}")
-        return 0
+        today = date.today()
+        streak = 0
+        day_offset = 0
+
+        while True:
+            check_date = today - timedelta(days=day_offset)
+            if check_date.weekday() < 5:  # Only count Mon-Fri
+                row = db.execute(text("""
+                    SELECT status
+                    FROM entries
+                    WHERE name = :name
+                      AND date = :check_date
+                """), {"name": name, "check_date": check_date}).fetchone()
+
+                if not row or row.status in ("sick", "leave"):
+                    break
+                streak += 1
+            day_offset += 1
+            # Optional cut-off (e.g., 100 days) to prevent infinite loop if needed
+
+        return streak
     finally:
         db.close()
 

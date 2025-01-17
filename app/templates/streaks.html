@@ -492,169 +492,11 @@
 const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June',
                      'July', 'August', 'September', 'October', 'November', 'December'];
 
-function showStreakCalendar(startDate, endDate, username, breakReason, isCurrentStreak = false) {
-    const modal = document.getElementById('streakModal');
-    const calendar = document.getElementById('streakCalendar');
-    const modalTitle = document.getElementById('modalTitle');
-    
-    // Clear previous calendar
-    calendar.innerHTML = '';
-    
-    // Set title with close button in header row
-    modalTitle.innerHTML = `
-        <div class="modal-title-row">
-            <span>${username}'s ${isCurrentStreak ? 'Current' : 'Past'} Streak</span>
-            <span class="close">&times;</span>
-        </div>
-    `;
-    
-    // Show streak info banner
-    const infoBanner = document.createElement('div');
-    infoBanner.className = isCurrentStreak ? 'streak-info-banner current' : 'break-reason-banner';
-    infoBanner.textContent = isCurrentStreak 
-        ? `Active streak: ${formatDateRange(startDate, endDate)}` 
-        : `Streak broken: ${breakReason}`;
-    calendar.appendChild(infoBanner);
-
-    // Create calendar grid
-    const calendarGrid = document.createElement('div');
-    calendarGrid.className = 'calendar-grid';
-    calendar.appendChild(calendarGrid);
-    
-    // Add day headers
-    const headerRow = document.createElement('div');
-    headerRow.className = 'calendar-header-row';
-    const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-    days.forEach(day => {
-        const header = document.createElement('div');
-        header.className = 'calendar-header';
-        header.textContent = day;
-        headerRow.appendChild(header);
-    });
-    calendarGrid.appendChild(headerRow);
-    
-    // Rest of calendar generation...
-    fetchAndDisplayCalendar(startDate, endDate, username, breakReason, calendarGrid);
-    
-    // Show modal
-    modal.style.display = 'block';
-    
-    // Set up close handlers
-    const closeBtn = modal.querySelector('.close');
-    closeBtn.onclick = () => modal.style.display = 'none';
-    
-    window.onclick = (event) => {
-        if (event.target === modal) {
-            modal.style.display = 'none';
-        }
-    };
-}
-
+// Move helper functions before main functions
 function formatDateRange(startDate, endDate) {
     const start = new Date(startDate);
     const end = new Date(endDate);
     return `${start.toLocaleDateString()} - ${end.toLocaleDateString()}`;
-}
-
-async function fetchAndDisplayCalendar(startDate, endDate, username, breakReason, calendarGrid) {
-    try {
-        // Generate dates array for the streak period instead of fetching
-        const start = new Date(startDate);
-        const end = new Date(endDate);
-        const attendance = {};
-        
-        // Generate attendance data for streak days (all days in streak are either in-office or remote)
-        let currentDate = new Date(start);
-        while (currentDate <= end) {
-            const dateStr = currentDate.toISOString().split('T')[0];
-            // Assume in-office for all streak days (since we know it's a valid streak)
-            attendance[dateStr] = 'in-office';
-            currentDate.setDate(currentDate.getDate() + 1);
-        }
-        
-        // Get first day of month for start date
-        const monthStart = new Date(start.getFullYear(), start.getMonth(), 1);
-        
-        // If streak starts in first week, show previous month too
-        if (start.getDate() <= 7) {
-            monthStart.setMonth(monthStart.getMonth() - 1);
-        }
-        
-        // Calculate last date to show (end of month containing end date)
-        const lastDate = new Date(end.getFullYear(), end.getMonth() + 1, 0);
-        
-        let currentDate = new Date(monthStart);
-        let currentMonth = currentDate.getMonth();
-        
-        // Add month divider
-        addMonthDivider(calendarGrid, currentDate);
-        
-        // Add initial padding for first month
-        addMonthPadding(calendarGrid, monthStart);
-        
-        while (currentDate <= lastDate) {
-            // Add new month divider if month changes
-            if (currentDate.getMonth() !== currentMonth) {
-                currentMonth = currentDate.getMonth();
-                addMonthDivider(calendarGrid, currentDate);
-            }
-            
-            const dayElement = createDayElement(
-                currentDate,
-                start,
-                end,
-                attendance,
-                startDate,
-                endDate,
-                breakReason
-            );
-            
-            calendarGrid.appendChild(dayElement);
-            currentDate.setDate(currentDate.getDate() + 1);
-        }
-    } catch (error) {
-        console.error('Error generating calendar:', error);
-    }
-}
-
-function createDayElement(currentDate, start, end, attendance, startDate, endDate, breakReason) {
-    const dayElement = document.createElement('div');
-    dayElement.className = 'calendar-day';
-    
-    const content = document.createElement('div');
-    content.className = 'calendar-day-content';
-    
-    const dayNumber = document.createElement('div');
-    dayNumber.className = 'day-number';
-    dayNumber.textContent = currentDate.getDate();
-    content.appendChild(dayNumber);
-    
-    const currentDateStr = currentDate.toISOString().split('T')[0];
-    
-    // Add status indicator if we have attendance data
-    if (attendance[currentDateStr]) {
-        const status = document.createElement('div');
-        status.className = `status-indicator status-${attendance[currentDateStr]}`;
-        content.appendChild(status);
-    }
-    
-    // Style based on streak
-    if (currentDate >= start && currentDate <= end) {
-        if (currentDateStr === startDate) {
-            dayElement.classList.add('streak-start');
-            dayElement.title = 'Streak Start';
-        } else if (currentDateStr === endDate) {
-            dayElement.classList.add('streak-end');
-            dayElement.title = breakReason;
-        } else {
-            dayElement.classList.add('streak-day');
-        }
-    } else {
-        dayElement.classList.add('inactive');
-    }
-    
-    dayElement.appendChild(content);
-    return dayElement;
 }
 
 function addMonthDivider(calendar, date) {
@@ -673,32 +515,155 @@ function addMonthPadding(calendar, date) {
     }
 }
 
+function createDayElement(currentDate, start, end, attendance, startDate, endDate, breakReason) {
+    const dayElement = document.createElement('div');
+    dayElement.className = 'calendar-day';
+    
+    const content = document.createElement('div');
+    content.className = 'calendar-day-content';
+    
+    const dayNumber = document.createElement('div');
+    dayNumber.className = 'day-number';
+    dayNumber.textContent = currentDate.getDate();
+    content.appendChild(dayNumber);
+    
+    const currentDateStr = currentDate.toISOString().split('T')[0];
+    
+    if (attendance[currentDateStr]) {
+        const status = document.createElement('div');
+        status.className = `status-indicator status-${attendance[currentDateStr]}`;
+        content.appendChild(status);
+    }
+    
+    if (currentDate >= start && currentDate <= end) {
+        if (currentDateStr === startDate) {
+            dayElement.classList.add('streak-start');
+            dayElement.title = 'Streak Start';
+        } else if (currentDateStr === endDate) {
+            dayElement.classList.add('streak-end');
+            dayElement.title = breakReason;
+        } else {
+            dayElement.classList.add('streak-day');
+        }
+    } else {
+        dayElement.classList.add('inactive');
+    }
+    
+    dayElement.appendChild(content);
+    return dayElement;
+}
+
+async function fetchAndDisplayCalendar(startDate, endDate, username, breakReason, calendarGrid) {
+    try {
+        const start = new Date(startDate);
+        const end = new Date(endDate);
+        const attendance = {};
+        
+        let date = new Date(start);
+        while (date <= end) {
+            const dateStr = date.toISOString().split('T')[0];
+            attendance[dateStr] = 'in-office';
+            date.setDate(date.getDate() + 1);
+        }
+        
+        const monthStart = new Date(start.getFullYear(), start.getMonth(), 1);
+        if (start.getDate() <= 7) {
+            monthStart.setMonth(monthStart.getMonth() - 1);
+        }
+        
+        const lastDate = new Date(end.getFullYear(), end.getMonth() + 1, 0);
+        
+        let displayDate = new Date(monthStart);
+        let currentMonth = displayDate.getMonth();
+        
+        addMonthDivider(calendarGrid, displayDate);
+        addMonthPadding(calendarGrid, monthStart);
+        
+        while (displayDate <= lastDate) {
+            if (displayDate.getMonth() !== currentMonth) {
+                currentMonth = displayDate.getMonth();
+                addMonthDivider(calendarGrid, displayDate);
+            }
+            
+            const dayElement = createDayElement(
+                displayDate,
+                start,
+                end,
+                attendance,
+                startDate,
+                endDate,
+                breakReason
+            );
+            
+            calendarGrid.appendChild(dayElement);
+            displayDate.setDate(displayDate.getDate() + 1);
+        }
+    } catch (error) {
+        console.error('Error generating calendar:', error);
+    }
+}
+
+window.showStreakCalendar = function(startDate, endDate, username, breakReason, isCurrentStreak = false) {
+    const modal = document.getElementById('streakModal');
+    const calendar = document.getElementById('streakCalendar');
+    const modalTitle = document.getElementById('modalTitle');
+    
+    calendar.innerHTML = '';
+    
+    modalTitle.innerHTML = `
+        <div class="modal-title-row">
+            <span>${username}'s ${isCurrentStreak ? 'Current' : 'Past'} Streak</span>
+            <span class="close">&times;</span>
+        </div>
+    `;
+    
+    const infoBanner = document.createElement('div');
+    infoBanner.className = isCurrentStreak ? 'streak-info-banner current' : 'break-reason-banner';
+    infoBanner.textContent = isCurrentStreak 
+        ? `Active streak: ${formatDateRange(startDate, endDate)}` 
+        : `Streak broken: ${breakReason}`;
+    calendar.appendChild(infoBanner);
+
+    const calendarGrid = document.createElement('div');
+    calendarGrid.className = 'calendar-grid';
+    calendar.appendChild(calendarGrid);
+    
+    const headerRow = document.createElement('div');
+    headerRow.className = 'calendar-header-row';
+    ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].forEach(day => {
+        const header = document.createElement('div');
+        header.className = 'calendar-header';
+        header.textContent = day;
+        headerRow.appendChild(header);
+    });
+    calendarGrid.appendChild(headerRow);
+    
+    fetchAndDisplayCalendar(startDate, endDate, username, breakReason, calendarGrid);
+    
+    modal.style.display = 'block';
+    
+    const closeBtn = modal.querySelector('.close');
+    closeBtn.onclick = () => modal.style.display = 'none';
+    
+    window.onclick = (event) => {
+        if (event.target === modal) {
+            modal.style.display = 'none';
+        }
+    };
+};
+
 document.addEventListener('DOMContentLoaded', function() {
-    // Add event listener for current streak clicking
-    document.querySelectorAll('.streak-count').forEach(element => {
-        const streakCount = element.querySelector('.current');
-        if (streakCount && parseInt(streakCount.textContent) > 0) {
-            element.style.cursor = 'pointer';
-            element.onclick = () => {
+    // Initialize event handlers for streaks
+    document.querySelectorAll('.streak-count.active').forEach(element => {
+        const current = element.querySelector('.current');
+        if (current) {
+            const days = parseInt(current.textContent);
+            if (days > 0) {
                 const username = element.closest('.streak-card').querySelector('h2').textContent;
-                const days = parseInt(streakCount.textContent);
                 const endDate = new Date().toISOString().split('T')[0];
                 const startDate = new Date(Date.now() - (days - 1) * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-                showStreakCalendar(startDate, endDate, username, 'Current active streak', true);
-            };
-        }
-    });
-
-    // Add click handlers for past streak dates
-    document.querySelectorAll('.streak-dates').forEach(element => {
-        const username = element.closest('.streak-card').querySelector('h2').textContent;
-        const dates = element.getAttribute('onclick')
-                            .match(/showStreakCalendar\('([^']+)', '([^']+)', '[^']+', '([^']+)'/);
-        if (dates) {
-            element.onclick = (e) => {
-                e.preventDefault();
-                showStreakCalendar(dates[1], dates[2], username, dates[3]);
-            };
+                element.onclick = () => showStreakCalendar(startDate, endDate, username, 'Current active streak', true);
+            }
         }
     });
 });

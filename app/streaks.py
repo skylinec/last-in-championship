@@ -71,7 +71,6 @@ def get_streak_data(username, db):
 def get_streak_history(username, db):
     """Get historical streak data for a user"""
     try:
-        # Get all entries for the user ordered by date
         entries = db.execute(text("""
             SELECT date, status
             FROM entries 
@@ -90,11 +89,14 @@ def get_streak_history(username, db):
         
         for entry in entries:
             entry_date = entry.date if isinstance(entry.date, date) else datetime.strptime(entry.date, '%Y-%m-%d').date()
-            status = entry.status.replace('-', '_')
             
+            # Skip weekends entirely
+            if entry_date.weekday() >= 5:  # 5=Saturday, 6=Sunday
+                continue
+                
             # Only process if it's a working day for this user
             if entry_date.strftime('%a').lower() in working_days:
-                # Check if this is a valid attendance day
+                status = entry.status.replace('-', '_')
                 is_valid = status in ['in_office', 'remote']
                 
                 if is_valid:
@@ -102,31 +104,33 @@ def get_streak_history(username, db):
                         streak_start = entry_date
                         current_streak = 1
                     else:
-                        # Check if this is the next consecutive working day
                         if last_date:
+                            # Calculate working days between last date and current date
                             days_between = []
                             current_date = last_date + timedelta(days=1)
                             
-                            # Find working days between last attendance and current date
                             while current_date < entry_date:
-                                if current_date.strftime('%a').lower() in working_days:
+                                # Skip weekends
+                                if current_date.weekday() < 5 and current_date.strftime('%a').lower() in working_days:
                                     days_between.append(current_date)
                                 current_date += timedelta(days=1)
                             
                             if not days_between:  # No missed working days
                                 current_streak += 1
                             else:
-                                # Streak broken - save it and start new one
+                                # Save previous streak (if exists) and start new one
                                 if current_streak > 1:
                                     streaks.append({
                                         'start': streak_start,
                                         'end': last_date,
-                                        'length': current_streak,
+                                        # Subtract 1 from streak to not count the last day
+                                        'length': current_streak - 1,
                                         'break_reason': f"Missed {len(days_between)} working day(s)"
                                     })
+                                # Start new streak immediately
                                 streak_start = entry_date
                                 current_streak = 1
-                                
+                    
                     last_date = entry_date
                 else:
                     # Non-working status breaks the streak
@@ -134,9 +138,11 @@ def get_streak_history(username, db):
                         streaks.append({
                             'start': streak_start,
                             'end': last_date,
-                            'length': current_streak,
+                            # Subtract 1 from streak to not count the last day
+                            'length': current_streak - 1,
                             'break_reason': f"Status changed to {status}"
                         })
+                    streak_start = None
                     current_streak = 0
                     last_date = entry_date
 
@@ -145,10 +151,13 @@ def get_streak_history(username, db):
             streaks.append({
                 'start': streak_start,
                 'end': last_date,
-                'length': current_streak,
+                # For active streaks, don't subtract 1 since the streak is ongoing
+                'length': current_streak if last_date == datetime.now().date() else current_streak - 1,
                 'break_reason': "Current active streak" if last_date == datetime.now().date() else "End of records"
             })
 
+        # Only return streaks with positive length
+        streaks = [s for s in streaks if s['length'] > 0]
         return sorted(streaks, key=lambda x: (-x['length'], -x['end'].toordinal()))
 
     except Exception as e:

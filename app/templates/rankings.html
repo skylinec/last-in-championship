@@ -56,10 +56,6 @@
                 <th>Name</th>
                 <th>Score {% if period in ['week', 'month'] %}(<span id="pointsMode">Average</span>){% endif %}</th>
                 <th>Average Arrival Time</th>
-                {% if streaks_enabled %}
-                <th>Current Streak</th>
-                <th>Max Streak</th>
-                {% endif %}
                 <th>Details</th>
             </tr>
         </thead>
@@ -67,25 +63,28 @@
             {% for rank in rankings %}
             <tr>
                 <td>{{ loop.index }}</td>
-                <td>{{ rank.name }}</td>
+                <td class="name-cell">
+                    {% if rank.current_streak > 0 %}
+                    <div class="streak-flame" data-streak="{{ rank.current_streak }}">
+                        🔥<span class="streak-count">{{ rank.current_streak }}</span>
+                    </div>
+                    {% endif %}
+                    {{ rank.name }}
+                </td>
                 <td class="score-cell" 
                     data-tooltip="Score breakdown:
                     Base points: {{ rank.base_points|default(0)|round(2) }}
                     {% if mode == 'last-in' %}
                     Position bonus: {{ rank.position_bonus|default(0)|round(2) }}
-                    Streak penalty: {{ rank.streak_bonus|default(0) * -1 if rank.streak_bonus else 0|round(2) }}
+                    Streak penalty: {{ rank.streak_bonus|default(0) * -1 if rank.streak_bonus and streaks_enabled else 0|round(2) }}
                     {% else %}
                     Position bonus: {{ rank.position_bonus|default(0)|round(2) }}
-                    Streak bonus: {{ rank.streak_bonus|default(0)|round(2) }}
+                    Streak bonus: {{ rank.streak_bonus|default(0) if streaks_enabled else 0|round(2) }}
                     {% endif %}
                     Total: {{ rank.score|default(0)|round(2) }}">
                     {{ rank.score|default(0)|round(2) }}
                 </td>
                 <td>{{ rank.average_arrival_time|default('N/A') }}</td>
-                {% if streaks_enabled %}
-                <td>{{ rank.current_streak|default(0) }} days</td>
-                <td>{{ rank.max_streak|default(0) }} days</td>
-                {% endif %}
                 <td>
                     Office: {{ rank.stats.in_office|default(0) }} days<br>
                     Remote: {{ rank.stats.remote|default(0) }} days<br>
@@ -463,6 +462,52 @@
 
 .points-switch input:checked + .slider:before {
     transform: translateX(25px);
+}
+
+/* Add to existing styles */
+.name-cell {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.streak-flame {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    font-size: 1.2em;
+    cursor: help;
+}
+
+.streak-count {
+    position: absolute;
+    right: -8px;
+    bottom: -8px;
+    background: var(--accent-color);
+    color: white;
+    font-size: 0.6em;
+    padding: 2px 4px;
+    border-radius: 8px;
+    font-weight: bold;
+}
+
+.streak-flame[data-streak="1"] { opacity: 0.6; }
+.streak-flame[data-streak="2"] { opacity: 0.7; }
+.streak-flame[data-streak="3"] { opacity: 0.8; }
+.streak-flame[data-streak="4"] { opacity: 0.9; }
+.streak-flame[data-streak="5"] { opacity: 1.0; }
+
+.streak-flame[data-streak^="1"] .streak-count { background: #FFA726; }
+.streak-flame[data-streak^="2"] .streak-count { background: #FF7043; }
+.streak-flame[data-streak^="3"] .streak-count { background: #F4511E; }
+.streak-flame[data-streak^="4"] .streak-count { background: #E64A19; }
+.streak-flame[data-streak^="5"] .streak-count { background: #D84315; }
+
+@media (max-width: 768px) {
+    .streak-count {
+        font-size: 0.5em;
+        padding: 1px 3px;
+    }
 }
 </style>
 

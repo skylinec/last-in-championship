@@ -354,24 +354,19 @@ def calculate_daily_score(entry, settings, position=None, total_entries=None, mo
             early_bird_bonus = position_bonus
             last_in_bonus = 0
 
-    # Calculate streak bonus only if the entry isn't in the future
+    # Calculate streak bonus regardless of settings being enabled
     streak_bonus = 0
-    if settings.get("enable_streaks", False):
-        entry_date = datetime.strptime(entry["date"], '%Y-%m-%d').date()
-        current_date = datetime.now().date()
-        
-        if entry_date <= current_date:  # Only calculate streak for non-future dates
-            db = SessionLocal()
-            try:
-                # Calculate streak up to the entry date
-                streak = calculate_streak_for_date(entry["name"], entry_date, db)
-                if streak > 0:
-                    multiplier = settings.get("streak_multiplier", 0.5)
-                    # Reverse logic: In last-in mode, streak subtracts points (penalizes consistent lateness)
-                    # In early-bird mode, streak adds points (rewards consistent earliness)
+    if entry_date <= current_date:  # Only calculate streak for non-future dates
+        db = SessionLocal()
+        try:
+            streak = calculate_streak_for_date(entry["name"], entry_date, db)
+            if streak > 0:
+                multiplier = settings.get("streak_multiplier", 0.5)
+                # Only apply streak bonus to score if streaks are enabled
+                if settings.get("enable_streaks", False):
                     streak_bonus = -streak * multiplier if mode == 'last_in' else streak * multiplier
-            finally:
-                db.close()
+        finally:
+            db.close()
 
     # Apply tie breaker wins if enabled - Modified to use the exact date
     tie_breaker_points = 0
@@ -400,17 +395,16 @@ def calculate_daily_score(entry, settings, position=None, total_entries=None, mo
             db.close()
 
     return {
-        "last_in": context['current_points'] + last_in_bonus + streak_bonus - tie_breaker_points,
-        "early_bird": context['current_points'] + early_bird_bonus - streak_bonus + tie_breaker_points,
+        "last_in": context['current_points'] + last_in_bonus + (streak_bonus if settings.get("enable_streaks", False) else 0),
+        "early_bird": context['current_points'] + early_bird_bonus - (streak_bonus if settings.get("enable_streaks", False) else 0),
         "base": context['current_points'],
         "streak": streak_bonus,
         "position_bonus": last_in_bonus if mode == 'last_in' else early_bird_bonus,
-        "tie_breaker": tie_breaker_points,
+        "current_streak": streak,  # Add current streak to return value
         "breakdown": {
             "base_points": context['current_points'],
             "position_bonus": last_in_bonus if mode == 'last_in' else early_bird_bonus,
-            "streak_bonus": streak_bonus,
-            "tie_breaker_points": tie_breaker_points
+            "streak_bonus": streak_bonus if settings.get("enable_streaks", False) else 0
         }
     }
 

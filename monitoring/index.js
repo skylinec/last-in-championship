@@ -131,17 +131,7 @@ async function generateStreaks() {
   try {
     const startTime = Date.now();
 
-    // Get settings first to check if streaks are enabled
-    const settings = await client.query('SELECT enable_streaks FROM settings LIMIT 1');
-    if (!settings.rows[0]?.enable_streaks) {
-      await logMonitoringEvent('streak_generation', {
-        duration: Date.now() - startTime,
-        streaks_generated: 0,
-        message: 'Streaks disabled in settings'
-      });
-      return;
-    }
-
+    // Remove early settings check since we want to generate streaks regardless
     // Get existing streaks for comparison
     const existingStreaks = await client.query('SELECT username, current_streak, max_streak FROM user_streaks');
     const existingStreakMap = new Map(existingStreaks.rows.map(s => [s.username, s]));

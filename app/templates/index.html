@@ -269,7 +269,45 @@
     margin-top: 10px;
 }
 
-/* Add responsive styles */
+.podium-name-with-streak {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    justify-content: center;
+}
+
+.streak-flame {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    font-size: 1.2em;
+    cursor: help;
+}
+
+.streak-count {
+    position: absolute;
+    right: -8px;
+    bottom: -8px;
+    background: var(--accent-color);
+    color: white;
+    font-size: 0.6em;
+    padding: 2px 4px;
+    border-radius: 8px;
+    font-weight: bold;
+}
+
+.streak-flame[data-streak="1"] { opacity: 0.6; }
+.streak-flame[data-streak="2"] { opacity: 0.7; }
+.streak-flame[data-streak="3"] { opacity: 0.8; }
+.streak-flame[data-streak="4"] { opacity: 0.9; }
+.streak-flame[data-streak="5"] { opacity: 1.0; }
+
+.streak-flame[data-streak^="1"] .streak-count { background: #FFA726; }
+.streak-flame[data-streak^="2"] .streak-count { background: #FF7043; }
+.streak-flame[data-streak^="3"] .streak-count { background: #F4511E; }
+.streak-flame[data-streak^="4"] .streak-count { background: #E64A19; }
+.streak-flame[data-streak^="5"] .streak-count { background: #D84315; }
+
 @media (max-width: 768px) {
     .dashboard-container {
         grid-template-columns: 1fr;
@@ -342,23 +380,14 @@
     .quick-action-buttons button {
         width: 100%;
     }
-}
 
-/* Add touch-friendly improvements */
-@media (hover: none) {
-    .status-button {
-        -webkit-tap-highlight-color: transparent;
-        cursor: pointer;
+    .streak-count {
+        font-size: 0.5em;
+        padding: 1px 3px;
     }
-
-    .status-button:active {
-        transform: scale(0.98);
-        background: var(--accent-color);
-        color: white;
-    }
-
-    .submit-button:active {
-        transform: scale(0.98);
+    
+    .podium-name-with-streak {
+        font-size: 0.9em;
     }
 }
 </style>
@@ -366,7 +395,6 @@
 <script>
 async function updatePodium() {
     const period = document.getElementById('podiumPeriod').value;
-    // Get current mode from toggle
     const mode = document.getElementById('championshipToggle').checked ? 'last_in' : 'early_bird';
     const response = await fetch(`/rankings/${period}?mode=${mode}`);
     const data = await response.text();
@@ -379,7 +407,24 @@ async function updatePodium() {
     places.forEach((place, index) => {
         if (rows[index]) {
             const cells = rows[index].querySelectorAll('td');
-            document.getElementById(`${place}Name`).textContent = cells[1].textContent;
+            const nameCell = cells[1];
+            const streakFlame = nameCell.querySelector('.streak-flame');
+            const userName = nameCell.lastChild.textContent.trim();
+            
+            // Create name element with streak if present
+            let nameHtml = userName;
+            if (streakFlame) {
+                const streak = streakFlame.getAttribute('data-streak');
+                nameHtml = `
+                    <div class="podium-name-with-streak">
+                        <div class="streak-flame" data-streak="${streak}">
+                            🔥<span class="streak-count">${streak}</span>
+                        </div>
+                        ${userName}
+                    </div>`;
+            }
+            
+            document.getElementById(`${place}Name`).innerHTML = nameHtml;
             document.getElementById(`${place}Points`).textContent = cells[2].textContent;
         } else {
             document.getElementById(`${place}Name`).textContent = '-';
@@ -388,7 +433,6 @@ async function updatePodium() {
     });
 }
 
-// Update podium when mode changes
 document.getElementById('championshipToggle').addEventListener('change', updatePodium);
 
 document.getElementById('podiumPeriod').addEventListener('change', updatePodium);

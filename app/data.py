@@ -246,6 +246,9 @@ def calculate_daily_score(entry, settings, position=None, total_entries=None, mo
     if not isinstance(settings, dict):
         settings = get_settings()
 
+    # Get current date or use today as default
+    current_date = datetime.now()
+
     entry_date = datetime.strptime(entry["date"], '%Y-%m-%d')
     weekday = entry_date.strftime('%A').lower()
     

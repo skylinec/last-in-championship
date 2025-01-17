@@ -22,7 +22,14 @@
             {% for entry in rankings %}
             <tr class="rank-row {% if entry.status == 'in-office' %}in-office{% endif %}">
                 <td>{{ loop.index }}</td>
-                <td>{{ entry.name }}</td>
+                <td class="name-cell">
+                    {% if entry.streak > 0 %}
+                    <div class="streak-flame" data-streak="{{ entry.streak }}">
+                        🔥<span class="streak-count">{{ entry.streak }}</span>
+                    </div>
+                    {% endif %}
+                    {{ entry.name }}
+                </td>
                 <td>{{ entry.time }}</td>
                 <td>{{ entry.status }}</td>
                 <td>{{ entry.points }}</td>
@@ -277,6 +284,52 @@ window.addEventListener('resize', adjustTimelineBars);
     left: 50%;
     transform: translate(-50%, -50%);
     white-space: nowrap;
+}
+
+/* Add to existing styles */
+.name-cell {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.streak-flame {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    font-size: 1.2em;
+    cursor: help;
+}
+
+.streak-count {
+    position: absolute;
+    right: -8px;
+    bottom: -8px;
+    background: var(--accent-color);
+    color: white;
+    font-size: 0.6em;
+    padding: 2px 4px;
+    border-radius: 8px;
+    font-weight: bold;
+}
+
+.streak-flame[data-streak="1"] { opacity: 0.6; }
+.streak-flame[data-streak="2"] { opacity: 0.7; }
+.streak-flame[data-streak="3"] { opacity: 0.8; }
+.streak-flame[data-streak="4"] { opacity: 0.9; }
+.streak-flame[data-streak="5"] { opacity: 1.0; }
+
+.streak-flame[data-streak^="1"] .streak-count { background: #FFA726; }
+.streak-flame[data-streak^="2"] .streak-count { background: #FF7043; }
+.streak-flame[data-streak^="3"] .streak-count { background: #F4511E; }
+.streak-flame[data-streak^="4"] .streak-count { background: #E64A19; }
+.streak-flame[data-streak^="5"] .streak-count { background: #D84315; }
+
+@media (max-width: 768px) {
+    .streak-count {
+        font-size: 0.5em;
+        padding: 1px 3px;
+    }
 }
 </style>
 {% endblock %}

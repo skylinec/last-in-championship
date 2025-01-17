@@ -109,7 +109,7 @@ from .visualisation import (calculate_arrival_patterns, calculate_average_time,
                             calculate_status_counts, calculate_user_comparison,
                             calculate_weekly_patterns, analyze_early_arrivals,
                             analyze_late_arrivals)
-from .streaks import calculate_current_streak, get_streak_history
+from .streaks import calculate_current_streak, get_streak_history, get_attendance_for_period
 
 # If you need to call methods from your main app or from 'app.py' directly, 
 # you typically do that through current_app from flask, or separate your code further.
@@ -2381,5 +2381,72 @@ def change_password():
         db.rollback()
         app.logger.error(f"Error changing password: {str(e)}")
         return jsonify({"message": "Error updating password"}), 500
+    finally:
+        db.close()
+
+@bp.route("/profile/change-password", methods=["POST"])
+@login_required
+def change_password():
+    if not request.is_json:
+        return jsonify({"message": "Invalid request"}), 400
+        
+    current_password = request.json.get("current_password")
+    new_password = request.json.get("new_password")
+    
+    if not current_password or not new_password:
+        return jsonify({"message": "Missing required fields"}), 400
+        
+    db = SessionLocal()
+    try:
+        user = db.query(User).filter_by(username=session['user']).first()
+        
+        if not user or user.password != current_password:  # In production, use proper password hashing
+            return jsonify({"message": "Current password is incorrect"}), 401
+            
+        user.password = new_password  # In production, hash the password
+        db.commit()
+        
+        log_audit(
+            "change_password",
+            session['user'],
+            "Password changed successfully"
+        )
+        
+        return jsonify({"message": "Password updated successfully"})
+        
+    except Exception as e:
+        db.rollback()
+        app.logger.error(f"Error changing password: {str(e)}")
+        return jsonify({"message": "Error updating password"}), 500
+    finally:
+        db.close()
+
+@bp.route("/api/attendance/<username>/<start_date>/<end_date>")
+@login_required
+def get_attendance(username, start_date, end_date):
+    db = SessionLocal()
+    try:
+        start = datetime.strptime(start_date, '%Y-%m-%d')
+        end = datetime.strptime(end_date, '%Y-%m-%d')
+        attendance = get_attendance_for_period(username, start, end, db)
+        return jsonify(attendance)
+    except Exception as e:
+        app.logger.error(f"Error getting attendance: {str(e)}")
+        return jsonify({}), 500
+    finally:
+        db.close()
+
+@bp.route("/api/attendance/<username>/<start_date>/<end_date>")
+@login_required
+def get_attendance(username, start_date, end_date):
+    db = SessionLocal()
+    try:
+        start = datetime.strptime(start_date, '%Y-%m-%d')
+        end = datetime.strptime(end_date, '%Y-%m-%d')
+        attendance = get_attendance_for_period(username, start, end, db)
+        return jsonify(attendance)
+    except Exception as e:
+        app.logger.error(f"Error getting attendance: {str(e)}")
+        return jsonify({}), 500
     finally:
         db.close()

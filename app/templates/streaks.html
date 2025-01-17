@@ -226,6 +226,8 @@
     max-width: 600px;
     box-shadow: 0 4px 15px rgba(0,0,0,0.2);
     animation: slideIn 0.3s ease;
+    max-height: 90vh;
+    overflow-y: auto;
 }
 
 .close {
@@ -244,8 +246,9 @@
     margin-top: 20px;
     display: grid;
     grid-template-columns: repeat(7, 1fr);
-    gap: 5px;
+    gap: 4px;
     padding: 10px;
+    background: white;
 }
 
 .calendar-day {
@@ -256,6 +259,49 @@
     border-radius: 4px;
     font-size: 0.9em;
     border: 1px solid #eee;
+    position: relative;
+    transition: transform 0.2s ease;
+    min-width: 40px;
+    min-height: 40px;
+}
+
+.calendar-day-content {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+}
+
+.day-number {
+    font-size: 1em;
+    margin-bottom: 2px;
+}
+
+.status-indicator {
+    position: absolute;
+    bottom: 4px;
+    font-size: 0.7em;
+}
+
+.status-in-office::after {
+    content: '🏢';
+}
+
+.status-remote::after {
+    content: '🏠';
+}
+
+.status-sick::after {
+    content: '🤒';
+}
+
+.status-leave::after {
+    content: '✈️';
 }
 
 .calendar-header {
@@ -283,12 +329,40 @@
 .month-divider {
     grid-column: 1 / -1;
     text-align: center;
-    padding: 5px;
+    padding: 10px;
     background: #f8f9fa;
-    margin: 5px 0;
+    margin: 10px 0;
     border-radius: 4px;
-    font-weight: 500;
-    color: #666;
+    font-weight: 600;
+    color: #333;
+    border: 1px solid #eee;
+}
+
+.calendar-day.inactive {
+    color: #ccc;
+    background-color: #f8f8f8;
+}
+
+.calendar-day:not(.inactive):hover {
+    transform: scale(1.1);
+    z-index: 1;
+}
+
+.calendar-day.streak-day:hover::after,
+.calendar-day.streak-start:hover::after,
+.calendar-day.streak-end:hover::after {
+    content: attr(title);
+    position: absolute;
+    bottom: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(0, 0, 0, 0.8);
+    color: white;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 0.8em;
+    white-space: nowrap;
+    z-index: 2;
 }
 
 @keyframes fadeIn {
@@ -308,7 +382,14 @@
     }
 
     .calendar-day {
+        min-width: 35px;
+        min-height: 35px;
         font-size: 0.8em;
+    }
+
+    .status-indicator {
+        font-size: 0.6em;
+        bottom: 2px;
     }
 
     .past-streaks li {
@@ -325,83 +406,118 @@ function showStreakCalendar(startDate, endDate, username, breakReason) {
     const calendar = document.getElementById('streakCalendar');
     const modalTitle = document.getElementById('modalTitle');
     
-    // Clear previous calendar
-    calendar.innerHTML = '';
-    
-    // Set title
-    modalTitle.textContent = `${username}'s Streak Calendar`;
-    
-    // Convert dates to Date objects
-    const start = new Date(startDate);
-    const end = new Date(endDate);
-    
-    // Add day headers
-    const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-    days.forEach(day => {
-        const header = document.createElement('div');
-        header.className = 'calendar-header';
-        header.textContent = day;
-        calendar.appendChild(header);
-    });
-    
-    // Fill in calendar
-    let currentDate = new Date(start);
-    let currentMonth = currentDate.getMonth();
-    
-    // Add month divider
-    const monthNames = ['January', 'February', 'March', 'April', 'May', 'June',
-                       'July', 'August', 'September', 'October', 'November', 'December'];
-    let monthDivider = document.createElement('div');
-    monthDivider.className = 'month-divider';
-    monthDivider.textContent = monthNames[currentMonth] + ' ' + currentDate.getFullYear();
-    calendar.appendChild(monthDivider);
-    
-    // Add padding for first day
-    let firstDay = currentDate.getDay();
+    // Fetch attendance data for the period
+    fetch(`/api/attendance/${username}/${startDate}/${endDate}`)
+        .then(response => response.json())
+        .then(attendance => {
+            // Clear previous calendar
+            calendar.innerHTML = '';
+            
+            // Set title
+            modalTitle.textContent = `${username}'s Streak Calendar`;
+            
+            // Convert dates to Date objects and get first day of start month
+            const start = new Date(startDate);
+            const end = new Date(endDate);
+            const monthStart = new Date(start.getFullYear(), start.getMonth(), 1);
+            
+            // Show previous month if streak starts in first week
+            if (start.getDate() <= 7) {
+                monthStart.setMonth(monthStart.getMonth() - 1);
+            }
+            
+            // Add day headers
+            const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+            days.forEach(day => {
+                const header = document.createElement('div');
+                header.className = 'calendar-header';
+                header.textContent = day;
+                calendar.appendChild(header);
+            });
+            
+            // Fill in calendar
+            let currentDate = new Date(monthStart);
+            let currentMonth = currentDate.getMonth();
+            
+            // Add month divider
+            const monthNames = ['January', 'February', 'March', 'April', 'May', 'June',
+                              'July', 'August', 'September', 'October', 'November', 'December'];
+            
+            // Add first month divider
+            addMonthDivider(calendar, currentDate, monthNames);
+            
+            // Add initial padding
+            addMonthPadding(calendar, currentDate);
+
+            // Calculate last date to show
+            const lastDate = new Date(end.getFullYear(), end.getMonth() + 1, 0);
+
+            while(currentDate <= lastDate) {
+                // Add new month divider if month changes
+                if(currentDate.getMonth() !== currentMonth) {
+                    currentMonth = currentDate.getMonth();
+                    addMonthDivider(calendar, currentDate, monthNames);
+                }
+                
+                const dayElement = document.createElement('div');
+                dayElement.className = 'calendar-day';
+                
+                const content = document.createElement('div');
+                content.className = 'calendar-day-content';
+                
+                const dayNumber = document.createElement('div');
+                dayNumber.className = 'day-number';
+                dayNumber.textContent = currentDate.getDate();
+                content.appendChild(dayNumber);
+                
+                const currentDateStr = currentDate.toISOString().split('T')[0];
+                
+                // Add status indicator if we have attendance data
+                if (attendance[currentDateStr]) {
+                    const status = document.createElement('div');
+                    status.className = `status-indicator status-${attendance[currentDateStr]}`;
+                    content.appendChild(status);
+                }
+                
+                // Style based on streak
+                if (currentDate >= start && currentDate <= end) {
+                    if (currentDateStr === startDate) {
+                        dayElement.classList.add('streak-start');
+                        dayElement.title = 'Streak Start';
+                    } else if (currentDateStr === endDate) {
+                        dayElement.classList.add('streak-end');
+                        dayElement.title = breakReason;
+                    } else {
+                        dayElement.classList.add('streak-day');
+                    }
+                } else {
+                    dayElement.classList.add('inactive');
+                }
+                
+                dayElement.appendChild(content);
+                calendar.appendChild(dayElement);
+                
+                currentDate.setDate(currentDate.getDate() + 1);
+            }
+            
+            // Show modal
+            modal.style.display = 'block';
+        });
+}
+
+function addMonthDivider(calendar, date, monthNames) {
+    const divider = document.createElement('div');
+    divider.className = 'month-divider';
+    divider.textContent = `${monthNames[date.getMonth()]} ${date.getFullYear()}`;
+    calendar.appendChild(divider);
+}
+
+function addMonthPadding(calendar, date) {
+    const firstDay = date.getDay();
     for(let i = 0; i < firstDay; i++) {
         const padding = document.createElement('div');
-        padding.className = 'calendar-day';
+        padding.className = 'calendar-day inactive';
         calendar.appendChild(padding);
-    }
-
-    while(currentDate <= end) {
-        // Check if we need to add a new month divider
-        if(currentDate.getMonth() !== currentMonth) {
-            currentMonth = currentDate.getMonth();
-            const newMonthDivider = document.createElement('div');
-            newMonthDivider.className = 'month-divider';
-            newMonthDivider.textContent = monthNames[currentMonth] + ' ' + currentDate.getFullYear();
-            calendar.appendChild(newMonthDivider);
-        }
-        
-        const dayElement = document.createElement('div');
-        dayElement.className = 'calendar-day';
-        dayElement.textContent = currentDate.getDate();
-        
-        // Add appropriate classes
-        if(currentDate.toISOString().split('T')[0] === startDate) {
-            dayElement.classList.add('streak-start');
-            dayElement.title = 'Streak Start';
-        } else if(currentDate.toISOString().split('T')[0] === endDate) {
-            dayElement.classList.add('streak-end');
-            dayElement.title = breakReason;
-        } else {
-            dayElement.classList.add('streak-day');
-        }
-        
-        calendar.appendChild(dayElement);
-        
-        currentDate.setDate(currentDate.getDate() + 1);
-    }
-    
-    // Show modal
-    modal.style.display = 'block';
-    
-    // Close modal when clicking X or outside
-    const closeBtn = document.getElementsByClassName('close')[0];
-    closeBtn.onclick = () => modal.style.display = 'none';
-    window.onclick = (event) => {
-        if (event.target === modal) modal.style.display = 'none';
     }
 }
 

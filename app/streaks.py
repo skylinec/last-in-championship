@@ -283,3 +283,19 @@ def calculate_current_streak(name):
         return 0
     finally:
         db.close()
+
+def get_attendance_for_period(username, start_date, end_date, db):
+    """Get attendance data for a date range"""
+    try:
+        entries = db.execute(
+            Entry.select().where(
+                Entry.c.name == username,
+                Entry.c.date >= start_date.strftime('%Y-%m-%d'),
+                Entry.c.date <= end_date.strftime('%Y-%m-%d')
+            ).order_by(Entry.c.date.asc())
+        ).fetchall()
+        
+        return {entry.date: entry.status for entry in entries}
+    except Exception as e:
+        logger.error(f"Error getting attendance data: {str(e)}")
+        return {}

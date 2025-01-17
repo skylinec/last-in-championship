@@ -34,9 +34,9 @@
 
     {% if period in ['week', 'month'] %}
     <div class="points-mode">
-        <label class="switch points-switch">
+        <label class="points-toggle">
             <input type="checkbox" id="pointsToggle" {% if request.args.get('points_mode') == 'cumulative' %}checked{% endif %}>
-            <span class="slider"></span>
+            <span class="points-slider"></span>
         </label>
         <div class="mode-info">
             <span class="mode-label">Average Points</span>
@@ -483,6 +483,60 @@
     gap: 10px;
     padding: 0 20px;
     border-left: 1px solid #ddd;
+}
+
+/* Points Mode Toggle specific styles */
+.points-toggle {
+    position: relative;
+    display: inline-block;
+    width: 50px;
+    height: 25px;
+}
+
+.points-toggle input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.points-slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: #2ecc71;
+    transition: .4s;
+    border-radius: 34px;
+}
+
+.points-slider:before {
+    position: absolute;
+    content: "x̄";  /* Average symbol */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    height: 17px;
+    width: 17px;
+    left: 4px;
+    bottom: 4px;
+    background-color: white;
+    transition: .4s;
+    border-radius: 50%;
+    font-weight: bold;
+    color: #2ecc71;
+}
+
+.points-toggle input:checked + .points-slider {
+    background-color: #3498db;
+}
+
+.points-toggle input:checked + .points-slider:before {
+    transform: translateX(25px);
+    content: "Σ";  /* Sum symbol */
+    color: #3498db;
 }
 
 .points-switch {

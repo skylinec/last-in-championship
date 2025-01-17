@@ -130,17 +130,10 @@ async function generateStreaks() {
   const client = await pool.connect();
   try {
     const startTime = Date.now();
+    const settingsResult = await client.query('SELECT points FROM settings LIMIT 1');
+    const workingDays = settingsResult.rows[0]?.points?.working_days || {};
 
-    // Remove early settings check since we want to generate streaks regardless
-    // Get existing streaks for comparison
-    const existingStreaks = await client.query('SELECT username, current_streak, max_streak FROM user_streaks');
-    const existingStreakMap = new Map(existingStreaks.rows.map(s => [s.username, s]));
-
-    // First get working days for each user
-    const settingsQuery = await client.query('SELECT points FROM settings LIMIT 1');
-    const workingDays = settingsQuery.rows[0]?.points?.working_days || {};
-
-    // Get all relevant entries ordered by user and date
+    // Get all entries ordered by user and date
     const entries = await client.query(`
       SELECT 
         e.name, 
@@ -153,8 +146,6 @@ async function generateStreaks() {
       ORDER BY e.name, e.date DESC
     `);
 
-    if (!entries.rows.length) return;
-
     const streaks = [];
     let currentUser = null;
     let currentStreak = 0;
@@ -163,8 +154,13 @@ async function generateStreaks() {
     let lastTimestamp = null;
 
     for (const entry of entries.rows) {
+      // Skip if date is a weekend (0 = Sunday, 6 = Saturday)
+      if (entry.day_of_week === 0 || entry.day_of_week === 6) {
+        continue;
+      }
+
       if (entry.name !== currentUser) {
-        // Save previous user's streak
+        // Save previous user's streak if valid
         if (currentUser && currentStreak > 0) {
           streaks.push({
             username: currentUser,
@@ -188,37 +184,23 @@ async function generateStreaks() {
       const userWorkingDays = workingDays[entry.name] || ['mon', 'tue', 'wed', 'thu', 'fri'];
       const dayMap = {0: 'sun', 1: 'mon', 2: 'tue', 3: 'wed', 4: 'thu', 5: 'fri', 6: 'sat'};
       
-      // Check if this is a working day for the user
-      const isWorkingDay = userWorkingDays.includes(dayMap[entry.day_of_week]);
-      
-      if (daysBetween <= 3) { // Within streak range
-        if (daysBetween <= 1) {
-          // Consecutive days
-          if (isWorkingDay) {
-            currentStreak++;
-            maxStreak = Math.max(maxStreak, currentStreak);
-          }
-        } else {
-          // Check if gap only includes non-working days
-          let onlyNonWorkingDays = true;
-          for (let d = 1; d < daysBetween; d++) {
-            const checkDate = new Date(lastDate);
-            checkDate.setDate(checkDate.getDate() - d);
-            const checkDayOfWeek = checkDate.getDay();
-            const isDayWorking = userWorkingDays.includes(dayMap[checkDayOfWeek]);
-            if (isDayWorking) {
-              onlyNonWorkingDays = false;
-              break;
-            }
-          }
-          
-          if (onlyNonWorkingDays && isWorkingDay) {
-            currentStreak++;
-            maxStreak = Math.max(maxStreak, currentStreak);
-          } else {
-            currentStreak = 1;
-          }
+      // Only continue streak if all days between were weekends or non-working days
+      let onlyNonWorkingDays = true;
+      for (let d = 1; d < daysBetween; d++) {
+        const checkDate = new Date(lastDate);
+        checkDate.setDate(checkDate.getDate() - d);
+        const checkDayOfWeek = checkDate.getDay();
+        // Break if we find a working day in between
+        if (checkDayOfWeek !== 0 && checkDayOfWeek !== 6 && 
+            userWorkingDays.includes(dayMap[checkDayOfWeek])) {
+          onlyNonWorkingDays = false;
+          break;
         }
+      }
+
+      if (onlyNonWorkingDays) {
+        currentStreak++;
+        maxStreak = Math.max(maxStreak, currentStreak);
       } else {
         currentStreak = 1;
       }
@@ -237,44 +219,28 @@ async function generateStreaks() {
       });
     }
 
-    // Compare and update streaks
+    // Update streaks in database
     if (streaks.length > 0) {
-      // Use a transaction for bulk updates
       await client.query('BEGIN');
       
       try {
         for (const streak of streaks) {
-          const existing = existingStreakMap.get(streak.username);
-          
-          if (existing) {
-            // Update existing streak
-            await client.query(`
-              UPDATE user_streaks 
-              SET 
-                current_streak = $1,
-                last_attendance = $2,
-                max_streak = GREATEST(max_streak, $1)
-              WHERE username = $3
-            `, [streak.currentStreak, streak.lastAttendance, streak.username]);
-          } else {
-            // Insert new streak
-            await client.query(`
-              INSERT INTO user_streaks (username, current_streak, last_attendance, max_streak)
-              VALUES ($1, $2, $3, $2)
-            `, [streak.username, streak.currentStreak, streak.lastAttendance]);
-          }
+          await client.query(`
+            INSERT INTO user_streaks (username, current_streak, last_attendance, max_streak)
+            VALUES ($1, $2, $3, $2)
+            ON CONFLICT (username) 
+            DO UPDATE SET 
+              current_streak = $2,
+              last_attendance = $3,
+              max_streak = GREATEST(user_streaks.max_streak, $2)
+          `, [streak.username, streak.currentStreak, streak.lastAttendance]);
         }
         
         await client.query('COMMIT');
         
         await logMonitoringEvent('streak_generation', {
           duration: Date.now() - startTime,
-          streaks_generated: streaks.length,
-          streaks_updated: streaks.filter(s => {
-            const existing = existingStreakMap.get(s.username);
-            return !existing || existing.current_streak !== s.currentStreak;
-          }).length,
-          message: 'Streaks processed successfully'
+          streaks_processed: streaks.length
         });
         
       } catch (error) {

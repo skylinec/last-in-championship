@@ -345,17 +345,20 @@ def calculate_daily_score(entry, settings, position=None, total_entries=None, mo
     early_bird_bonus = 0
     last_in_bonus = 0
     if position is not None and total_entries is not None and status in ["in_office", "remote"]:
-        # Modify bonus calculation to make early-bird exactly inverse of last-in
-        # Now first person (position=1) gets bonus equal to total_entries in early-bird mode
-        # Last person (position=total_entries) gets bonus equal to total_entries in last-in mode
         if mode == 'last_in':
-            position_bonus = position * late_bonus
-            last_in_bonus = position_bonus
+            # Last-In Mode: Position × late_bonus
+            # Position 5 (last) in a 5-person day gets 5 × late_bonus
+            last_in_bonus = position * late_bonus
             early_bird_bonus = 0
         else:  # early_bird mode
-            position_bonus = (total_entries + 1 - position) * early_bonus
-            early_bird_bonus = position_bonus
+            # Early-Bird Mode: (Total - Position + 1) × early_bonus
+            # Position 1 (first) in a 5-person day gets 5 × early_bonus
+            early_bird_bonus = (total_entries - position + 1) * early_bonus
             last_in_bonus = 0
+
+        # Store the position bonus for breakdown
+        position_bonus = last_in_bonus if mode == 'last_in' else early_bird_bonus
+        context['position_bonus'] = position_bonus
 
     # Initialize streak variable with default value
     streak = 0
@@ -405,10 +408,10 @@ def calculate_daily_score(entry, settings, position=None, total_entries=None, mo
         "base": context['current_points'],
         "streak": streak_bonus,
         "current_streak": streak,  # Now streak is always defined
-        "position_bonus": last_in_bonus if mode == 'last_in' else early_bird_bonus,
+        "position_bonus": context['position_bonus'] if 'position_bonus' in context else 0,
         "breakdown": {
             "base_points": context['current_points'],
-            "position_bonus": last_in_bonus if mode == 'last_in' else early_bird_bonus,
+            "position_bonus": context.get('position_bonus', 0),
             "streak_bonus": streak_bonus if settings.get("enable_streaks", False) else 0
         }
     }

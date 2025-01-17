@@ -135,7 +135,7 @@ async function generateStreaks() {
     const settingsResult = await client.query('SELECT points FROM settings LIMIT 1');
     const workingDays = settingsResult.rows[0]?.points?.working_days || {};
 
-    // Improved entries query
+    // Get all entries with proper sorting
     const entries = await client.query(`
       WITH grouped_entries AS (
         SELECT DISTINCT ON (name, date::date)
@@ -149,7 +149,7 @@ async function generateStreaks() {
         ORDER BY name, date::date DESC, timestamp DESC
       )
       SELECT * FROM grouped_entries
-      ORDER BY name, date ASC  -- Changed to ASC for chronological processing
+      ORDER BY name, date ASC
     `);
 
     const streaks = new Map();
@@ -161,13 +161,16 @@ async function generateStreaks() {
     let streakStart = null;
 
     for (const entry of entries.rows) {
+      // Skip weekends entirely
+      if (entry.day_of_week === 0 || entry.day_of_week === 6) continue;
+
       // Handle user change
       if (entry.name !== currentUser) {
         if (currentUser && currentStreak > 0) {
           streaks.set(currentUser, {
             username: currentUser,
-            currentStreak: currentStreak,
-            maxStreak: Math.max(maxStreak, currentStreak),
+            currentStreak: Math.max(0, currentStreak - 1), // Subtract 1 to not count last day
+            maxStreak: Math.max(maxStreak, currentStreak - 1),
             lastAttendance: lastTimestamp,
             streakStartDate: streakStart
           });
@@ -182,45 +185,41 @@ async function generateStreaks() {
       }
 
       // Skip if this is the same date
-      if (lastDate.getTime() === entry.date.getTime()) {
+      if (lastDate?.getTime() === entry.date.getTime()) {
         continue;
       }
 
       // Get user's working days
       const userWorkingDays = workingDays[entry.name] || ['mon', 'tue', 'wed', 'thu', 'fri'];
       const dayMap = {1: 'mon', 2: 'tue', 3: 'wed', 4: 'thu', 5: 'fri'};
-
-      // Calculate days between entries
-      const daysBetween = Math.floor((entry.date - lastDate) / (1000 * 60 * 60 * 24));
-
-      let shouldIncrementStreak = false;
-
-      if (daysBetween === 1) {
-        // Direct consecutive days
-        shouldIncrementStreak = true;
-      } else if (daysBetween <= 3) {
-        // Check if gap only includes weekends/non-working days
-        let checkDate = new Date(lastDate);
-        let missedWorkingDay = false;
-
-        for (let i = 1; i < daysBetween; i++) {
-          checkDate.setDate(checkDate.getDate() + 1);
-          const dow = checkDate.getDay();
-          // Check if it's a working day for this user
-          if (dow > 0 && dow < 6 && userWorkingDays.includes(dayMap[dow])) {
-            missedWorkingDay = true;
-            break;
-          }
-        }
-
-        shouldIncrementStreak = !missedWorkingDay;
+      
+      // Skip if not a working day for this user
+      if (!userWorkingDays.includes(dayMap[entry.day_of_week])) {
+        continue;
       }
 
-      // Update streak based on evaluation
-      if (shouldIncrementStreak) {
+      // Calculate days between entries (excluding weekends and non-working days)
+      let missedWorkingDays = 0;
+      if (lastDate) {
+        let checkDate = new Date(lastDate);
+        checkDate.setDate(checkDate.getDate() + 1);
+        
+        while (checkDate < entry.date) {
+          const dow = checkDate.getDay();
+          // Only count as missed if it's a working day for this user
+          if (dow > 0 && dow < 6 && userWorkingDays.includes(dayMap[dow])) {
+            missedWorkingDays++;
+          }
+          checkDate.setDate(checkDate.getDate() + 1);
+        }
+      }
+
+      if (missedWorkingDays === 0) {
+        // Consecutive working day
         currentStreak++;
         maxStreak = Math.max(maxStreak, currentStreak);
       } else {
+        // Break in streak - start new one
         maxStreak = Math.max(maxStreak, currentStreak);
         currentStreak = 1;
         streakStart = entry.date;
@@ -230,19 +229,22 @@ async function generateStreaks() {
       lastTimestamp = entry.timestamp;
     }
 
-    // Don't forget the last user
+    // Handle last user
     if (currentUser && currentStreak > 0) {
-      maxStreak = Math.max(maxStreak, currentStreak);
+      const finalStreak = lastDate?.getTime() === new Date().setHours(0,0,0,0) ? 
+        currentStreak : Math.max(0, currentStreak - 1);
+      maxStreak = Math.max(maxStreak, finalStreak);
+      
       streaks.set(currentUser, {
         username: currentUser,
-        currentStreak: currentStreak,
+        currentStreak: finalStreak,
         maxStreak: maxStreak,
         lastAttendance: lastTimestamp,
         streakStartDate: streakStart
       });
     }
 
-    // Update streaks in database
+    // Update database with new streak values
     if (streaks.size > 0) {
       await client.query('BEGIN');
       try {

@@ -133,16 +133,16 @@ async function generateStreaks() {
     const settingsResult = await client.query('SELECT points FROM settings LIMIT 1');
     const workingDays = settingsResult.rows[0]?.points?.working_days || {};
 
-    // Get all entries ordered by user and date, excluding weekends
+    // Get all entries ordered by user and date
     const entries = await client.query(`
       SELECT 
         e.name, 
         e.date::date, 
         e.timestamp,
-        e.status
+        e.status,
+        EXTRACT(DOW FROM e.date::date) as day_of_week
       FROM entries e
       WHERE e.status IN ('in-office', 'remote')
-        AND EXTRACT(DOW FROM e.date::date) NOT IN (0, 6)  -- Exclude weekends
       ORDER BY e.name, e.date DESC
     `);
 
@@ -154,8 +154,8 @@ async function generateStreaks() {
     let lastTimestamp = null;
 
     for (const entry of entries.rows) {
+      // Handle user change
       if (entry.name !== currentUser) {
-        // Save previous user's streak if valid
         if (currentUser && currentStreak > 0) {
           streaks.push({
             username: currentUser,
@@ -164,7 +164,6 @@ async function generateStreaks() {
             lastAttendance: lastTimestamp
           });
         }
-        // Reset for new user
         currentUser = entry.name;
         currentStreak = 1;
         maxStreak = 1;
@@ -173,28 +172,34 @@ async function generateStreaks() {
         continue;
       }
 
-      const daysBetween = Math.floor((lastDate - entry.date) / (1000 * 60 * 60 * 24));
+      // Skip if this is the same date
+      if (lastDate.getTime() === entry.date.getTime()) {
+        continue;
+      }
+
+      const daysBetween = (lastDate - entry.date) / (1000 * 60 * 60 * 24);
       
       // Get user's working days
       const userWorkingDays = workingDays[entry.name] || ['mon', 'tue', 'wed', 'thu', 'fri'];
       const dayMap = {1: 'mon', 2: 'tue', 3: 'wed', 4: 'thu', 5: 'fri'};
       
-      // Count only weekdays between dates
-      let workingDaysMissed = 0;
-      for (let d = 1; d < daysBetween; d++) {
-        const checkDate = new Date(lastDate);
-        checkDate.setDate(checkDate.getDate() - d);
-        const checkDayOfWeek = checkDate.getDay();
-        
-        // Only count if it's a weekday (Monday-Friday) and a working day for the user
-        if (checkDayOfWeek > 0 && checkDayOfWeek < 6 && 
-            userWorkingDays.includes(dayMap[checkDayOfWeek])) {
-          workingDaysMissed++;
+      // Check each day between entries
+      let missedWorkday = false;
+      let day = new Date(entry.date);
+      while (day < lastDate) {
+        const checkDayOfWeek = day.getDay();
+        // Only check weekdays (1-5, Mon-Fri)
+        if (checkDayOfWeek > 0 && checkDayOfWeek < 6) {
+          // If it's a working day for this user
+          if (userWorkingDays.includes(dayMap[checkDayOfWeek])) {
+            missedWorkday = true;
+            break;
+          }
         }
+        day.setDate(day.getDate() + 1);
       }
 
-      // Continue streak only if no working days were missed
-      if (workingDaysMissed === 0) {
+      if (!missedWorkday) {
         currentStreak++;
         maxStreak = Math.max(maxStreak, currentStreak);
       } else {
@@ -218,7 +223,6 @@ async function generateStreaks() {
     // Update streaks in database
     if (streaks.length > 0) {
       await client.query('BEGIN');
-      
       try {
         for (const streak of streaks) {
           await client.query(`
@@ -231,20 +235,16 @@ async function generateStreaks() {
               max_streak = GREATEST(user_streaks.max_streak, $2)
           `, [streak.username, streak.currentStreak, streak.lastAttendance]);
         }
-        
         await client.query('COMMIT');
-        
         await logMonitoringEvent('streak_generation', {
           duration: Date.now() - startTime,
           streaks_processed: streaks.length
         });
-        
       } catch (error) {
         await client.query('ROLLBACK');
         throw error;
       }
     }
-
   } catch (error) {
     await logMonitoringEvent('streak_generation', {
       error: error.message

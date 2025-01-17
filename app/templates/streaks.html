@@ -309,6 +309,36 @@
     color: #666;
     padding: 5px;
     text-align: center;
+    border-bottom: 1px solid #eee;
+}
+
+.calendar-header-row {
+    display: contents;
+}
+
+.calendar-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 4px;
+}
+
+.modal-title-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+}
+
+.break-reason-banner {
+    grid-column: 1 / -1;
+    padding: 10px;
+    margin: 10px 0;
+    background: #fff3cd;
+    border: 1px solid #ffeeba;
+    color: #856404;
+    border-radius: 4px;
+    text-align: center;
+    font-size: 0.9em;
 }
 
 .streak-day {
@@ -406,103 +436,151 @@ function showStreakCalendar(startDate, endDate, username, breakReason) {
     const calendar = document.getElementById('streakCalendar');
     const modalTitle = document.getElementById('modalTitle');
     
-    // Fetch attendance data for the period
-    fetch(`/api/attendance/${username}/${startDate}/${endDate}`)
-        .then(response => response.json())
-        .then(attendance => {
-            // Clear previous calendar
-            calendar.innerHTML = '';
-            
-            // Set title
-            modalTitle.textContent = `${username}'s Streak Calendar`;
-            
-            // Convert dates to Date objects and get first day of start month
-            const start = new Date(startDate);
-            const end = new Date(endDate);
-            const monthStart = new Date(start.getFullYear(), start.getMonth(), 1);
-            
-            // Show previous month if streak starts in first week
-            if (start.getDate() <= 7) {
-                monthStart.setMonth(monthStart.getMonth() - 1);
+    // Clear previous calendar
+    calendar.innerHTML = '';
+    
+    // Set title with close button in header row
+    modalTitle.innerHTML = `
+        <div class="modal-title-row">
+            <span>${username}'s Streak Calendar</span>
+            <span class="close">&times;</span>
+        </div>
+    `;
+    
+    // Show break reason banner if provided
+    if (breakReason && breakReason !== 'Current active streak') {
+        const reasonBanner = document.createElement('div');
+        reasonBanner.className = 'break-reason-banner';
+        reasonBanner.textContent = `Streak broken: ${breakReason}`;
+        calendar.appendChild(reasonBanner);
+    }
+
+    // Create calendar grid
+    const calendarGrid = document.createElement('div');
+    calendarGrid.className = 'calendar-grid';
+    calendar.appendChild(calendarGrid);
+    
+    // Add day headers
+    const headerRow = document.createElement('div');
+    headerRow.className = 'calendar-header-row';
+    const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    days.forEach(day => {
+        const header = document.createElement('div');
+        header.className = 'calendar-header';
+        header.textContent = day;
+        headerRow.appendChild(header);
+    });
+    calendarGrid.appendChild(headerRow);
+    
+    // Rest of calendar generation...
+    fetchAndDisplayCalendar(startDate, endDate, username, breakReason, calendarGrid);
+    
+    // Show modal
+    modal.style.display = 'block';
+    
+    // Set up close handlers
+    const closeBtn = modal.querySelector('.close');
+    closeBtn.onclick = () => modal.style.display = 'none';
+    
+    window.onclick = (event) => {
+        if (event.target === modal) {
+            modal.style.display = 'none';
+        }
+    };
+}
+
+async function fetchAndDisplayCalendar(startDate, endDate, username, breakReason, calendarGrid) {
+    try {
+        const response = await fetch(`/api/attendance/${username}/${startDate}/${endDate}`);
+        const attendance = await response.json();
+        
+        // Convert dates to Date objects
+        const start = new Date(startDate);
+        const end = new Date(endDate);
+        
+        // Get first day of month for start date
+        const monthStart = new Date(start.getFullYear(), start.getMonth(), 1);
+        
+        // If streak starts in first week, show previous month too
+        if (start.getDate() <= 7) {
+            monthStart.setMonth(monthStart.getMonth() - 1);
+        }
+        
+        // Calculate last date to show (end of month containing end date)
+        const lastDate = new Date(end.getFullYear(), end.getMonth() + 1, 0);
+        
+        let currentDate = new Date(monthStart);
+        let currentMonth = currentDate.getMonth();
+        
+        // Add month divider
+        addMonthDivider(calendarGrid, currentDate);
+        
+        // Add initial padding for first month
+        addMonthPadding(calendarGrid, monthStart);
+        
+        while (currentDate <= lastDate) {
+            // Add new month divider if month changes
+            if (currentDate.getMonth() !== currentMonth) {
+                currentMonth = currentDate.getMonth();
+                addMonthDivider(calendarGrid, currentDate);
             }
             
-            // Add day headers
-            const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-            days.forEach(day => {
-                const header = document.createElement('div');
-                header.className = 'calendar-header';
-                header.textContent = day;
-                calendar.appendChild(header);
-            });
+            const dayElement = createDayElement(
+                currentDate,
+                start,
+                end,
+                attendance,
+                startDate,
+                endDate,
+                breakReason
+            );
             
-            // Fill in calendar
-            let currentDate = new Date(monthStart);
-            let currentMonth = currentDate.getMonth();
-            
-            // Add month divider
-            const monthNames = ['January', 'February', 'March', 'April', 'May', 'June',
-                              'July', 'August', 'September', 'October', 'November', 'December'];
-            
-            // Add first month divider
-            addMonthDivider(calendar, currentDate, monthNames);
-            
-            // Add initial padding
-            addMonthPadding(calendar, currentDate);
+            calendarGrid.appendChild(dayElement);
+            currentDate.setDate(currentDate.getDate() + 1);
+        }
+    } catch (error) {
+        console.error('Error fetching attendance:', error);
+    }
+}
 
-            // Calculate last date to show
-            const lastDate = new Date(end.getFullYear(), end.getMonth() + 1, 0);
-
-            while(currentDate <= lastDate) {
-                // Add new month divider if month changes
-                if(currentDate.getMonth() !== currentMonth) {
-                    currentMonth = currentDate.getMonth();
-                    addMonthDivider(calendar, currentDate, monthNames);
-                }
-                
-                const dayElement = document.createElement('div');
-                dayElement.className = 'calendar-day';
-                
-                const content = document.createElement('div');
-                content.className = 'calendar-day-content';
-                
-                const dayNumber = document.createElement('div');
-                dayNumber.className = 'day-number';
-                dayNumber.textContent = currentDate.getDate();
-                content.appendChild(dayNumber);
-                
-                const currentDateStr = currentDate.toISOString().split('T')[0];
-                
-                // Add status indicator if we have attendance data
-                if (attendance[currentDateStr]) {
-                    const status = document.createElement('div');
-                    status.className = `status-indicator status-${attendance[currentDateStr]}`;
-                    content.appendChild(status);
-                }
-                
-                // Style based on streak
-                if (currentDate >= start && currentDate <= end) {
-                    if (currentDateStr === startDate) {
-                        dayElement.classList.add('streak-start');
-                        dayElement.title = 'Streak Start';
-                    } else if (currentDateStr === endDate) {
-                        dayElement.classList.add('streak-end');
-                        dayElement.title = breakReason;
-                    } else {
-                        dayElement.classList.add('streak-day');
-                    }
-                } else {
-                    dayElement.classList.add('inactive');
-                }
-                
-                dayElement.appendChild(content);
-                calendar.appendChild(dayElement);
-                
-                currentDate.setDate(currentDate.getDate() + 1);
-            }
-            
-            // Show modal
-            modal.style.display = 'block';
-        });
+function createDayElement(currentDate, start, end, attendance, startDate, endDate, breakReason) {
+    const dayElement = document.createElement('div');
+    dayElement.className = 'calendar-day';
+    
+    const content = document.createElement('div');
+    content.className = 'calendar-day-content';
+    
+    const dayNumber = document.createElement('div');
+    dayNumber.className = 'day-number';
+    dayNumber.textContent = currentDate.getDate();
+    content.appendChild(dayNumber);
+    
+    const currentDateStr = currentDate.toISOString().split('T')[0];
+    
+    // Add status indicator if we have attendance data
+    if (attendance[currentDateStr]) {
+        const status = document.createElement('div');
+        status.className = `status-indicator status-${attendance[currentDateStr]}`;
+        content.appendChild(status);
+    }
+    
+    // Style based on streak
+    if (currentDate >= start && currentDate <= end) {
+        if (currentDateStr === startDate) {
+            dayElement.classList.add('streak-start');
+            dayElement.title = 'Streak Start';
+        } else if (currentDateStr === endDate) {
+            dayElement.classList.add('streak-end');
+            dayElement.title = breakReason;
+        } else {
+            dayElement.classList.add('streak-day');
+        }
+    } else {
+        dayElement.classList.add('inactive');
+    }
+    
+    dayElement.appendChild(content);
+    return dayElement;
 }
 
 function addMonthDivider(calendar, date, monthNames) {

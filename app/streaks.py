@@ -38,12 +38,14 @@ def calculate_current_streak(name):
     db = SessionLocal()
     try:
         today = date.today()
+        working_days = get_working_days(db, name)
         streak = 0
         day_offset = 0
 
         while True:
             check_date = today - timedelta(days=day_offset)
-            if check_date.weekday() < 5:  # Only count Mon-Fri
+            # Only count if the weekday is in user's working days
+            if check_date.strftime('%a').lower() in working_days:
                 row = db.execute(text("""
                     SELECT status
                     FROM entries
@@ -54,8 +56,8 @@ def calculate_current_streak(name):
                 if not row or row.status in ("sick", "leave"):
                     break
                 streak += 1
+
             day_offset += 1
-            # Optional cut-off (e.g., 100 days) to prevent infinite loop if needed
 
         return streak
     finally:

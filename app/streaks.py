@@ -80,7 +80,7 @@ def get_streak_history(username, db):
                     LAG(status) OVER (ORDER BY date) as prev_status
                 FROM entries 
                 WHERE name = :username
-                AND status IN ('in-office', 'remote')  -- Only get valid attendance statuses
+                AND status IN ('in-office', 'remote')
                 ORDER BY date ASC
             )
             SELECT * FROM ordered_entries
@@ -94,42 +94,49 @@ def get_streak_history(username, db):
         streak_start = None
         last_date = None
         working_days = get_working_days(db, username)
+
+        def is_working_day(check_date):
+            """Helper to check if a date is a working day"""
+            return (check_date.weekday() < 5 and 
+                   check_date.strftime('%a').lower() in working_days)
+
+        def count_working_days_between(start_date, end_date):
+            """Count working days between two dates, excluding the start and end dates"""
+            missed_days = []
+            current = start_date + timedelta(days=1)
+            while current < end_date:
+                if is_working_day(current):
+                    missed_days.append(current)
+                current += timedelta(days=1)
+            return missed_days
         
         for entry in entries:
             entry_date = entry.date if isinstance(entry.date, date) else datetime.strptime(entry.date, '%Y-%m-%d').date()
             
-            # Skip if not a working day (weekend or not in user's working days)
-            if (entry_date.weekday() >= 5 or 
-                entry_date.strftime('%a').lower() not in working_days):
+            # Skip non-working days but don't break the streak
+            if not is_working_day(entry_date):
                 continue
             
-            # Both in-office and remote count as valid attendance
             if current_streak == 0:
                 streak_start = entry_date
                 current_streak = 1
             else:
                 if last_date:
-                    days_between = []
-                    current_date = last_date + timedelta(days=1)
+                    # Get working days between last attendance and current
+                    missed_working_days = count_working_days_between(last_date, entry_date)
                     
-                    # Count only weekday working days between dates
-                    while current_date < entry_date:
-                        if (current_date.weekday() < 5 and  # Not weekend
-                            current_date.strftime('%a').lower() in working_days):
-                            days_between.append(current_date)
-                        current_date += timedelta(days=1)
-                    
-                    if not days_between:  # No missed working days
+                    if not missed_working_days:  # No missed working days
                         current_streak += 1
                     else:
-                        # Save previous streak and start new one
+                        # Save current streak if valid
                         if current_streak > 1:
                             streaks.append({
                                 'start': streak_start,
                                 'end': last_date,
                                 'length': current_streak - 1,  # Don't count last day
-                                'break_reason': f"Missed {len(days_between)} working day(s)"
+                                'break_reason': f"Missed {len(missed_working_days)} working day(s)"
                             })
+                        # Start new streak
                         streak_start = entry_date
                         current_streak = 1
             

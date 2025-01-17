@@ -159,13 +159,34 @@ async function generateStreaks() {
     let lastTimestamp = null;
     let streakStart = null;
 
+    function isWorkingDay(date, userWorkingDays, dayMap) {
+      const dow = date.getDay();
+      return dow > 0 && dow < 6 && userWorkingDays.includes(dayMap[dow]);
+    }
+
+    function countWorkingDaysBetween(startDate, endDate, userWorkingDays, dayMap) {
+      const missedDays = [];
+      let current = new Date(startDate);
+      current.setDate(current.getDate() + 1);
+      
+      while (current < endDate) {
+        if (isWorkingDay(current, userWorkingDays, dayMap)) {
+          missedDays.push(new Date(current));
+        }
+        current.setDate(current.getDate() + 1);
+      }
+      
+      return missedDays;
+    }
+
     for (const entry of entries.rows) {
-      // Skip non-working days
+      const entryDate = new Date(entry.date);
+      
+      // Skip non-working days without breaking streak
       if (entry.day_of_week === 0 || entry.day_of_week === 6) continue;
 
       // Handle user change
       if (entry.name !== currentUser) {
-        // Save previous user's streak
         if (currentUser && currentStreak > 0) {
           streaks.set(currentUser, {
             username: currentUser,
@@ -176,51 +197,42 @@ async function generateStreaks() {
           });
         }
         
-        // Initialize new user
         currentUser = entry.name;
         currentStreak = 1;
         maxStreak = 1;
-        streakStart = entry.date;
-        lastDate = entry.date;
+        streakStart = entryDate;
+        lastDate = entryDate;
         lastTimestamp = entry.timestamp;
         continue;
       }
 
-      // Skip same-day entries
-      if (lastDate?.getTime() === entry.date.getTime()) continue;
+      if (lastDate?.getTime() === entryDate.getTime()) continue;
 
-      // Get user's working days
       const userWorkingDays = workingDays[entry.name] || ['mon', 'tue', 'wed', 'thu', 'fri'];
       const dayMap = {1: 'mon', 2: 'tue', 3: 'wed', 4: 'thu', 5: 'fri'};
       
-      // Skip if not a working day
+      // Skip if not a working day but don't break streak
       if (!userWorkingDays.includes(dayMap[entry.day_of_week])) continue;
 
-      // Calculate working days between entries
-      let missedWorkingDays = 0;
       if (lastDate) {
-        let checkDate = new Date(lastDate);
-        checkDate.setDate(checkDate.getDate() + 1);
-        
-        while (checkDate < entry.date) {
-          const dow = checkDate.getDay();
-          if (dow > 0 && dow < 6 && userWorkingDays.includes(dayMap[dow])) {
-            missedWorkingDays++;
-          }
-          checkDate.setDate(checkDate.getDate() + 1);
+        const missedWorkingDays = countWorkingDaysBetween(
+          lastDate, 
+          entryDate,
+          userWorkingDays,
+          dayMap
+        );
+
+        if (missedWorkingDays.length === 0) {
+          currentStreak++;
+          maxStreak = Math.max(maxStreak, currentStreak);
+        } else {
+          maxStreak = Math.max(maxStreak, currentStreak);
+          currentStreak = 1;
+          streakStart = entryDate;
         }
       }
 
-      if (missedWorkingDays === 0) {
-        currentStreak++;
-        maxStreak = Math.max(maxStreak, currentStreak);
-      } else {
-        maxStreak = Math.max(maxStreak, currentStreak);
-        currentStreak = 1;
-        streakStart = entry.date;
-      }
-
-      lastDate = entry.date;
+      lastDate = entryDate;
       lastTimestamp = entry.timestamp;
     }
 

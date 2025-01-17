@@ -1868,16 +1868,34 @@ def day_rankings(date=None):
 def history():
     db = SessionLocal()
     try:
-        # Get all core users for filtering
-        core_users = get_core_users()
-        
-        # Get all distinct statuses for filtering
-        statuses = db.query(Entry.status).distinct().all()
-        status_list = [status[0] for status in statuses]
+        page = request.args.get("page", 1, type=int)
+        per_page = request.args.get("per_page", 50, type=int)
+        per_page = min(max(per_page, 1), 500)
+        offset = (page - 1) * per_page
+
+        query = db.execute(text("SELECT * FROM entries ORDER BY date DESC, time DESC"))
+        total_entries = len(query.fetchall())  # Or use COUNT(*) if needed
+
+        # Re-run the query with limit/offset
+        paginated_query = db.execute(
+            text("SELECT * FROM entries ORDER BY date DESC, time DESC LIMIT :limit OFFSET :offset"),
+            {"limit": per_page, "offset": offset}
+        ).fetchall()
+
+        total_pages = (total_entries + per_page - 1) // per_page
+
+        results = []
+        for i, row in enumerate(paginated_query):
+            item_dict = dict(row)
+            item_dict["absolute_id"] = offset + i + 1
+            results.append(item_dict)
 
         return render_template("history.html",
-                             users=core_users,
-                             statuses=status_list)
+            entries=results,
+            current_page=page,
+            total_pages=total_pages,
+            per_page=per_page
+        )
     finally:
         db.close()
 

@@ -51,6 +51,8 @@ BEGIN
     END IF;
 END $$;
 
+ALTER TABLE user_streaks ADD COLUMN IF NOT EXISTS streak_start_date DATE;
+
 ------------------------------------------
 -- SECTION 3: TIE BREAKER SYSTEM
 ------------------------------------------

@@ -415,8 +415,8 @@ def calculate_daily_score(entry, settings, position=None, total_entries=None, mo
         "early_bird": context['current_points'] + early_bird_bonus + (streak_bonus if settings.get("enable_streaks", False) else 0),
         "base": context['current_points'],
         "streak": streak_bonus,
-        "current_streak": streak,  # Now streak is always defined
-        "position_bonus": context['position_bonus'] if 'position_bonus' in context else 0,
+        "current_streak": context['streak'],  # Add this line
+        "position_bonus": context.get('position_bonus', 0),
         "breakdown": {
             "base_points": context['current_points'],
             "position_bonus": context.get('position_bonus', 0),

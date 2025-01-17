@@ -135,7 +135,7 @@ async function generateStreaks() {
     const settingsResult = await client.query('SELECT points FROM settings LIMIT 1');
     const workingDays = settingsResult.rows[0]?.points?.working_days || {};
 
-    // Get all entries ordered by user and date
+    // Improved entries query
     const entries = await client.query(`
       WITH grouped_entries AS (
         SELECT DISTINCT ON (name, date::date)
@@ -149,32 +149,35 @@ async function generateStreaks() {
         ORDER BY name, date::date DESC, timestamp DESC
       )
       SELECT * FROM grouped_entries
-      ORDER BY name, date DESC
+      ORDER BY name, date ASC  -- Changed to ASC for chronological processing
     `);
 
-    const streaks = [];
+    const streaks = new Map();
     let currentUser = null;
     let currentStreak = 0;
     let maxStreak = 0;
     let lastDate = null;
     let lastTimestamp = null;
+    let streakStart = null;
 
     for (const entry of entries.rows) {
       // Handle user change
       if (entry.name !== currentUser) {
         if (currentUser && currentStreak > 0) {
-          streaks.push({
+          streaks.set(currentUser, {
             username: currentUser,
             currentStreak: currentStreak,
             maxStreak: Math.max(maxStreak, currentStreak),
-            lastAttendance: lastTimestamp
+            lastAttendance: lastTimestamp,
+            streakStartDate: streakStart
           });
         }
         currentUser = entry.name;
         currentStreak = 1;
-        maxStreak = currentStreak;
+        maxStreak = 1;
         lastDate = entry.date;
         lastTimestamp = entry.timestamp;
+        streakStart = entry.date;
         continue;
       }
 
@@ -188,10 +191,7 @@ async function generateStreaks() {
       const dayMap = {1: 'mon', 2: 'tue', 3: 'wed', 4: 'thu', 5: 'fri'};
 
       // Calculate days between entries
-      const daysBetween = Math.floor((lastDate - entry.date) / (1000 * 60 * 60 * 24));
-      
-      // Log for debugging
-      console.log(`User ${entry.name}: Gap of ${daysBetween} days between ${entry.date} and ${lastDate}`);
+      const daysBetween = Math.floor((entry.date - lastDate) / (1000 * 60 * 60 * 24));
 
       let shouldIncrementStreak = false;
 
@@ -200,7 +200,7 @@ async function generateStreaks() {
         shouldIncrementStreak = true;
       } else if (daysBetween <= 3) {
         // Check if gap only includes weekends/non-working days
-        let checkDate = new Date(entry.date);
+        let checkDate = new Date(lastDate);
         let missedWorkingDay = false;
 
         for (let i = 1; i < daysBetween; i++) {
@@ -219,11 +219,11 @@ async function generateStreaks() {
       // Update streak based on evaluation
       if (shouldIncrementStreak) {
         currentStreak++;
-        console.log(`${entry.name}: Streak incremented to ${currentStreak}`);
+        maxStreak = Math.max(maxStreak, currentStreak);
       } else {
-        console.log(`${entry.name}: Streak reset (was ${currentStreak})`);
         maxStreak = Math.max(maxStreak, currentStreak);
         currentStreak = 1;
+        streakStart = entry.date;
       }
 
       lastDate = entry.date;
@@ -233,37 +233,39 @@ async function generateStreaks() {
     // Don't forget the last user
     if (currentUser && currentStreak > 0) {
       maxStreak = Math.max(maxStreak, currentStreak);
-      streaks.push({
+      streaks.set(currentUser, {
         username: currentUser,
         currentStreak: currentStreak,
         maxStreak: maxStreak,
-        lastAttendance: lastTimestamp
+        lastAttendance: lastTimestamp,
+        streakStartDate: streakStart
       });
     }
 
-    // Update streaks in database with additional logging
-    if (streaks.length > 0) {
+    // Update streaks in database
+    if (streaks.size > 0) {
       await client.query('BEGIN');
       try {
-        for (const streak of streaks) {
-          console.log(`Updating streak for ${streak.username}: current=${streak.currentStreak}, max=${streak.maxStreak}`);
-          
+        for (const streak of streaks.values()) {
           await client.query(`
-            INSERT INTO user_streaks (username, current_streak, last_attendance, max_streak)
-            VALUES ($1, $2, $3, $4)
+            INSERT INTO user_streaks (
+              username, current_streak, last_attendance, max_streak, streak_start_date
+            ) VALUES ($1, $2, $3, $4, $5)
             ON CONFLICT (username) 
             DO UPDATE SET 
               current_streak = $2,
               last_attendance = $3,
-              max_streak = GREATEST(user_streaks.max_streak, $4)
-            WHERE 
-              user_streaks.current_streak != $2 OR
-              user_streaks.last_attendance < $3
+              max_streak = GREATEST(user_streaks.max_streak, $4),
+              streak_start_date = CASE
+                WHEN user_streaks.current_streak != $2 THEN $5
+                ELSE user_streaks.streak_start_date
+              END
           `, [
             streak.username,
             streak.currentStreak,
             streak.lastAttendance,
-            streak.maxStreak
+            streak.maxStreak,
+            streak.streakStartDate
           ]);
         }
         await client.query('COMMIT');
@@ -275,8 +277,8 @@ async function generateStreaks() {
 
     await logMonitoringEvent('streak_generation', {
       duration: Date.now() - startTime,
-      streaks_processed: streaks.length,
-      streak_details: streaks
+      streaks_processed: streaks.size,
+      streak_details: Array.from(streaks.values())
     });
 
   } catch (error) {

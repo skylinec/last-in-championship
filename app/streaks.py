@@ -18,14 +18,6 @@ def get_working_days(db, username):
         return ['mon', 'tue', 'wed', 'thu', 'fri']  # Default working days
     return settings.points.get('working_days', {}).get(username, ['mon', 'tue', 'wed', 'thu', 'fri'])
 
-def is_working_day(date, working_days):
-    """Check if a given date is a working day"""
-    return date.strftime('%a').lower() in working_days
-
-def is_weekend(date):
-    """Check if a date is a weekend (Saturday=5 or Sunday=6)"""
-    return date.weekday() >= 5
-
 def get_attendance_for_period(username, start_date, end_date, db):
     """Get attendance data for a date range"""
     try:
@@ -42,45 +34,16 @@ def get_attendance_for_period(username, start_date, end_date, db):
         logger.error(f"Error getting attendance data: {str(e)}")
         return {}
 
-def get_streak_history(username, db):
-    """Get past notable streaks for a user"""
-    try:
-        entries = db.execute(
-            Entry.select().where(
-                Entry.c.name == username,
-                Entry.c.status.in_(['in-office', 'remote'])
-            ).order_by(Entry.c.date.asc())
-        ).fetchall()
-
-        if not entries:
-            return []
-
-        today = datetime.now().date()
-        streaks = []
-        # Get streak data from user_streaks table
-        streak_data = db.execute(
-            UserStreak.select().where(UserStreak.c.username == username)
-        ).first()
-
-        current_streak = streak_data.current_streak if streak_data else 0
-
-        # Only return non-active historical streaks
-        return sorted(streaks, key=lambda x: (-x['length'], -x['end'].toordinal()))
-
-    except Exception as e:
-        logger.error(f"Error getting streak history: {str(e)}", exc_info=True)
-        return []
-
 def calculate_current_streak(name):
     """Get current streak for a user from the database"""
     db = SessionLocal()
     try:
-        streak = db.execute(
-            UserStreak.select().where(UserStreak.c.username == name)
-        ).first()
-        return streak.current_streak if streak else 0
+        streak = db.execute(text("""
+            SELECT current_streak FROM user_streaks WHERE username = :name
+        """), {"name": name}).scalar()
+        return streak or 0
     except Exception as e:
-        logging.error(f"Error getting current streak: {str(e)}")
+        logger.error(f"Error getting current streak: {str(e)}")
         return 0
     finally:
         db.close()
@@ -88,9 +51,9 @@ def calculate_current_streak(name):
 def get_streak_data(username, db):
     """Get complete streak data for a user"""
     try:
-        streak = db.execute(
-            UserStreak.select().where(UserStreak.c.username == username)
-        ).first()
+        streak = db.execute(text("""
+            SELECT * FROM user_streaks WHERE username = :username
+        """), {"username": username}).first()
 
         return {
             'current_streak': streak.current_streak if streak else 0,
@@ -104,5 +67,3 @@ def get_streak_data(username, db):
             'max_streak': 0,
             'last_attendance': None
         }
-
-# Remove other streak calculation functions since they're handled by the monitoring service

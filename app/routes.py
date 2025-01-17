@@ -1818,7 +1818,7 @@ def day_rankings(date=None):
             "end_time": end_time.strftime('%H:%M'),
             "status": entry["status"],
             "points": scores["last_in"] if mode == 'last_in' else scores["early_bird"],
-            "streak": scores["current_streak"]  # Add this line
+            "streak": scores.get("current_streak", 0)  # Use get() with default value
         })
     
     # Sort by points descending

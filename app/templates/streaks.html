@@ -673,18 +673,34 @@ function addMonthPadding(calendar, date) {
     }
 }
 
-// Add event listener for current streak clicking
-document.querySelectorAll('.streak-count').forEach(element => {
-    if(element.querySelector('.current').textContent > 0) {
-        element.style.cursor = 'pointer';
-        element.onclick = () => {
-            const username = element.closest('.streak-card').querySelector('h2').textContent;
-            const days = parseInt(element.querySelector('.current').textContent);
-            const endDate = new Date().toISOString().split('T')[0];
-            const startDate = new Date(Date.now() - (days - 1) * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-            showStreakCalendar(startDate, endDate, username, 'Current active streak');
-        };
-    }
+document.addEventListener('DOMContentLoaded', function() {
+    // Add event listener for current streak clicking
+    document.querySelectorAll('.streak-count').forEach(element => {
+        const streakCount = element.querySelector('.current');
+        if (streakCount && parseInt(streakCount.textContent) > 0) {
+            element.style.cursor = 'pointer';
+            element.onclick = () => {
+                const username = element.closest('.streak-card').querySelector('h2').textContent;
+                const days = parseInt(streakCount.textContent);
+                const endDate = new Date().toISOString().split('T')[0];
+                const startDate = new Date(Date.now() - (days - 1) * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+                showStreakCalendar(startDate, endDate, username, 'Current active streak', true);
+            };
+        }
+    });
+
+    // Add click handlers for past streak dates
+    document.querySelectorAll('.streak-dates').forEach(element => {
+        const username = element.closest('.streak-card').querySelector('h2').textContent;
+        const dates = element.getAttribute('onclick')
+                            .match(/showStreakCalendar\('([^']+)', '([^']+)', '[^']+', '([^']+)'/);
+        if (dates) {
+            element.onclick = (e) => {
+                e.preventDefault();
+                showStreakCalendar(dates[1], dates[2], username, dates[3]);
+            };
+        }
+    });
 });
 </script>
 {% endblock %}

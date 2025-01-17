@@ -8,7 +8,7 @@ from collections import defaultdict
 from .models import Settings  # Add this import
 from .database import SessionLocal
 from .utils import get_settings  # Use utils instead
-from .streaks import calculate_streak_for_date, calculate_current_streak
+from .streaks import calculate_current_streak  # Remove calculate_streak_for_date
 from .helpers import in_period, calculate_average_time
 
 # Create a logger instance
@@ -290,6 +290,14 @@ def calculate_daily_score(entry, settings, position=None, total_entries=None, mo
         'streak_multiplier': streak_multiplier
     }
 
+    # Get current streak from database instead of calculating
+    db = SessionLocal()
+    try:
+        streak = calculate_current_streak(entry["name"])
+        context['streak'] = streak
+    finally:
+        db.close()
+
     # Modify late arrival logic to use configured start time
     shift_start = datetime.strptime(day_shift["start"], "%H:%M").time()
     entry_time = datetime.strptime(entry["time"], "%H:%M").time()
@@ -367,7 +375,7 @@ def calculate_daily_score(entry, settings, position=None, total_entries=None, mo
     if entry_date <= current_date:  # Only calculate streak for non-future dates
         db = SessionLocal()
         try:
-            streak = calculate_streak_for_date(entry["name"], entry_date, db)
+            streak = calculate_current_streak(entry["name"])
             if streak > 0:
                 multiplier = settings.get("streak_multiplier", 0.5)
                 # Only apply streak bonus to score if streaks are enabled

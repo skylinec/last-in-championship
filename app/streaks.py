@@ -85,4 +85,24 @@ def calculate_current_streak(name):
     finally:
         db.close()
 
+def get_streak_data(username, db):
+    """Get complete streak data for a user"""
+    try:
+        streak = db.execute(
+            UserStreak.select().where(UserStreak.c.username == username)
+        ).first()
+
+        return {
+            'current_streak': streak.current_streak if streak else 0,
+            'max_streak': streak.max_streak if streak else 0,
+            'last_attendance': streak.last_attendance.isoformat() if streak and streak.last_attendance else None
+        }
+    except Exception as e:
+        logger.error(f"Error getting streak data: {str(e)}")
+        return {
+            'current_streak': 0,
+            'max_streak': 0,
+            'last_attendance': None
+        }
+
 # Remove other streak calculation functions since they're handled by the monitoring service

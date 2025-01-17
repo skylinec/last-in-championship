@@ -1879,10 +1879,8 @@ def view_streaks():
         today = datetime.now().date()
         streak_data = []
         for username in recent_users:
-            # Calculate current streak using the standardized logic
-            current_streak = calculate_current_streak(username)
-            
-            # Get past streaks using same logic
+            # Get current and historical streak data from the database
+            streak = db.query(UserStreak).filter_by(username=username).first()
             past_streaks = get_streak_history(username, db)
             
             # Don't show current streak in past streaks
@@ -1890,9 +1888,9 @@ def view_streaks():
 
             streak_data.append({
                 'username': username,
-                'current_streak': current_streak,
+                'current_streak': streak.current_streak if streak else 0,
                 'past_streaks': past_streaks[:5],  # Show top 5 past streaks
-                'max_streak': max([s['length'] for s in past_streaks] + [current_streak, 0])
+                'max_streak': streak.max_streak if streak else 0
             })
         
         # Sort by current streak first, then max streak
@@ -1903,43 +1901,12 @@ def view_streaks():
                              streaks=streak_data,
                              max_streak=max_streak,
                              today=today,
-                             timedelta=timedelta)  # Add timedelta to template context
+                             timedelta=timedelta)
     finally:
         db.close()
 
-def update_user_streak(username, attendance_date):
-    """Update streak for a user based on new attendance"""
-    db = SessionLocal()
-    try:
-        streak = db.query(UserStreak).filter_by(username=username).first()
-        if not streak:
-            streak = UserStreak(username=username)
-            db.add(streak)
-
-        # Convert attendance_date to datetime if it's a string
-        if isinstance(attendance_date, str):
-            attendance_date = datetime.strptime(attendance_date, '%Y-%m-%d')
-        
-        # Ensure we're comparing dates, not mixing date and datetime
-        attendance_date = attendance_date.date() if isinstance(attendance_date, datetime) else attendance_date
-
-        if streak.last_attendance:
-            # Convert last_attendance to date for comparison
-            last_date = streak.last_attendance.date()
-            days_diff = (attendance_date - last_date).days
-            if days_diff <= 3:  # Allow for weekends
-                streak.current_streak += 1
-            else:
-                streak.current_streak = 1
-        else:
-            streak.current_streak = 1
-
-        # Store the full datetime
-        streak.last_attendance = datetime.combine(attendance_date, datetime.min.time())
-        streak.max_streak = max(streak.max_streak, streak.current_streak)
-        db.commit()
-    finally:
-        db.close()
+# Remove update_user_streak function since it's handled by monitoring service
+# Remove other streak-related functions that are no longer needed
 
 @bp.route("/visualisations")
 @login_required

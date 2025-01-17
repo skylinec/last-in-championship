@@ -30,7 +30,7 @@
                         {% for past in streak.past_streaks %}
                         <li>
                             <span class="streak-length">{{ past.length }} days</span>
-                            <span class="streak-dates">
+                            <span class="streak-dates" title="Streak broken: {{ past.break_reason }}">
                                 {{ past.start.strftime('%d/%m/%Y') }} - {{ past.end.strftime('%d/%m/%Y') }}
                             </span>
                         </li>
@@ -165,6 +165,22 @@
 .streak-dates {
     color: #666;
     font-size: 0.9em;
+    cursor: help;
+    border-bottom: 1px dotted #666;
+}
+
+.streak-dates:hover::after {
+    content: attr(title);
+    position: absolute;
+    background: rgba(0, 0, 0, 0.8);
+    color: white;
+    padding: 5px 10px;
+    border-radius: 4px;
+    font-size: 0.9em;
+    margin-top: -30px;
+    margin-left: 10px;
+    white-space: nowrap;
+    z-index: 1000;
 }
 
 @media (max-width: 768px) {

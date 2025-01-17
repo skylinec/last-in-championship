@@ -70,6 +70,40 @@
             </div>
 
             <div class="settings-section">
+                <h2>Working Days Configuration</h2>
+                <p class="helper-text">Select which days users are expected to work</p>
+                <div class="working-days-table">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>User</th>
+                                <th>Mon</th>
+                                <th>Tue</th>
+                                <th>Wed</th>
+                                <th>Thu</th>
+                                <th>Fri</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for user in core_users %}
+                            <tr class="working-days-row" data-user="{{ user }}">
+                                <td>{{ user }}</td>
+                                {% for day in ['mon', 'tue', 'wed', 'thu', 'fri'] %}
+                                <td>
+                                    <input type="checkbox" 
+                                           name="working_days.{{ user }}"
+                                           value="{{ day }}"
+                                           {% if day in settings.points.get('working_days', {}).get(user, ['mon', 'tue', 'wed', 'thu', 'fri']) %}checked{% endif %}>
+                                </td>
+                                {% endfor %}
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="settings-section">
                 <h2>Core Users</h2>
                 <p class="helper-text">Select users to include in attendance tracking</p>
                 <div class="core-users-table">
@@ -1317,6 +1351,14 @@ document.getElementById('settingsForm').addEventListener('submit', async (event)
         const days = Array.from(row.querySelectorAll('input[type="checkbox"]:checked'))
                         .map(checkbox => checkbox.value);
         settings.remote_days[user] = days;
+    });
+
+    // Collect working days
+    document.querySelectorAll('.working-days-row').forEach(row => {
+        const user = row.dataset.user;
+        const days = Array.from(row.querySelectorAll('input[type="checkbox"]:checked'))
+                        .map(checkbox => checkbox.value);
+        settings.points.working_days[user] = days;
     });
 
     try {

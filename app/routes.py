@@ -504,25 +504,21 @@ def manage_settings():
             load_settings.cache_clear()
             settings_data = load_settings()
             
-            if not settings_data.get('monitoring_start_date'):
-                settings_data['monitoring_start_date'] = datetime.now().replace(month=1, day=1).date()
+            # Ensure working_days exists in points
+            if 'points' not in settings_data:
+                settings_data['points'] = {}
+            if 'working_days' not in settings_data['points']:
+                settings_data['points']['working_days'] = {}
             
-            registered_users = [user[0] for user in db.query(User.username).all()]
+            # Initialize default working days for users without settings
             core_users = settings_data.get("core_users", [])
-            
-            # Pass today's date to the template
-            today = datetime.now().date()
-            
-            return render_template(
-                "settings.html",
-                settings=settings_data,
-                settings_data=settings_data,
-                registered_users=registered_users,
-                core_users=core_users,
-                rules=settings_data.get("points", {}).get("rules", []),
-                today=today  # Add this line
-            )
-        else:
+            for user in core_users:
+                if user not in settings_data['points']['working_days']:
+                    settings_data['points']['working_days'][user] = ['mon', 'tue', 'wed', 'thu', 'fri']
+
+            # ...rest of GET handler...
+
+        else:  # POST
             try:
                 # Clear the settings cache immediately
                 load_settings.cache_clear()
@@ -558,6 +554,11 @@ def manage_settings():
                     # Create new settings
                     old_settings = Settings(**normalized_settings)
                     db.add(old_settings)
+
+                # Ensure working_days are properly nested in points
+                if 'points' in normalized_settings and 'working_days' in normalized_settings:
+                    working_days = normalized_settings.pop('working_days')
+                    normalized_settings['points']['working_days'] = working_days
 
                 # Log the changes before commit
                 log_audit(

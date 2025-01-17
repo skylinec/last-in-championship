@@ -22,6 +22,10 @@ def is_working_day(date, working_days):
     """Check if a given date is a working day"""
     return date.strftime('%a').lower() in working_days
 
+def is_weekend(date):
+    """Check if a date is a weekend (Saturday=5 or Sunday=6)"""
+    return date.weekday() >= 5
+
 def calculate_streak_for_date(username, target_date, db):
     """Calculate streak up to a specific date"""
     try:
@@ -32,6 +36,10 @@ def calculate_streak_for_date(username, target_date, db):
                       if isinstance(target_date, str) 
                       else target_date.date() if isinstance(target_date, datetime) 
                       else target_date)
+        
+        # Don't start/end streaks on weekends
+        if is_weekend(target_date):
+            return 0
 
         working_days = get_working_days(db, username)
         
@@ -47,40 +55,32 @@ def calculate_streak_for_date(username, target_date, db):
             return 0
 
         streak = 0
-        current_date = target_date
         last_date = None
 
         for entry in entries:
             entry_date = datetime.strptime(entry.date, '%Y-%m-%d').date()
             
+            # Skip weekend entries when calculating streak
+            if is_weekend(entry_date):
+                continue
+                
             if last_date is None:
                 last_date = entry_date
                 streak = 1
                 continue
 
-            days_between = (last_date - entry_date).days - 1
-            if days_between < 0:
-                continue
+            days_between = (last_date - entry_date).days
 
-            # Check if any working days were missed
-            missed_working_day = False
-            check_date = entry_date + timedelta(days=1)
-            while check_date < last_date:
-                if is_working_day(check_date, working_days):
-                    missed_working_day = True
-                    break
-                check_date += timedelta(days=1)
+            # Skip weekends when counting days between
+            non_weekend_days = sum(1 for d in range(1, days_between)
+                                 if not is_weekend(entry_date + timedelta(days=d)))
 
-            if not missed_working_day:
+            if non_weekend_days == 0:
                 streak += 1
             else:
                 break
 
             last_date = entry_date
-
-            # Break if we're too far back (more than 90 days)
-            if (target_date - entry_date).days > 90:
-                break
 
         return streak
 

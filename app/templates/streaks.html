@@ -528,14 +528,20 @@ function createDayElement(currentDate, start, end, attendance, startDate, endDat
     content.appendChild(dayNumber);
     
     const currentDateStr = currentDate.toISOString().split('T')[0];
+    const isWeekend = currentDate.getDay() === 0 || currentDate.getDay() === 6;
     
+    // Always show attendance status if available
     if (attendance[currentDateStr]) {
         const status = document.createElement('div');
         status.className = `status-indicator status-${attendance[currentDateStr]}`;
         content.appendChild(status);
     }
     
-    if (currentDate >= start && currentDate <= end) {
+    // Mark weekends as inactive and add title
+    if (isWeekend) {
+        dayElement.classList.add('inactive');
+        dayElement.title = 'Weekend';
+    } else if (currentDate >= start && currentDate <= end) {
         if (currentDateStr === startDate) {
             dayElement.classList.add('streak-start');
             dayElement.title = 'Streak Start';
@@ -544,6 +550,9 @@ function createDayElement(currentDate, start, end, attendance, startDate, endDat
             dayElement.title = breakReason;
         } else {
             dayElement.classList.add('streak-day');
+            if (attendance[currentDateStr]) {
+                dayElement.title = `Status: ${attendance[currentDateStr]}`;
+            }
         }
     } else {
         dayElement.classList.add('inactive');
@@ -569,9 +578,9 @@ async function fetchAndDisplayCalendar(startDate, endDate, username, breakReason
             }
         }
         
-        // Only include previous month if streak starts in it
+        // Calculate start and end of display range
         const monthStart = new Date(start.getFullYear(), start.getMonth(), 1);
-        const lastDate = new Date(end.getFullYear(), end.getMonth() + 1, 0);
+        const monthEnd = new Date(end.getFullYear(), end.getMonth() + 1, 0);
         
         let displayDate = new Date(monthStart);
         let currentMonth = displayDate.getMonth();
@@ -585,7 +594,8 @@ async function fetchAndDisplayCalendar(startDate, endDate, username, breakReason
         addMonthDivider(calendarGrid, displayDate);
         addMonthPadding(calendarGrid, displayDate);
         
-        while (displayDate <= lastDate) {
+        // Continue generating calendar until we've shown the entire end month
+        while (displayDate <= monthEnd) {
             if (displayDate.getMonth() !== currentMonth) {
                 currentMonth = displayDate.getMonth();
                 addMonthDivider(calendarGrid, displayDate);

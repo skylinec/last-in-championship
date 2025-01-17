@@ -7,15 +7,17 @@
 <div class="streaks-container">
     <div class="streak-cards">
         {% for streak in streaks %}
-        <div class="streak-card">
+        <div class="streak-card {% if streak.current_streak > 0 %}active-streak{% endif %}">
             <div class="streak-header">
                 <h2>{{ streak.username }}</h2>
                 <div class="streak-count {% if streak.current_streak > 0 %}active{% endif %}"
-                     onclick="showStreakCalendar('{{ (today - timedelta(days=streak.current_streak-1)).strftime('%Y-%m-%d') }}', 
+                     {% if streak.current_streak > 0 %}
+                     onclick="showStreakCalendar('{{ streak.current_start.strftime('%Y-%m-%d') }}', 
                                                '{{ today.strftime('%Y-%m-%d') }}', 
                                                '{{ streak.username }}', 
                                                'Current active streak',
-                                               true)">
+                                               true)"
+                     {% endif %}>
                     <span class="current">{{ streak.current_streak }}</span>
                     <span class="days">days</span>
                     {% if streak.current_streak > 0 %}
@@ -23,32 +25,36 @@
                     {% endif %}
                 </div>
             </div>
+            
             <div class="streak-progress">
                 <div class="streak-bar" style="width: {{ (streak.current_streak / max_streak * 100) if max_streak > 0 else 0 }}%"></div>
             </div>
+
             <div class="streak-details">
                 <div class="detail">
                     <span class="label">Best Streak:</span>
                     <span class="value">{{ streak.max_streak }} days</span>
                 </div>
+                
                 {% if streak.past_streaks %}
                 <div class="past-streaks">
                     <h3>Past Notable Streaks</h3>
-                    <ul>
+                    <div class="past-streaks-list">
                         {% for past in streak.past_streaks %}
-                        <li>
-                            <span class="streak-length">{{ past.length }} days</span>
-                            <span class="streak-dates" title="Streak broken: {{ past.break_reason }}"
-                                  onclick="showStreakCalendar('{{ past.start.strftime('%Y-%m-%d') }}', 
-                                                            '{{ past.end.strftime('%Y-%m-%d') }}',
-                                                            '{{ streak.username }}',
-                                                            '{{ past.break_reason }}')">
-                                {{ past.start.strftime('%d/%m/%Y') }} - {{ past.end.strftime('%d/%m/%Y') }}
-                                <div class="streak-highlight"></div>
-                            </span>
-                        </li>
+                        <div class="past-streak-item" 
+                             onclick="showStreakCalendar('{{ past.start.strftime('%Y-%m-%d') }}', 
+                                                       '{{ past.end.strftime('%Y-%m-%d') }}', 
+                                                       '{{ streak.username }}', 
+                                                       '{{ past.break_reason }}')">
+                            <div class="past-streak-info">
+                                <span class="streak-length">{{ past.length }} days</span>
+                                <span class="streak-dates">{{ past.date_range }}</span>
+                            </div>
+                            <div class="streak-reason">{{ past.break_reason }}</div>
+                            <div class="streak-highlight"></div>
+                        </div>
                         {% endfor %}
-                    </ul>
+                    </div>
                 </div>
                 {% endif %}
             </div>
@@ -484,6 +490,80 @@
         align-items: flex-start;
         gap: 3px;
     }
+}
+
+.past-streaks-list {
+    margin-top: 10px;
+}
+
+.past-streak-item {
+    background: #f8f9fa;
+    padding: 12px;
+    margin: 8px 0;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    border: 1px solid #eee;
+    position: relative;
+    overflow: hidden;
+}
+
+.past-streak-item:hover {
+    transform: translateX(5px);
+    background: #fff;
+    border-color: var(--accent-color);
+}
+
+.past-streak-info {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 4px;
+}
+
+.streak-length {
+    font-weight: 600;
+    color: var(--primary-color);
+}
+
+.streak-dates {
+    color: #666;
+    font-size: 0.9em;
+}
+
+.streak-reason {
+    font-size: 0.85em;
+    color: #888;
+    font-style: italic;
+}
+
+.streak-highlight {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    height: 2px;
+    background: var(--accent-color);
+    transform: scaleX(0);
+    transition: transform 0.2s ease;
+    transform-origin: left;
+}
+
+.past-streak-item:hover .streak-highlight {
+    transform: scaleX(1);
+}
+
+.active-streak {
+    border: 2px solid var(--accent-color);
+    box-shadow: 0 0 10px rgba(52, 152, 219, 0.1);
+}
+
+.streak-card h3 {
+    color: var(--primary-color);
+    font-size: 1em;
+    margin: 15px 0 10px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid #eee;
 }
 </style>
 

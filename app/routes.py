@@ -1902,10 +1902,22 @@ def view_streaks():
             # Don't show current streak in past streaks
             past_streaks = [s for s in past_streaks if s['end'] < today]
 
+            # Format past streaks with additional details
+            formatted_past_streaks = []
+            for past in past_streaks:
+                formatted_past_streaks.append({
+                    'start': past['start'],
+                    'end': past['end'],
+                    'length': past['length'],
+                    'break_reason': past.get('break_reason', 'Streak ended'),
+                    'date_range': f"{past['start'].strftime('%d/%m/%Y')} - {past['end'].strftime('%d/%m/%Y')}"
+                })
+
             streak_data.append({
                 'username': username,
                 'current_streak': streak.current_streak if streak else 0,
-                'past_streaks': past_streaks[:5],  # Show top 5 past streaks
+                'current_start': streak.last_attendance - timedelta(days=streak.current_streak-1) if streak and streak.current_streak > 0 else None,
+                'past_streaks': sorted(formatted_past_streaks, key=lambda x: (-x['length'], -x['end'].toordinal()))[:5],  # Show top 5 past streaks
                 'max_streak': streak.max_streak if streak else 0
             })
         
@@ -1916,8 +1928,7 @@ def view_streaks():
         return render_template("streaks.html", 
                              streaks=streak_data,
                              max_streak=max_streak,
-                             today=today,
-                             timedelta=timedelta)
+                             today=today)
     finally:
         db.close()
 

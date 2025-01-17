@@ -130,7 +130,7 @@ async function generateStreaks() {
   const client = await pool.connect();
   try {
     const startTime = Date.now();
-
+    
     // Get working days configuration from settings
     const settingsResult = await client.query('SELECT points FROM settings LIMIT 1');
     const workingDays = settingsResult.rows[0]?.points?.working_days || {};
@@ -183,40 +183,47 @@ async function generateStreaks() {
         continue;
       }
 
-      // Get user's working days configuration
+      // Get user's working days
       const userWorkingDays = workingDays[entry.name] || ['mon', 'tue', 'wed', 'thu', 'fri'];
       const dayMap = {1: 'mon', 2: 'tue', 3: 'wed', 4: 'thu', 5: 'fri'};
 
       // Calculate days between entries
       const daysBetween = Math.floor((lastDate - entry.date) / (1000 * 60 * 60 * 24));
       
-      if (daysBetween === 1 || daysBetween === 3) {
-        // Direct consecutive days or over weekend
-        currentStreak++;
-      } else {
-        // Check if all missed days were non-working days
-        let missedWorkday = false;
+      // Log for debugging
+      console.log(`User ${entry.name}: Gap of ${daysBetween} days between ${entry.date} and ${lastDate}`);
+
+      let shouldIncrementStreak = false;
+
+      if (daysBetween === 1) {
+        // Direct consecutive days
+        shouldIncrementStreak = true;
+      } else if (daysBetween <= 3) {
+        // Check if gap only includes weekends/non-working days
         let checkDate = new Date(entry.date);
-        checkDate.setDate(checkDate.getDate() + 1);
-        
-        while (checkDate < lastDate) {
-          const dayOfWeek = checkDate.getDay();
-          const isWeekday = dayOfWeek > 0 && dayOfWeek < 6;
-          const isWorkingDay = isWeekday && userWorkingDays.includes(dayMap[dayOfWeek]);
-          
-          if (isWorkingDay) {
-            missedWorkday = true;
+        let missedWorkingDay = false;
+
+        for (let i = 1; i < daysBetween; i++) {
+          checkDate.setDate(checkDate.getDate() + 1);
+          const dow = checkDate.getDay();
+          // Check if it's a working day for this user
+          if (dow > 0 && dow < 6 && userWorkingDays.includes(dayMap[dow])) {
+            missedWorkingDay = true;
             break;
           }
-          checkDate.setDate(checkDate.getDate() + 1);
         }
 
-        if (!missedWorkday) {
-          currentStreak++;
-        } else {
-          maxStreak = Math.max(maxStreak, currentStreak);
-          currentStreak = 1;
-        }
+        shouldIncrementStreak = !missedWorkingDay;
+      }
+
+      // Update streak based on evaluation
+      if (shouldIncrementStreak) {
+        currentStreak++;
+        console.log(`${entry.name}: Streak incremented to ${currentStreak}`);
+      } else {
+        console.log(`${entry.name}: Streak reset (was ${currentStreak})`);
+        maxStreak = Math.max(maxStreak, currentStreak);
+        currentStreak = 1;
       }
 
       lastDate = entry.date;
@@ -225,19 +232,22 @@ async function generateStreaks() {
 
     // Don't forget the last user
     if (currentUser && currentStreak > 0) {
+      maxStreak = Math.max(maxStreak, currentStreak);
       streaks.push({
         username: currentUser,
         currentStreak: currentStreak,
-        maxStreak: Math.max(maxStreak, currentStreak),
+        maxStreak: maxStreak,
         lastAttendance: lastTimestamp
       });
     }
 
-    // Update streaks in database
+    // Update streaks in database with additional logging
     if (streaks.length > 0) {
       await client.query('BEGIN');
       try {
         for (const streak of streaks) {
+          console.log(`Updating streak for ${streak.username}: current=${streak.currentStreak}, max=${streak.maxStreak}`);
+          
           await client.query(`
             INSERT INTO user_streaks (username, current_streak, last_attendance, max_streak)
             VALUES ($1, $2, $3, $4)
@@ -247,13 +257,12 @@ async function generateStreaks() {
               last_attendance = $3,
               max_streak = GREATEST(user_streaks.max_streak, $4)
             WHERE 
-              -- Only update if the new streak is different or the last attendance is more recent
               user_streaks.current_streak != $2 OR
               user_streaks.last_attendance < $3
           `, [
-            streak.username, 
-            streak.currentStreak, 
-            streak.lastAttendance, 
+            streak.username,
+            streak.currentStreak,
+            streak.lastAttendance,
             streak.maxStreak
           ]);
         }
@@ -266,7 +275,8 @@ async function generateStreaks() {
 
     await logMonitoringEvent('streak_generation', {
       duration: Date.now() - startTime,
-      streaks_processed: streaks.length
+      streaks_processed: streaks.length,
+      streak_details: streaks
     });
 
   } catch (error) {

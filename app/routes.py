@@ -1871,9 +1871,75 @@ def view_streaks():
     """View streaks for all users"""
     db = SessionLocal()
     try:
-        streaks = db.query(UserStreak).all()
-        max_streak = max((s.current_streak for s in streaks), default=0)
-        return render_template("streaks.html", streaks=streaks, max_streak=max_streak)
+        # Get all users who have had entries in the past 30 days
+        recent_users = db.query(Entry.name).distinct().filter(
+            Entry.date >= (datetime.now() - timedelta(days=30)).strftime('%Y-%m-%d')
+        ).all()
+        recent_users = [u[0] for u in recent_users]
+        
+        streak_data = []
+        for username in recent_users:
+            # Get current streak
+            current_streak = calculate_current_streak(username)
+            
+            # Get streak history
+            entries = db.query(Entry).filter(
+                Entry.name == username,
+                Entry.status.in_(['in-office', 'remote'])
+            ).order_by(Entry.date.asc()).all()
+            
+            past_streaks = []
+            current_run = 0
+            streak_start = None
+            
+            for i, entry in enumerate(entries):
+                entry_date = datetime.strptime(entry.date, '%Y-%m-%d').date()
+                
+                if i == 0:
+                    current_run = 1
+                    streak_start = entry_date
+                    continue
+                
+                prev_date = datetime.strptime(entries[i-1].date, '%Y-%m-%d').date()
+                days_diff = (entry_date - prev_date).days
+                
+                if days_diff <= 3:  # Allow for weekends
+                    current_run += 1
+                else:
+                    if current_run >= 3:  # Only record significant streaks
+                        past_streaks.append({
+                            'length': current_run,
+                            'start': streak_start,
+                            'end': prev_date
+                        })
+                    current_run = 1
+                    streak_start = entry_date
+            
+            # Add the final streak if significant
+            if current_run >= 3:
+                past_streaks.append({
+                    'length': current_run,
+                    'start': streak_start,
+                    'end': entry_date
+                })
+            
+            # Sort past streaks by length descending
+            past_streaks.sort(key=lambda x: x['length'], reverse=True)
+            
+            streak_data.append({
+                'username': username,
+                'current_streak': current_streak,
+                'past_streaks': past_streaks[:5],  # Show top 5 past streaks
+                'max_streak': max([s['length'] for s in past_streaks] + [current_streak, 0])
+            })
+        
+        # Sort by current streak first, then max streak
+        streak_data.sort(key=lambda x: (-x['current_streak'], -x['max_streak']))
+        
+        max_streak = max((s['max_streak'] for s in streak_data), default=0)
+        return render_template("streaks.html", 
+                             streaks=streak_data,
+                             max_streak=max_streak)
     finally:
         db.close()
 

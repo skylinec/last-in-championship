@@ -10,7 +10,7 @@
         <div class="streak-card">
             <div class="streak-header">
                 <h2>{{ streak.username }}</h2>
-                <div class="streak-count">
+                <div class="streak-count {% if streak.current_streak > 0 %}active{% endif %}">
                     <span class="current">{{ streak.current_streak }}</span>
                     <span class="days">days</span>
                 </div>
@@ -20,13 +20,24 @@
             </div>
             <div class="streak-details">
                 <div class="detail">
-                    <span class="label">Max Streak:</span>
+                    <span class="label">Best Streak:</span>
                     <span class="value">{{ streak.max_streak }} days</span>
                 </div>
-                <div class="detail">
-                    <span class="label">Last Attendance:</span>
-                    <span class="value">{{ streak.last_attendance.strftime('%d/%m/%Y') if streak.last_attendance else 'N/A' }}</span>
+                {% if streak.past_streaks %}
+                <div class="past-streaks">
+                    <h3>Past Notable Streaks</h3>
+                    <ul>
+                        {% for past in streak.past_streaks %}
+                        <li>
+                            <span class="streak-length">{{ past.length }} days</span>
+                            <span class="streak-dates">
+                                {{ past.start.strftime('%d/%m/%Y') }} - {{ past.end.strftime('%d/%m/%Y') }}
+                            </span>
+                        </li>
+                        {% endfor %}
+                    </ul>
                 </div>
+                {% endif %}
             </div>
         </div>
         {% endfor %}
@@ -113,6 +124,55 @@
 
 .detail .value {
     font-weight: 500;
+}
+
+.streak-count.active {
+    color: var(--accent-color);
+    text-shadow: 0 0 10px rgba(52, 152, 219, 0.3);
+}
+
+.past-streaks {
+    margin-top: 15px;
+    padding-top: 15px;
+    border-top: 1px solid #eee;
+}
+
+.past-streaks h3 {
+    font-size: 0.9em;
+    color: #666;
+    margin-bottom: 10px;
+}
+
+.past-streaks ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.past-streaks li {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 5px 0;
+    font-size: 0.9em;
+}
+
+.streak-length {
+    font-weight: 500;
+    color: var(--primary-color);
+}
+
+.streak-dates {
+    color: #666;
+    font-size: 0.9em;
+}
+
+@media (max-width: 768px) {
+    .past-streaks li {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 3px;
+    }
 }
 </style>
 {% endblock %}

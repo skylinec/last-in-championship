@@ -97,79 +97,89 @@ def get_streak_history(username, db):
             Entry.select().where(
                 Entry.c.name == username,
                 Entry.c.status.in_(['in-office', 'remote'])
-            ).order_by(Entry.c.date.desc())
+            ).order_by(Entry.c.date.asc())  # Changed to ascending order for chronological processing
         ).fetchall()
 
         if not entries:
             return []
 
         streaks = []
-        current_streak = 1
-        streak_start = streak_end = datetime.strptime(entries[0].date, '%Y-%m-%d').date()
-        last_date = streak_end
+        current_streak = 0
+        streak_start = None
+        last_date = None
+        last_working_day = None
 
-        for entry in entries[1:]:
+        for entry in entries:
             entry_date = datetime.strptime(entry.date, '%Y-%m-%d').date()
-            days_between = (last_date - entry_date).days - 1
-
-            # Check if any working days were missed
-            missed_working_day = False
-            first_missed_date = None
-            check_date = entry_date + timedelta(days=1)
-            while check_date < last_date:
-                if is_working_day(check_date, working_days):
-                    missed_working_day = True
-                    first_missed_date = check_date
-                    break
-                check_date += timedelta(days=1)
-
-            if not missed_working_day:
-                current_streak += 1
+            
+            # Initialize streak start if this is the first entry
+            if streak_start is None:
                 streak_start = entry_date
-            else:
+                current_streak = 1
+                last_date = entry_date
+                continue
+
+            days_between = (entry_date - last_date).days - 1
+            
+            # Check if streak is broken
+            streak_broken = False
+            break_reason = None
+            
+            if days_between > 0:
+                # Check each day in between for working days
+                check_date = last_date + timedelta(days=1)
+                while check_date < entry_date:
+                    if is_working_day(check_date, working_days):
+                        streak_broken = True
+                        break_reason = f"Missed working day on {check_date.strftime('%d/%m/%Y')}"
+                        break
+                    check_date += timedelta(days=1)
+            
+            if streak_broken:
                 if current_streak >= 3:  # Only store significant streaks
-                    # Get the next entry after streak end to determine break reason
                     next_entry = db.execute(
                         Entry.select().where(
                             Entry.c.name == username,
-                            Entry.c.date > streak_end.strftime('%Y-%m-%d')
-                        ).order_by(Entry.c.date.asc()).limit(1)
+                            Entry.c.date > last_date.strftime('%Y-%m-%d'),
+                            Entry.c.date < (last_date + timedelta(days=7)).strftime('%Y-%m-%d')
+                        ).order_by(Entry.c.date.asc())
                     ).first()
 
-                    break_reason = "No attendance"
-                    if next_entry:
-                        next_date = datetime.strptime(next_entry.date, '%Y-%m-%d').date()
-                        if next_date - streak_end <= timedelta(days=7):
-                            break_reason = f"Missed day on {first_missed_date.strftime('%d/%m/%Y')}"
-                            if next_entry.status not in ['in-office', 'remote']:
-                                break_reason += f" ({next_entry.status})"
-                    
+                    if next_entry and next_entry.status not in ['in-office', 'remote']:
+                        break_reason += f" ({next_entry.status})"
+
                     streaks.append({
                         'length': current_streak,
                         'start': streak_start,
-                        'end': streak_end,
+                        'end': last_date,
                         'break_reason': break_reason
                     })
+                
+                # Reset streak
+                streak_start = entry_date
                 current_streak = 1
-                streak_start = streak_end = entry_date
-
+            else:
+                current_streak += 1
+            
             last_date = entry_date
 
         # Add final streak if significant
         if current_streak >= 3:
+            today = datetime.now().date()
+            is_active = (today - last_date).days <= 3  # Consider weekends
             streaks.append({
                 'length': current_streak,
                 'start': streak_start,
-                'end': streak_end,
-                'break_reason': "Current active streak" if streak_end == datetime.now().date() else "End of records"
+                'end': last_date,
+                'break_reason': "Current active streak" if is_active else "End of records"
             })
 
-        # Sort by length and then by recency
+        # Sort by length first, then by recency for same lengths
         streaks.sort(key=lambda x: (-x['length'], -x['end'].toordinal()))
         return streaks
 
     except Exception as e:
-        logger.error(f"Error getting streak history: {str(e)}")
+        logger.error(f"Error getting streak history: {str(e)}", exc_info=True)
         return []
 
 def update_user_streak(username, attendance_date):

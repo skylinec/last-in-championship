@@ -71,11 +71,19 @@ def get_streak_data(username, db):
 def get_streak_history(username, db):
     """Get historical streak data for a user"""
     try:
+        # Get previous entry before first streak entry to check for continuations
         entries = db.execute(text("""
-            SELECT date, status
-            FROM entries 
-            WHERE name = :username
-            ORDER BY date ASC
+            WITH ordered_entries AS (
+                SELECT 
+                    date,
+                    status,
+                    LAG(date) OVER (ORDER BY date) as prev_date,
+                    LAG(status) OVER (ORDER BY date) as prev_status
+                FROM entries 
+                WHERE name = :username
+                ORDER BY date ASC
+            )
+            SELECT * FROM ordered_entries
         """), {"username": username}).fetchall()
         
         if not entries:
@@ -91,7 +99,7 @@ def get_streak_history(username, db):
             entry_date = entry.date if isinstance(entry.date, date) else datetime.strptime(entry.date, '%Y-%m-%d').date()
             
             # Skip weekends entirely
-            if entry_date.weekday() >= 5:  # 5=Saturday, 6=Sunday
+            if entry_date.weekday() >= 5:
                 continue
                 
             # Only process if it's a working day for this user
@@ -101,6 +109,19 @@ def get_streak_history(username, db):
                 
                 if is_valid:
                     if current_streak == 0:
+                        # Check if there's a valid previous entry to continue the streak
+                        if entry.prev_date:
+                            prev_date = entry.prev_date if isinstance(entry.prev_date, date) else datetime.strptime(entry.prev_date, '%Y-%m-%d').date()
+                            days_between = (entry_date - prev_date).days
+                            # Check if previous entry was valid and within range (allowing for weekends)
+                            if (days_between <= 3 and 
+                                entry.prev_status in ['in-office', 'remote'] and 
+                                prev_date.strftime('%a').lower() in working_days):
+                                streak_start = prev_date
+                                current_streak = 2  # Count both days
+                                last_date = entry_date
+                                continue
+
                         streak_start = entry_date
                         current_streak = 1
                     else:

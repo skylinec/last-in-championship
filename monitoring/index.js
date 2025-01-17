@@ -160,6 +160,30 @@ async function generateStreaks() {
     let lastTimestamp = null;
     let streakStart = null;
 
+    // Add helper function inside generateStreaks
+    async function getLastValidDay(username, beforeDate, userWorkingDays, dayMap) {
+      const result = await client.query(`
+        SELECT date, status
+        FROM entries
+        WHERE name = $1
+          AND date < $2
+          AND status IN ('in-office', 'remote')
+          AND EXTRACT(DOW FROM date) BETWEEN 1 AND 5
+        ORDER BY date DESC
+        LIMIT 1
+      `, [username, beforeDate]);
+
+      if (result.rows.length === 0) return null;
+      
+      const lastDay = result.rows[0];
+      const dow = new Date(lastDay.date).getDay();
+      // Check if it was a working day for the user
+      if (userWorkingDays.includes(dayMap[dow])) {
+        return lastDay.date;
+      }
+      return null;
+    }
+
     for (const entry of entries.rows) {
       // Skip weekends entirely
       if (entry.day_of_week === 0 || entry.day_of_week === 6) continue;
@@ -176,11 +200,32 @@ async function generateStreaks() {
           });
         }
         currentUser = entry.name;
-        currentStreak = 1;
+        
+        // Check for streak continuation from previous valid day
+        const lastValidDay = await getLastValidDay(
+          entry.name, 
+          entry.date, 
+          workingDays[entry.name] || ['mon', 'tue', 'wed', 'thu', 'fri'],
+          dayMap
+        );
+        
+        if (lastValidDay) {
+          const daysBetween = Math.floor((entry.date - lastValidDay) / (1000 * 60 * 60 * 24));
+          if (daysBetween <= 3) { // Allow for weekend gap
+            currentStreak = 1;
+            streakStart = lastValidDay;
+          } else {
+            currentStreak = 1;
+            streakStart = entry.date;
+          }
+        } else {
+          currentStreak = 1;
+          streakStart = entry.date;
+        }
+        
         maxStreak = 1;
         lastDate = entry.date;
         lastTimestamp = entry.timestamp;
-        streakStart = entry.date;
         continue;
       }
 

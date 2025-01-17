@@ -139,24 +139,30 @@ async function loadHistory() {
         updateTable(data.entries);
         updatePagination(data.total_pages);
 
-        // Show total results count
-        const totalResults = document.createElement('div');
-        totalResults.className = 'total-results';
+        // Update total results count - modified to prevent duplicates
+        let totalResults = document.querySelector('.total-results');
+        if (!totalResults) {
+            totalResults = document.createElement('div');
+            totalResults.className = 'total-results';
+            document.getElementById('historyTable').parentNode.insertBefore(
+                totalResults, 
+                document.getElementById('historyTable')
+            );
+        }
         totalResults.textContent = `Total entries: ${data.total}`;
-        document.getElementById('historyTable').parentNode.insertBefore(
-            totalResults, 
-            document.getElementById('historyTable')
-        );
     } catch (error) {
         console.error('Error loading history:', error);
-        // Show error message to user
-        const errorDiv = document.createElement('div');
-        errorDiv.className = 'error-message';
+        // Show error message to user - modified to prevent duplicates
+        let errorDiv = document.querySelector('.error-message');
+        if (!errorDiv) {
+            errorDiv = document.createElement('div');
+            errorDiv.className = 'error-message';
+            document.getElementById('historyTable').parentNode.insertBefore(
+                errorDiv, 
+                document.getElementById('historyTable')
+            );
+        }
         errorDiv.textContent = 'Error loading history. Please try again.';
-        document.getElementById('historyTable').parentNode.insertBefore(
-            errorDiv, 
-            document.getElementById('historyTable')
-        );
     }
 }
 

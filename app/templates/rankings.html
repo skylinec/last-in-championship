@@ -5,35 +5,33 @@
 <h1>{{ period|title }} Rankings for {{ current_display }}</h1>
 
 <div class="period-selector">
-    <button onclick="changePeriod(-1)">Previous {{ period|title }}</button>
-    {% if period == 'day' %}
-        <input type="date" 
-               id="periodSelect" 
-               value="{{ current_date }}" 
-               max="{{ today.strftime('%Y-%m-%d') }}"
-               onchange="loadPeriod(this.value)">
-    {% elif period == 'week' %}
-        <div class="week-picker">
-            <button onclick="loadThisWeek()">Current Week</button>
-            <div class="date-selector">
-                <label>Select any date in the week:</label>
+    <div class="navigation-group">
+        <button onclick="changePeriod(-1)">&laquo; Previous {{ period|title }}</button>
+        {% if period == 'day' %}
+            <input type="date" 
+                   id="periodSelect" 
+                   value="{{ current_date }}" 
+                   max="{{ today.strftime('%Y-%m-%d') }}"
+                   onchange="loadPeriod(this.value)">
+        {% elif period == 'week' %}
+            <div class="week-picker">
                 <input type="date" 
                        id="weekSelect" 
                        value="{{ current_date }}"
                        max="{{ today.strftime('%Y-%m-%d') }}"
                        onchange="loadWeek(this.value)">
+                <button onclick="loadThisWeek()">Current Week</button>
+                <div class="current-week">{{ current_display }}</div>
             </div>
-            <div class="current-week">
-                {{ current_display }}
-            </div>
-        </div>
-    {% elif period == 'month' %}
-        <input type="month" 
-               id="periodSelect" 
-               value="{{ current_month_value }}" 
-               onchange="loadPeriod(this.value)">
-    {% endif %}
-    <button onclick="changePeriod(1)">Next {{ period|title }}</button>
+        {% elif period == 'month' %}
+            <input type="month" 
+                   id="periodSelect" 
+                   value="{{ current_month_value }}" 
+                   onchange="loadPeriod(this.value)">
+        {% endif %}
+        <button onclick="changePeriod(1)">Next {{ period|title }} &raquo;</button>
+    </div>
+
     {% if period in ['week', 'month'] %}
     <div class="points-mode">
         <label class="switch points-switch">
@@ -138,13 +136,34 @@
 .period-selector {
     margin: 20px 0;
     display: flex;
-    gap: 10px;
     align-items: center;
-    justify-content: center;
+    justify-content: space-between;
     background: white;
     padding: 15px;
     border-radius: 8px;
     box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+}
+
+.navigation-group {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+.week-picker {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    min-width: 200px;
+}
+
+.week-picker input[type="date"] {
+    min-width: 150px;
+}
+
+.current-week {
+    font-weight: 500;
+    color: var(--primary-color);
 }
 
 .period-selector button {
@@ -406,9 +425,26 @@
         gap: 15px;
     }
 
-    .period-selector input,
-    .period-selector button {
+    .navigation-group {
         width: 100%;
+        flex-direction: column;
+    }
+
+    .navigation-group button,
+    .navigation-group input,
+    .week-picker {
+        width: 100%;
+    }
+
+    .week-picker {
+        flex-direction: column;
+    }
+
+    .points-mode {
+        width: 100%;
+        justify-content: center;
+        padding-top: 10px;
+        border-top: 1px solid #eee;
     }
 
     .timeline-container {

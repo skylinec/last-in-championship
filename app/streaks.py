@@ -13,8 +13,6 @@ UserStreak = Base.metadata.tables['user_streaks']
 
 def calculate_streak_for_date(username, target_date, db):
     """Calculate streak up to a specific date"""
-    db = SessionLocal()
-    
     try:
         if not username or not target_date:
             return 0
@@ -30,7 +28,7 @@ def calculate_streak_for_date(username, target_date, db):
         # Get user's working days from settings JSON
         working_days = settings.points.get('working_days', {}).get(username, ['mon', 'tue', 'wed', 'thu', 'fri'])
         
-        # Query entries using raw table
+        # Query entries using raw table - get entries up to target date
         entries = db.execute(
             Entry.select().where(
                 Entry.c.name == username,
@@ -41,58 +39,37 @@ def calculate_streak_for_date(username, target_date, db):
         
         if not entries:
             return 0
-        
+
         streak = 0
-        last_date = datetime.strptime(entries[0].date, '%Y-%m-%d').date()
-        
-        # Check if the first entry is the target date
-        if last_date == target_date:
-            streak = 1
-        else:
-            return 0  # If most recent entry isn't target date, no active streak
-        
-        # Process remaining entries
-        for entry in entries[1:]:
+        current_date = target_date
+
+        # Process entries starting from target_date backwards
+        for entry in entries:
             entry_date = datetime.strptime(entry.date, '%Y-%m-%d').date()
-            days_between = (last_date - entry_date).days
             
-            # Check if dates are consecutive working days
-            current_date = last_date
-            working_day_count = 0
-            non_working_day_count = 0
+            # If we've moved too far back, break
+            if (current_date - entry_date).days > 10:  # Allow for long weekends/holidays
+                break
+
+            # Count working days between current_date and entry_date
+            missed_working_days = 0
+            check_date = current_date
+            while check_date > entry_date:
+                check_date -= timedelta(days=1)
+                if check_date.strftime('%a').lower() in working_days:
+                    missed_working_days += 1
+                if missed_working_days > 1:  # More than one working day gap
+                    return streak
             
-            for _ in range(days_between):
-                current_date -= timedelta(days=1)
-                day_name = current_date.strftime('%a').lower()
-                
-                if day_name in working_days:
-                    working_day_count += 1
-                else:
-                    non_working_day_count += 1
-                    
-            # Break streak if there are missed working days
-            if working_day_count > 1:  # More than one working day gap
-                break
-                
-            if working_day_count == 1:
-                # Found next working day, continue streak
-                streak += 1
-                last_date = entry_date
-            elif working_day_count == 0 and non_working_day_count <= 3:
-                # Only weekend/non-working days between, continue streak
-                streak += 1
-                last_date = entry_date
-            else:
-                # Gap too large, break streak
-                break
-        
+            # If we get here, this entry continues the streak
+            streak += 1
+            current_date = entry_date
+
         return streak
-        
+
     except Exception as e:
         logger.error(f"Error calculating streak: {str(e)}")
         return 0
-    finally:
-        db.close()
 
 def update_user_streak(username, attendance_date):
     """Update streak for a user based on new attendance"""
@@ -188,45 +165,10 @@ def calculate_current_streak(name):
     """Calculate current streak for a user"""
     db = SessionLocal()
     try:
-        # Use proper table reference and string formatting in query
-        entries = db.execute(text("""
-            SELECT date, status 
-            FROM entries 
-            WHERE name = :name 
-            AND status IN ('in-office', 'remote')
-            ORDER BY date DESC
-        """), {"name": name}).fetchall()
-
-        if not entries:
-            return 0
-
-        streak = 1
-        last_date = datetime.strptime(entries[0].date, "%Y-%m-%d").date()
-
-        for entry in entries[1:]:
-            entry_date = datetime.strptime(entry.date, "%Y-%m-%d").date()
-            days_between = (last_date - entry_date).days
-
-            if days_between > 3:  # More than a weekend
-                break
-            elif days_between > 1:
-                # Check if gap only includes weekend
-                weekend_only = True
-                for d in range(1, days_between):
-                    check_date = last_date - timedelta(days=d)
-                    if check_date.weekday() < 5:  # Not weekend
-                        weekend_only = False
-                        break
-                if not weekend_only:
-                    break
-
-            streak += 1
-            last_date = entry_date
-
-        return streak
-
+        current_date = datetime.now().date()
+        return calculate_streak_for_date(name, current_date, db)
     except Exception as e:
-        logging.error(f"Error calculating streak: {str(e)}")
+        logging.error(f"Error calculating current streak: {str(e)}")
         return 0
     finally:
         db.close()

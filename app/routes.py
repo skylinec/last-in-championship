@@ -109,6 +109,7 @@ from .visualisation import (calculate_arrival_patterns, calculate_average_time,
                             calculate_status_counts, calculate_user_comparison,
                             calculate_weekly_patterns, analyze_early_arrivals,
                             analyze_late_arrivals)
+from .streaks import calculate_current_streak, calculate_streak_for_date
 
 # If you need to call methods from your main app or from 'app.py' directly, 
 # you typically do that through current_app from flask, or separate your code further.
@@ -778,6 +779,11 @@ def view_rankings(period, date_str=None):
                 # Sort rankings again if using cumulative mode
                 if points_mode == 'cumulative':
                     rankings.sort(key=lambda x: (-x['score'], x['name']))
+
+                # Add current streak for each ranked user
+                for rank in rankings:
+                    streak = calculate_current_streak(rank["name"])
+                    rank["current_streak"] = streak  # Add this line
 
                 template_data = {
                     'rankings': rankings,
@@ -1786,7 +1792,8 @@ def day_rankings(date=None):
             "shift_hours": shift_length_hours,
             "end_time": end_time.strftime('%H:%M'),
             "status": entry["status"],
-            "points": scores["last_in"] if mode == 'last_in' else scores["early_bird"]
+            "points": scores["last_in"] if mode == 'last_in' else scores["early_bird"],
+            "streak": scores["current_streak"]  # Add this line
         })
     
     # Sort by points descending

@@ -2398,18 +2398,3 @@ def get_attendance(username, start_date, end_date):
         return jsonify({}), 500
     finally:
         db.close()
-
-@bp.route("/api/attendance/<username>/<start_date>/<end_date>")
-@login_required
-def get_attendance(username, start_date, end_date):
-    db = SessionLocal()
-    try:
-        start = datetime.strptime(start_date, '%Y-%m-%d')
-        end = datetime.strptime(end_date, '%Y-%m-%d')
-        attendance = get_attendance_for_period(username, start, end, db)
-        return jsonify(attendance)
-    except Exception as e:
-        app.logger.error(f"Error getting attendance: {str(e)}")
-        return jsonify({}), 500
-    finally:
-        db.close()

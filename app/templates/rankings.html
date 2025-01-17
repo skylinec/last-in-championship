@@ -491,6 +491,28 @@
 }
 
 .points-switch .slider:before {
+    position: absolute;
+    content: "x̄";  /* Average symbol */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    height: 17px;
+    width: 17px;
+    left: 4px;
+    bottom: 4px;
+    background-color: white;
+    transition: .4s;
+    border-radius: 50%;
+    font-weight: bold;
+}
+
+input:checked + .slider:before {
+    transform: translateX(25px);
+    content: "Σ";  /* Sum symbol */
+}
+
+.points-switch .slider:before {
     height: 17px;
     width: 17px;
     left: 4px;

@@ -1902,7 +1902,8 @@ def view_streaks():
         return render_template("streaks.html", 
                              streaks=streak_data,
                              max_streak=max_streak,
-                             today=today)
+                             today=today,
+                             timedelta=timedelta)  # Add timedelta to template context
     finally:
         db.close()
 

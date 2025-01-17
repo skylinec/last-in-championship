@@ -557,27 +557,24 @@ async function fetchAndDisplayCalendar(startDate, endDate, username, breakReason
     try {
         const start = new Date(startDate);
         const end = new Date(endDate);
-        const attendance = {};
         
-        let date = new Date(start);
-        while (date <= end) {
-            const dateStr = date.toISOString().split('T')[0];
-            attendance[dateStr] = 'in-office';
-            date.setDate(date.getDate() + 1);
-        }
-        
+        // Only include previous month if streak starts in it
         const monthStart = new Date(start.getFullYear(), start.getMonth(), 1);
-        if (start.getDate() <= 7) {
-            monthStart.setMonth(monthStart.getMonth() - 1);
-        }
-        
         const lastDate = new Date(end.getFullYear(), end.getMonth() + 1, 0);
         
         let displayDate = new Date(monthStart);
         let currentMonth = displayDate.getMonth();
         
-        addMonthDivider(calendarGrid, displayDate);
-        addMonthPadding(calendarGrid, monthStart);
+        // Check if we need to show the previous month
+        if (start.getMonth() !== end.getMonth()) {
+            addMonthDivider(calendarGrid, displayDate);
+            addMonthPadding(calendarGrid, monthStart);
+        } else if (start.getDate() > 1) {
+            // If streak starts mid-month, start from there
+            displayDate = new Date(start);
+            addMonthDivider(calendarGrid, displayDate);
+            addMonthPadding(calendarGrid, displayDate);
+        }
         
         while (displayDate <= lastDate) {
             if (displayDate.getMonth() !== currentMonth) {
@@ -637,8 +634,14 @@ window.showStreakCalendar = function(startDate, endDate, username, breakReason, 
         headerRow.appendChild(header);
     });
     calendarGrid.appendChild(headerRow);
-    
-    fetchAndDisplayCalendar(startDate, endDate, username, breakReason, calendarGrid);
+
+    // Fetch actual attendance data before displaying calendar
+    fetch(`/api/attendance/${username}/${startDate}/${endDate}`)
+        .then(response => response.json())
+        .then(attendance => {
+            fetchAndDisplayCalendar(startDate, endDate, username, breakReason, calendarGrid, attendance);
+        })
+        .catch(error => console.error('Error fetching attendance:', error));
     
     modal.style.display = 'block';
     

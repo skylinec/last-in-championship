@@ -10,9 +10,17 @@
         <div class="streak-card">
             <div class="streak-header">
                 <h2>{{ streak.username }}</h2>
-                <div class="streak-count {% if streak.current_streak > 0 %}active{% endif %}">
+                <div class="streak-count {% if streak.current_streak > 0 %}active{% endif %}"
+                     onclick="showStreakCalendar('{{ (today - timedelta(days=streak.current_streak-1)).strftime('%Y-%m-%d') }}', 
+                                               '{{ today.strftime('%Y-%m-%d') }}', 
+                                               '{{ streak.username }}', 
+                                               'Current active streak',
+                                               true)">
                     <span class="current">{{ streak.current_streak }}</span>
                     <span class="days">days</span>
+                    {% if streak.current_streak > 0 %}
+                    <div class="streak-info-icon">ℹ️</div>
+                    {% endif %}
                 </div>
             </div>
             <div class="streak-progress">
@@ -36,6 +44,7 @@
                                                             '{{ streak.username }}',
                                                             '{{ past.break_reason }}')">
                                 {{ past.start.strftime('%d/%m/%Y') }} - {{ past.end.strftime('%d/%m/%Y') }}
+                                <div class="streak-highlight"></div>
                             </span>
                         </li>
                         {% endfor %}
@@ -91,7 +100,9 @@
 }
 
 .streak-count {
+    position: relative;
     text-align: center;
+    transition: transform 0.2s ease;
 }
 
 .streak-count .current {
@@ -140,8 +151,26 @@
 }
 
 .streak-count.active {
+    cursor: pointer;
     color: var(--accent-color);
     text-shadow: 0 0 10px rgba(52, 152, 219, 0.3);
+}
+
+.streak-count.active:hover {
+    transform: scale(1.05);
+}
+
+.streak-info-icon {
+    position: absolute;
+    top: -8px;
+    right: -8px;
+    font-size: 0.8em;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+}
+
+.streak-count.active:hover .streak-info-icon {
+    opacity: 1;
 }
 
 .past-streaks {
@@ -180,6 +209,7 @@
     font-size: 0.9em;
     cursor: help;
     border-bottom: 1px dotted #666;
+    position: relative;
 }
 
 .streak-dates:hover::after {
@@ -203,6 +233,21 @@
 
 .streak-dates:hover {
     color: var(--accent-color);
+}
+
+.streak-highlight {
+    position: absolute;
+    bottom: -2px;
+    left: 0;
+    width: 100%;
+    height: 2px;
+    background: var(--accent-color);
+    transform: scaleX(0);
+    transition: transform 0.2s ease;
+}
+
+.streak-dates:hover .streak-highlight {
+    transform: scaleX(1);
 }
 
 .modal {
@@ -341,6 +386,18 @@
     font-size: 0.9em;
 }
 
+.streak-info-banner {
+    grid-column: 1 / -1;
+    padding: 10px;
+    margin: 10px 0;
+    background: #d4edda;
+    border: 1px solid #c3e6cb;
+    color: #155724;
+    border-radius: 4px;
+    text-align: center;
+    font-size: 0.9em;
+}
+
 .streak-day {
     background-color: var(--accent-color);
     color: white;
@@ -431,7 +488,11 @@
 </style>
 
 <script>
-function showStreakCalendar(startDate, endDate, username, breakReason) {
+// Add month names as a constant at the top of the script
+const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June',
+                     'July', 'August', 'September', 'October', 'November', 'December'];
+
+function showStreakCalendar(startDate, endDate, username, breakReason, isCurrentStreak = false) {
     const modal = document.getElementById('streakModal');
     const calendar = document.getElementById('streakCalendar');
     const modalTitle = document.getElementById('modalTitle');
@@ -442,18 +503,18 @@ function showStreakCalendar(startDate, endDate, username, breakReason) {
     // Set title with close button in header row
     modalTitle.innerHTML = `
         <div class="modal-title-row">
-            <span>${username}'s Streak Calendar</span>
+            <span>${username}'s ${isCurrentStreak ? 'Current' : 'Past'} Streak</span>
             <span class="close">&times;</span>
         </div>
     `;
     
-    // Show break reason banner if provided
-    if (breakReason && breakReason !== 'Current active streak') {
-        const reasonBanner = document.createElement('div');
-        reasonBanner.className = 'break-reason-banner';
-        reasonBanner.textContent = `Streak broken: ${breakReason}`;
-        calendar.appendChild(reasonBanner);
-    }
+    // Show streak info banner
+    const infoBanner = document.createElement('div');
+    infoBanner.className = isCurrentStreak ? 'streak-info-banner current' : 'break-reason-banner';
+    infoBanner.textContent = isCurrentStreak 
+        ? `Active streak: ${formatDateRange(startDate, endDate)}` 
+        : `Streak broken: ${breakReason}`;
+    calendar.appendChild(infoBanner);
 
     // Create calendar grid
     const calendarGrid = document.createElement('div');
@@ -489,14 +550,27 @@ function showStreakCalendar(startDate, endDate, username, breakReason) {
     };
 }
 
+function formatDateRange(startDate, endDate) {
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    return `${start.toLocaleDateString()} - ${end.toLocaleDateString()}`;
+}
+
 async function fetchAndDisplayCalendar(startDate, endDate, username, breakReason, calendarGrid) {
     try {
-        const response = await fetch(`/api/attendance/${username}/${startDate}/${endDate}`);
-        const attendance = await response.json();
-        
-        // Convert dates to Date objects
+        // Generate dates array for the streak period instead of fetching
         const start = new Date(startDate);
         const end = new Date(endDate);
+        const attendance = {};
+        
+        // Generate attendance data for streak days (all days in streak are either in-office or remote)
+        let currentDate = new Date(start);
+        while (currentDate <= end) {
+            const dateStr = currentDate.toISOString().split('T')[0];
+            // Assume in-office for all streak days (since we know it's a valid streak)
+            attendance[dateStr] = 'in-office';
+            currentDate.setDate(currentDate.getDate() + 1);
+        }
         
         // Get first day of month for start date
         const monthStart = new Date(start.getFullYear(), start.getMonth(), 1);
@@ -539,7 +613,7 @@ async function fetchAndDisplayCalendar(startDate, endDate, username, breakReason
             currentDate.setDate(currentDate.getDate() + 1);
         }
     } catch (error) {
-        console.error('Error fetching attendance:', error);
+        console.error('Error generating calendar:', error);
     }
 }
 
@@ -583,10 +657,10 @@ function createDayElement(currentDate, start, end, attendance, startDate, endDat
     return dayElement;
 }
 
-function addMonthDivider(calendar, date, monthNames) {
+function addMonthDivider(calendar, date) {
     const divider = document.createElement('div');
     divider.className = 'month-divider';
-    divider.textContent = `${monthNames[date.getMonth()]} ${date.getFullYear()}`;
+    divider.textContent = `${MONTH_NAMES[date.getMonth()]} ${date.getFullYear()}`;
     calendar.appendChild(divider);
 }
 

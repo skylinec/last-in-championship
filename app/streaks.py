@@ -92,12 +92,13 @@ def get_streak_history(username, db):
     """Get past notable streaks for a user"""
     try:
         working_days = get_working_days(db, username)
+        today = datetime.now().date()
         
         entries = db.execute(
             Entry.select().where(
                 Entry.c.name == username,
                 Entry.c.status.in_(['in-office', 'remote'])
-            ).order_by(Entry.c.date.asc())  # Changed to ascending order for chronological processing
+            ).order_by(Entry.c.date.asc())
         ).fetchall()
 
         if not entries:
@@ -165,14 +166,15 @@ def get_streak_history(username, db):
 
         # Add final streak if significant
         if current_streak >= 3:
-            today = datetime.now().date()
             is_active = (today - last_date).days <= 3  # Consider weekends
-            streaks.append({
-                'length': current_streak,
-                'start': streak_start,
-                'end': last_date,
-                'break_reason': "Current active streak" if is_active else "End of records"
-            })
+            # Only add to past streaks if it's not currently active
+            if not is_active:
+                streaks.append({
+                    'length': current_streak,
+                    'start': streak_start,
+                    'end': last_date,
+                    'break_reason': "End of records"
+                })
 
         # Sort by length first, then by recency for same lengths
         streaks.sort(key=lambda x: (-x['length'], -x['end'].toordinal()))

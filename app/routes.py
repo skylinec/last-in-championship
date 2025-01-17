@@ -1876,6 +1876,7 @@ def view_streaks():
         ).all()
         recent_users = [u[0] for u in recent_users]
         
+        today = datetime.now().date()
         streak_data = []
         for username in recent_users:
             # Calculate current streak using the standardized logic
@@ -1884,11 +1885,8 @@ def view_streaks():
             # Get past streaks using same logic
             past_streaks = get_streak_history(username, db)
             
-            # Current streak should match most recent past streak if dates overlap
-            if past_streaks and current_streak > 0:
-                last_streak = past_streaks[0]
-                if last_streak['end'] == datetime.now().date():
-                    current_streak = last_streak['length']
+            # Don't show current streak in past streaks
+            past_streaks = [s for s in past_streaks if s['end'] < today]
 
             streak_data.append({
                 'username': username,
@@ -1903,7 +1901,8 @@ def view_streaks():
         max_streak = max((s['max_streak'] for s in streak_data), default=0)
         return render_template("streaks.html", 
                              streaks=streak_data,
-                             max_streak=max_streak)
+                             max_streak=max_streak,
+                             today=today)
     finally:
         db.close()
 

@@ -78,13 +78,16 @@ class Settings(Base):
         }
 
 class AuditLog(Base):
-    __tablename__ = 'audit_logs'
-    id = Column(Integer, primary_key=True, autoincrement=True)
+    __tablename__ = "audit_log"
+    id = Column(Integer, primary_key=True)
     timestamp = Column(DateTime, default=datetime.now)
     user = Column(String, nullable=False)
     action = Column(String, nullable=False)
     details = Column(String)
-    changes = Column(JSON, nullable=True)
+    changes = Column(JSON, nullable=True)  # Make sure nullable is True
+
+    def __repr__(self):
+        return f"<AuditLog {self.action} by {self.user} at {self.timestamp}>"
 
 class UserStreak(Base):
     __tablename__ = 'user_streaks'

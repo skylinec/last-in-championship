@@ -628,9 +628,11 @@ def view_audit():
         if user_filter != 'all':
             query = query.filter(AuditLog.user == user_filter)
         if date_from:
-            query = query.filter(AuditLog.timestamp >= f"{date_from} 00:00:00")
+            date_from_dt = datetime.strptime(date_from, '%Y-%m-%d')
+            query = query.filter(AuditLog.timestamp >= date_from_dt)
         if date_to:
-            query = query.filter(AuditLog.timestamp <= f"{date_to} 23:59:59")
+            date_to_dt = datetime.strptime(date_to, '%Y-%m-%d')
+            query = query.filter(AuditLog.timestamp <= date_to_dt)
             
         # Ensure proper ordering
         query = query.order_by(AuditLog.timestamp.desc())

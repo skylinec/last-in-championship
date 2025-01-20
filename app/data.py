@@ -187,6 +187,9 @@ def calculate_scores(data, period, current_date, mode='last_in'):
             early_bird_avg = early_bird_total / scores["active_days"]
             last_in_avg = last_in_total / scores["active_days"]
             
+            # Get streak info directly from streaks module
+            streak_info = get_current_streak_info(name, db)
+            
             rankings.append({
                 "name": name,
                 "score": last_in_avg if mode == 'last_in' else early_bird_avg,
@@ -197,7 +200,9 @@ def calculate_scores(data, period, current_date, mode='last_in'):
                 "base_points": scores["base_points_total"] / scores["active_days"],
                 "position_bonus": scores["position_bonus_total"] / scores["active_days"],
                 "streak_bonus": scores["streak_bonus_total"] / scores["active_days"],
-                "streak": calculate_current_streak(name),
+                "streak": streak_info['length'],
+                "streak_start": streak_info['start'],
+                "is_current_streak": streak_info['is_current'],
                 "stats": scores["stats"],
                 "average_arrival_time": calculate_average_time(scores["stats"]["arrival_times"]) if scores["stats"]["arrival_times"] else "N/A",
                 "days": scores["active_days"]

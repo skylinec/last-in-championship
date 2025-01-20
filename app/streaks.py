@@ -80,19 +80,14 @@ def get_streak_history(username, db):
     """Get historical streak data for a user"""
     try:
         entries = db.execute(text("""
-            WITH ordered_entries AS (
-                SELECT 
-                    date,
-                    status,
-                    LAG(date, 1) OVER (ORDER BY date) as prev_date,
-                    LAG(status, 1) OVER (ORDER BY date) as prev_status,
-                    LEAD(date, 1) OVER (ORDER BY date) as next_date,
-                    LEAD(status, 1) OVER (ORDER BY date) as next_status
+            WITH sorted_entries AS (
+                SELECT date, status
                 FROM entries 
                 WHERE name = :username
+                  AND status IN ('in-office', 'remote')
                 ORDER BY date ASC
             )
-            SELECT * FROM ordered_entries
+            SELECT * FROM sorted_entries
         """), {"username": username}).fetchall()
         
         if not entries:
@@ -121,66 +116,78 @@ def get_streak_history(username, db):
             """Check if current_date should continue streak from prev_date"""
             if not prev_date:
                 return False
-                
-            # Get next expected working day after prev_date
             expected_date = get_next_working_day(prev_date)
             return current_date == expected_date
-        
+
         for entry in entries:
             entry_date = entry.date if isinstance(entry.date, date) else datetime.strptime(entry.date, '%Y-%m-%d').date()
-            status = entry.status
             
-            # Skip non-working days
+            # Skip non-working days without breaking streak
             if not is_working_day(entry_date):
                 continue
             
-            if status in ['in-office', 'remote']:
-                if current_streak == 0:
-                    streak_start = entry_date
-                    current_streak = 1
-                elif should_continue_streak(last_date, entry_date):
-                    current_streak += 1
-                else:
-                    # Save previous streak if exists
-                    if current_streak > 1:
-                        streaks.append({
-                            'start': streak_start,
-                            'end': last_date,
-                            'length': current_streak - 1,
-                            'break_reason': "Missed working day(s)"
-                        })
-                    # Start new streak
-                    streak_start = entry_date
-                    current_streak = 1
+            if current_streak == 0:
+                streak_start = entry_date
+                current_streak = 1
+            elif should_continue_streak(last_date, entry_date):
+                current_streak += 1
             else:
-                # Non-attendance status
-                if current_streak > 1:
+                # Save completed streak
+                if current_streak > 0:
                     streaks.append({
                         'start': streak_start,
                         'end': last_date,
-                        'length': current_streak - 1,
-                        'break_reason': f"Status changed to {status}"
+                        'length': current_streak,
+                        'break_reason': "Missed working day(s)",
+                        'is_current': False
                     })
-                current_streak = 0
-                streak_start = None
+                streak_start = entry_date
+                current_streak = 1
             
             last_date = entry_date
 
-        # Handle final active streak
-        if current_streak > 1:
+        # Handle final streak
+        if current_streak > 0:
             is_active = last_date == today
             streaks.append({
                 'start': streak_start,
                 'end': last_date,
-                'length': current_streak if is_active else current_streak - 1,
+                'length': current_streak,
                 'break_reason': "Current active streak" if is_active else "End of records",
                 'is_current': is_active
             })
 
-        # Filter out zero-length streaks and sort by end date descending
-        streaks = [s for s in streaks if s['length'] > 0]
         return sorted(streaks, key=lambda x: x['end'].toordinal(), reverse=True)
 
     except Exception as e:
         logger.error(f"Error getting streak history: {str(e)}")
         return []
+
+def get_current_streak_info(username, db=None):
+    """Get complete info about user's current streak"""
+    if db is None:
+        db = SessionLocal()
+        should_close = True
+    else:
+        should_close = False
+
+    try:
+        streaks = get_streak_history(username, db)
+        if not streaks:
+            return {
+                'length': 0,
+                'start': None,
+                'end': None,
+                'is_current': False
+            }
+
+        current = streaks[0]
+        return {
+            'length': current['length'],
+            'start': current['start'],
+            'end': current['end'],
+            'is_current': current['is_current']
+        }
+    finally:
+        if should_close:
+            db.close()

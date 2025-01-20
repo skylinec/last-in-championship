@@ -8,7 +8,7 @@ from collections import defaultdict
 from .models import Settings  # Add this import
 from .database import SessionLocal
 from .utils import get_settings  # Use utils instead
-from .streaks import calculate_current_streak  # Remove calculate_streak_for_date
+from .streaks import calculate_current_streak, get_current_streak_info  # Remove calculate_streak_for_date
 from .helpers import in_period, calculate_average_time
 
 # Create a logger instance
@@ -188,6 +188,7 @@ def calculate_scores(data, period, current_date, mode='last_in'):
             last_in_avg = last_in_total / scores["active_days"]
             
             # Get streak info directly from streaks module
+            db = SessionLocal()
             streak_info = get_current_streak_info(name, db)
             
             rankings.append({

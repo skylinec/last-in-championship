@@ -1,5 +1,5 @@
 from datetime import datetime, timedelta, date
-from sqlalchemy import text
+from sqlalchemy import text, Date
 import logging
 
 from .database import SessionLocal, Base

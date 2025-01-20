@@ -7,44 +7,43 @@
 <div class="streaks-container">
     <div class="streak-cards">
         {% for streak in streaks %}
-        <div class="streak-card {% if streak.current_streak > 0 %}active-streak{% endif %}">
+        <div class="streak-card">
             <div class="streak-header">
                 <h2>{{ streak.username }}</h2>
-                <div class="streak-count {% if streak.current_streak > 0 %}active{% endif %}"
-                     {% if streak.current_streak > 0 %}
-                     title="Active streak since {{ streak.current_start.strftime('%d/%m/%Y') }}"
-                     onclick="showStreakCalendar('{{ streak.current_start.strftime('%Y-%m-%d') }}', 
-                                               '{{ today.strftime('%Y-%m-%d') }}', 
-                                               '{{ streak.username }}', 
-                                               'Current active streak',
-                                               true)"
-                     {% endif %}>
-                    <span class="current">{{ streak.current_streak }}</span>
+                <div class="streak-count {% if streak.past_streaks %}active{% endif %}"
+                    {% if streak.past_streaks %}
+                    onclick="showStreakCalendar('{{ streak.past_streaks[0].start.strftime('%Y-%m-%d') }}', 
+                                              '{{ streak.past_streaks[0].end.strftime('%Y-%m-%d') }}', 
+                                              '{{ streak.username }}', 
+                                              '{{ streak.past_streaks[0].break_reason }}',
+                                              {{ 'true' if streak.past_streaks[0].is_current else 'false' }})">
+                    {% endif %}>
+                    <span class="current">{{ streak.past_streaks[0].length if streak.past_streaks else 0 }}</span>
                     <span class="days">days</span>
-                    {% if streak.current_streak > 0 %}
+                    {% if streak.past_streaks %}
                     <div class="streak-info-icon">ℹ️</div>
                     {% endif %}
                 </div>
             </div>
             
             <div class="streak-progress">
-                <div class="streak-bar" style="width: {{ (streak.current_streak / max_streak * 100) if max_streak > 0 else 0 }}%"></div>
+                <div class="streak-bar" style="width: {{ (streak.max_streak / max_streak * 100) if max_streak > 0 else 0 }}%"></div>
             </div>
 
             <div class="streak-details">
                 <div class="detail">
                     <span class="label">Best Streak:</span>
-                    <span class="value">{{ streak.max_streak }} days</span>  <!-- Remove -1 -->
+                    <span class="value">{{ streak.max_streak }} days</span>
                 </div>
                 
-                {% if streak.past_streaks %}
+                {% if streak.past_streaks|length > 1 %}
                 <div class="past-streaks">
                     <h3>Past Notable Streaks</h3>
                     <div class="past-streaks-list">
-                        {% for past in streak.past_streaks %}
+                        {% for past in streak.past_streaks[1:] %}
                         <div class="past-streak-item" 
                              onclick="showStreakCalendar('{{ past.start.strftime('%Y-%m-%d') }}', 
-                                                       '{{ past.end.strftime('%Y-%m-%d') }}', ∏
+                                                       '{{ past.end.strftime('%Y-%m-%d') }}', 
                                                        '{{ streak.username }}', 
                                                        '{{ past.break_reason }}')">
                             <div class="past-streak-info">
@@ -611,32 +610,32 @@ function createDayElement(currentDate, start, end, attendance, startDate, endDat
     const currentDateStr = currentDate.toISOString().split('T')[0];
     const isWeekend = currentDate.getDay() === 0 || currentDate.getDay() === 6;
     
-    // Always show attendance status if available
     if (attendance[currentDateStr]) {
         const status = document.createElement('div');
         status.className = `status-indicator status-${attendance[currentDateStr]}`;
         content.appendChild(status);
-    }
-    
-    // Mark weekends as inactive and add title
-    if (isWeekend) {
-        dayElement.classList.add('inactive');
-        dayElement.title = 'Weekend';
-    } else if (currentDate >= start && currentDate <= end) {
-        if (currentDateStr === startDate) {
-            dayElement.classList.add('streak-start');
-            dayElement.title = 'Streak Start';
-        } else if (currentDateStr === endDate) {
-            dayElement.classList.add('streak-end');
-            dayElement.title = breakReason;
-        } else {
-            dayElement.classList.add('streak-day');
-            if (attendance[currentDateStr]) {
+        
+        // Only show streak indicators for in-office or remote days
+        if (['in-office', 'remote'].includes(attendance[currentDateStr])) {
+            if (currentDateStr === startDate) {
+                dayElement.classList.add('streak-start');
+                dayElement.title = 'Streak Start';
+            } else if (currentDateStr === endDate) {
+                dayElement.classList.add('streak-end');
+                dayElement.title = breakReason;
+            } else if (currentDate >= start && currentDate <= end) {
+                dayElement.classList.add('streak-day');
                 dayElement.title = `Status: ${attendance[currentDateStr]}`;
             }
         }
-    } else {
+    }
+    
+    if (isWeekend) {
         dayElement.classList.add('inactive');
+        dayElement.title = 'Weekend';
+    } else if (!attendance[currentDateStr] && currentDate >= start && currentDate <= end) {
+        dayElement.classList.add('inactive');
+        dayElement.title = 'Non-working day';
     }
     
     dayElement.appendChild(content);

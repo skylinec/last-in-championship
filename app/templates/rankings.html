@@ -75,16 +75,16 @@
                 </td>
                 <td class="score-cell" 
                     data-tooltip="Score breakdown:
-                    Base points: {{ rank.base_points|default(0)|round(2) }}
+                    Base points: {{ rank.base_points|default(0)|round(2) if request.args.get('points_mode') != 'cumulative' else rank.total_base_points|default(0)|round(2) }}
                     {% if mode == 'last-in' %}
-                    Position bonus: {{ rank.position_bonus|default(0)|round(2) }}
-                    Streak penalty: {{ rank.streak_bonus|default(0) * -1 if rank.streak_bonus and streaks_enabled else 0|round(2) }}
+                    Position bonus: {{ rank.position_bonus|default(0)|round(2) if request.args.get('points_mode') != 'cumulative' else rank.total_position_bonus|default(0)|round(2) }}
+                    Streak penalty: {{ (rank.streak_bonus|default(0) * -1 if rank.streak_bonus and streaks_enabled else 0)|round(2) if request.args.get('points_mode') != 'cumulative' else (rank.total_streak_bonus|default(0) * -1 if rank.streak_bonus and streaks_enabled else 0)|round(2) }}
                     {% else %}
-                    Position bonus: {{ rank.position_bonus|default(0)|round(2) }}
-                    Streak bonus: {{ rank.streak_bonus|default(0) if streaks_enabled else 0|round(2) }}
+                    Position bonus: {{ rank.position_bonus|default(0)|round(2) if request.args.get('points_mode') != 'cumulative' else rank.total_position_bonus|default(0)|round(2) }}
+                    Streak bonus: {{ rank.streak_bonus|default(0) if streaks_enabled else 0|round(2) if request.args.get('points_mode') != 'cumulative' else rank.total_streak_bonus|default(0) if streaks_enabled else 0|round(2) }}
                     {% endif %}
-                    Total: {{ rank.score|default(0)|round(2) }}">
-                    {{ rank.score|default(0)|round(2) }}
+                    Total: {{ rank.score|default(0)|round(2) if request.args.get('points_mode') != 'cumulative' else rank.total_score|default(0)|round(2) }}">
+                    {{ rank.score|default(0)|round(2) if request.args.get('points_mode') != 'cumulative' else rank.total_score|default(0)|round(2) }}
                 </td>
                 <td>{{ rank.average_arrival_time|default('N/A') }}</td>
                 <td>

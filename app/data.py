@@ -187,23 +187,25 @@ def calculate_scores(data, period, current_date, mode='last_in'):
             early_bird_avg = early_bird_total / scores["active_days"]
             last_in_avg = last_in_total / scores["active_days"]
             
-            arrival_times = scores["stats"]["arrival_times"]
-            
             rankings.append({
                 "name": name,
                 "score": last_in_avg if mode == 'last_in' else early_bird_avg,
-                "total_score": last_in_total if mode == 'last_in' else early_bird_total,  # Add total score
-                "streak": calculate_current_streak(name),
-                "stats": scores["stats"],
-                "average_arrival_time": calculate_average_time(arrival_times) if arrival_times else "N/A",
+                "total_score": last_in_total if mode == 'last_in' else early_bird_total,
+                "total_base_points": scores["base_points_total"],
+                "total_position_bonus": scores["position_bonus_total"],
+                "total_streak_bonus": scores["streak_bonus_total"],
                 "base_points": scores["base_points_total"] / scores["active_days"],
                 "position_bonus": scores["position_bonus_total"] / scores["active_days"],
                 "streak_bonus": scores["streak_bonus_total"] / scores["active_days"],
-                "days": scores["active_days"]  # Add number of active days
+                "streak": calculate_current_streak(name),
+                "stats": scores["stats"],
+                "average_arrival_time": calculate_average_time(scores["stats"]["arrival_times"]) if scores["stats"]["arrival_times"] else "N/A",
+                "days": scores["active_days"]
             })
-    
-    # Sort by average score by default
-    rankings.sort(key=lambda x: (-x["score"], x["name"]))
+
+    # Sort by correct score type based on points_mode
+    points_mode = request.args.get('points_mode', 'average') if hasattr(request, 'args') else 'average'
+    rankings.sort(key=lambda x: (-x["total_score"] if points_mode == 'cumulative' else -x["score"], x["name"]))
     return rankings
 
 def get_settings():

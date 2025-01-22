@@ -476,3 +476,31 @@ WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'mattermost')\gexec
 \echo 'Creating Matomo database if it does not exist'
 SELECT 'CREATE DATABASE matomo WITH ENCODING = ''UTF8'' CONNECTION LIMIT = -1'
 WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'matomo')\gexec
+
+------------------------------------------
+-- SECTION 9: USERS
+------------------------------------------
+-- Add API token column to users table if it doesn't exist
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 
+        FROM information_schema.columns 
+        WHERE table_name = 'users' 
+        AND column_name = 'api_token'
+    ) THEN
+        ALTER TABLE users ADD COLUMN api_token VARCHAR(255) UNIQUE;
+    END IF;
+END $$;
+
+-- Create index on api_token
+CREATE INDEX IF NOT EXISTS idx_users_api_token ON users(api_token);
+
+-- Add not null constraint to username and password if not already present
+ALTER TABLE users 
+    ALTER COLUMN username SET NOT NULL,
+    ALTER COLUMN password SET NOT NULL;
+
+-- Ensure unique constraint on username
+ALTER TABLE users DROP CONSTRAINT IF EXISTS users_username_key;
+ALTER TABLE users ADD CONSTRAINT users_username_key UNIQUE (username);

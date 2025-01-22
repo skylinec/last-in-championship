@@ -1,6 +1,5 @@
 use clap::Args;
 use comfy_table::Cell;
-use colored::*;
 use crate::{api::Api, config::Config, ui};
 
 #[derive(Args)]

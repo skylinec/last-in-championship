@@ -10,7 +10,12 @@ impl StreaksCommand {
         let pb = ui::create_spinner("Fetching streaks...");
         
         let api = Api::new(config.api_url.clone());
-        let streaks = api.get_streaks().await?;
+        
+        // Get token from config, return error if not found
+        let token = config.api_token.as_ref()
+            .ok_or_else(|| anyhow::anyhow!("Not logged in. Please run `lic login` first."))?;
+        
+        let streaks = api.get_streaks(token).await?;
 
         let mut table = ui::create_table();
         table.set_header(vec![

@@ -7,7 +7,7 @@ use anyhow::Result;
 pub struct Config {
     pub api_url: String,
     pub username: String,
-    pub api_token: Option<String>,  // Add this field
+    pub api_token: Option<String>,
 }
 
 impl Default for Config {

@@ -1,7 +1,6 @@
 use clap::{Parser, Subcommand};
-use dialoguer::{theme::ColorfulTheme, Input, MultiSelect, Select};
 use std::path::PathBuf;
-use tracing::{debug, info};
+use tracing::debug;
 
 mod api;
 mod commands;

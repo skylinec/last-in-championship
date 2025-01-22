@@ -1,5 +1,5 @@
 use reqwest::{Client, StatusCode, header};
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use anyhow::{Result, Context};
 use tracing::debug;
 

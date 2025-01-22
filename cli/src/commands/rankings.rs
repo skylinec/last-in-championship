@@ -17,7 +17,12 @@ impl RankingsCommand {
         let pb = ui::create_spinner("Fetching rankings...");
 
         let api = Api::new(config.api_url.clone());
-        let rankings = api.get_rankings(&self.period, self.date.clone()).await?;
+        
+        // Get token from config, return error if not found
+        let token = config.api_token.as_ref()
+            .ok_or_else(|| anyhow::anyhow!("Not logged in. Please run `lic login` first."))?;
+
+        let rankings = api.get_rankings(token, &self.period, self.date.clone()).await?;
 
         let mut table = ui::create_table();
         table.set_header(vec![

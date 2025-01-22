@@ -163,12 +163,12 @@ services:
       matomo_db:
         condition: service_healthy
 
-  cli-builder:
-    build:
-      context: ./cli
-      dockerfile: Dockerfile.builder
-    volumes:
-      - cli_builds:/output
+  # cli-builder:
+  #   build:
+  #     context: ./cli
+  #     dockerfile: Dockerfile.builder
+  #   volumes:
+  #     - cli_builds:/output
 
 volumes:
   postgres_data:

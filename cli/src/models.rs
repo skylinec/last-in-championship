@@ -35,4 +35,14 @@ pub struct Streak {
     pub streak_start: Option<NaiveDate>,
 }
 
+#[derive(Debug, Deserialize)]
+pub struct QueryResult {
+    pub date: String,
+    pub name: String,
+    pub status: String,
+    pub time: String,
+    pub score: f64,
+    pub streak: Option<i32>,
+}
+
 // Add other models...

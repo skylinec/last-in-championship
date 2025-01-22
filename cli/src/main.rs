@@ -44,6 +44,9 @@ enum Commands {
     
     /// Configure the CLI
     Config(ConfigCommand),
+    
+    /// Query attendance data with filters
+    Query(QueryCommand),
 }
 
 #[tokio::main]
@@ -63,6 +66,7 @@ async fn main() -> anyhow::Result<()> {
         Commands::Streaks(cmd) => cmd.run(&config).await?,
         Commands::Stats(cmd) => cmd.run(&config).await?,
         Commands::Config(cmd) => cmd.run(&config).await?,
+        Commands::Query(cmd) => cmd.run(&config).await?,
     }
 
     Ok(())

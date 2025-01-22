@@ -2642,3 +2642,81 @@ def api_user_stats(username):
         return jsonify({"error": str(e)}), 500
 
 # ...existing code...
+
+@bp.route("/api/query/<period>")
+@api_auth_required
+def api_query_data(period):
+    """Query attendance data with granular filtering"""
+    db = SessionLocal()
+    try:
+        # Get filter parameters
+        from_date = request.args.get('from')
+        to_date = request.args.get('to')
+        user = request.args.get('user')
+        mode = request.args.get('mode', 'last-in')
+        status = request.args.get('status')
+        limit = request.args.get('limit', type=int)
+
+        # Start with base query
+        query = db.query(Entry)
+
+        # Apply filters
+        if from_date:
+            query = query.filter(Entry.date >= from_date)
+        if to_date:
+            query = query.filter(Entry.date <= to_date)
+        if user:
+            query = query.filter(Entry.name == user)
+        if status:
+            query = query.filter(Entry.status == status)
+
+        # Apply ordering
+        if mode == 'last-in':
+            query = query.order_by(Entry.date.desc(), Entry.time.desc())
+        else:  # early-bird
+            query = query.order_by(Entry.date.desc(), Entry.time.asc())
+
+        # Apply limit
+        if limit:
+            query = query.limit(limit)
+
+        # Execute query
+        entries = query.all()
+
+        # Format results
+        results = []
+        for entry in entries:
+            # Get streak info for each entry
+            streak_info = get_current_streak_info(entry.name, db)
+            
+            # Calculate score for the entry
+            settings = load_settings()
+            score = calculate_daily_score(
+                {
+                    "date": entry.date,
+                    "time": entry.time,
+                    "name": entry.name,
+                    "status": entry.status
+                },
+                settings,
+                mode=mode
+            )
+
+            results.append({
+                "date": entry.date,
+                "name": entry.name,
+                "status": entry.status,
+                "time": entry.time,
+                "score": score[mode] if isinstance(score, dict) else score,
+                "streak": streak_info['length'] if streak_info['is_current'] else None
+            })
+
+        return jsonify(results)
+        
+    except Exception as e:
+        app.logger.error(f"Error querying data: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+    finally:
+        db.close()
+
+# ...existing code...

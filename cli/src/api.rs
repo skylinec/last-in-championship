@@ -2,6 +2,7 @@ use reqwest::{Client, StatusCode, header};
 use serde::Deserialize;
 use anyhow::{Result, Context};
 use tracing::debug;
+use chrono::NaiveDate;
 
 use crate::models::*;
 
@@ -105,6 +106,55 @@ impl Api {
     pub async fn get_user_stats(&self, token: &str, username: &str) -> Result<Ranking> {
         let url = format!("{}/api/users/{}/stats", self.base_url, username);
         debug!("Requesting user stats from: {}", url);
+        let response = self.client
+            .get(&url)
+            .headers(self.auth_headers(token)?)
+            .send()
+            .await?;
+
+        self.handle_response(response).await
+    }
+
+    pub async fn query_data(
+        &self,
+        token: &str,
+        period: &str,
+        from: Option<NaiveDate>,
+        to: Option<NaiveDate>,
+        user: Option<&str>,
+        mode: &str,
+        status: Option<&str>,
+        limit: Option<usize>,
+    ) -> Result<Vec<QueryResult>> {
+        let mut url = format!("{}/api/query/{}", self.base_url, period);
+        
+        let mut query_params = Vec::new();
+        if let Some(from) = from {
+            query_params.push(("from", from.format("%Y-%m-%d").to_string()));
+        }
+        if let Some(to) = to {
+            query_params.push(("to", to.format("%Y-%m-%d").to_string()));
+        }
+        if let Some(user) = user {
+            query_params.push(("user", user.to_string()));
+        }
+        query_params.push(("mode", mode.to_string()));
+        if let Some(status) = status {
+            query_params.push(("status", status.to_string()));
+        }
+        if let Some(limit) = limit {
+            query_params.push(("limit", limit.to_string()));
+        }
+        
+        if !query_params.is_empty() {
+            url.push('?');
+            url.push_str(&query_params.into_iter()
+                .map(|(k, v)| format!("{}={}", k, v))
+                .collect::<Vec<_>>()
+                .join("&"));
+        }
+
+        debug!("Querying data from: {}", url);
         let response = self.client
             .get(&url)
             .headers(self.auth_headers(token)?)

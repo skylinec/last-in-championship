@@ -2566,3 +2566,79 @@ def api_log_attendance():
             db.close()
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+# ...existing code...
+
+def calculate_user_stats(entries):
+    """Calculate statistics for a specific user from their entries"""
+    if not entries:
+        return {
+            "stats": {
+                "days": 0,
+                "in_office": 0,
+                "remote": 0,
+                "sick": 0,
+                "leave": 0
+            },
+            "score": 0.0,
+            "average_arrival_time": "N/A"
+        }
+        
+    total_days = len(entries)
+    status_counts = {
+        "in_office": sum(1 for e in entries if e["status"] == "in-office"),
+        "remote": sum(1 for e in entries if e["status"] == "remote"),
+        "sick": sum(1 for e in entries if e["status"] == "sick"),
+        "leave": sum(1 for e in entries if e["status"] == "leave")
+    }
+    
+    arrival_times = [
+        datetime.strptime(e["time"], "%H:%M").time()
+        for e in entries
+        if e["status"] in ["in-office", "remote"]
+    ]
+    
+    avg_time = "N/A"
+    if arrival_times:
+        total_minutes = sum(t.hour * 60 + t.minute for t in arrival_times)
+        avg_minutes = total_minutes / len(arrival_times)
+        avg_hour = int(avg_minutes // 60)
+        avg_min = int(avg_minutes % 60)
+        avg_time = f"{avg_hour:02d}:{avg_min:02d}"
+    
+    # Calculate score based on attendance
+    settings = get_settings()
+    base_score = (
+        status_counts["in_office"] * float(settings["points"].get("in_office", 1)) +
+        status_counts["remote"] * float(settings["points"].get("remote", 0.8))
+    ) / total_days if total_days > 0 else 0
+    
+    return {
+        "stats": {
+            "days": total_days,
+            **status_counts
+        },
+        "score": base_score,
+        "average_arrival_time": avg_time
+    }
+
+# ...existing code...
+
+@bp.route("/api/users/<username>/stats")
+@api_auth_required
+def api_user_stats(username):
+    try:
+        data = load_data()
+        if not data:
+            return jsonify({"error": "No data found"}), 404
+            
+        user_entries = [e for e in data if e["name"] == username]
+        if not user_entries:
+            return jsonify({"error": "User not found"}), 404
+            
+        stats = calculate_user_stats(user_entries)
+        return jsonify(stats)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+# ...existing code...

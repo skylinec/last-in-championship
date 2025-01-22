@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::fs;
 use anyhow::Result;
 
@@ -7,6 +7,7 @@ use anyhow::Result;
 pub struct Config {
     pub api_url: String,
     pub username: String,
+    pub api_token: Option<String>,  // Add this field
 }
 
 impl Default for Config {
@@ -14,6 +15,7 @@ impl Default for Config {
         Self {
             api_url: "https://lic.mattdh.me".to_string(),
             username: String::new(),
+            api_token: None,
         }
     }
 }

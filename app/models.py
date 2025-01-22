@@ -31,6 +31,7 @@ class User(Base):
     __tablename__ = "users"
     username = Column(String, primary_key=True)
     password = Column(String, nullable=False)
+    api_token = Column(String, unique=True, nullable=True)
 
 class Settings(Base):
     __tablename__ = 'settings'

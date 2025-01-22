@@ -19,7 +19,7 @@ impl Api {
         Self { client, base_url }
     }
 
-    pub async fn login(&self, username: &str, password: &str) -> Result<()> {
+    pub async fn login(&self, username: &str, password: &str) -> Result<String> {
         let resp = self.client
             .post(&format!("{}/api/login", self.base_url))
             .header(header::CONTENT_TYPE, "application/json")
@@ -35,7 +35,28 @@ impl Api {
             anyhow::bail!("Login failed: {}", error);
         }
 
-        Ok(())
+        let data: serde_json::Value = resp.json().await?;
+        let token = data["token"].as_str()
+            .ok_or_else(|| anyhow::anyhow!("No token in response"))?
+            .to_string();
+
+        Ok(token)
+    }
+
+    fn auth_headers(&self, token: &str) -> Result<header::HeaderMap> {
+        let mut headers = header::HeaderMap::new();
+        
+        headers.insert(
+            header::AUTHORIZATION,
+            header::HeaderValue::from_str(&format!("Bearer {}", token))?
+        );
+        
+        headers.insert(
+            header::ACCEPT,
+            header::HeaderValue::from_static("application/json")
+        );
+        
+        Ok(headers)
     }
 
     pub async fn log_attendance(&self, entry: AttendanceEntry) -> Result<()> {
@@ -53,7 +74,7 @@ impl Api {
         Ok(())
     }
 
-    pub async fn get_rankings(&self, period: &str, date: Option<String>) -> Result<Vec<Ranking>> {
+    pub async fn get_rankings(&self, token: &str, period: &str, date: Option<String>) -> Result<Vec<Ranking>> {
         let mut url = format!("{}/api/rankings/{}", self.base_url, period);
         if let Some(date) = date {
             url.push_str(&format!("/{}", date));
@@ -62,19 +83,19 @@ impl Api {
         debug!("Requesting rankings from: {}", url);
         let response = self.client
             .get(&url)
-            .header(header::ACCEPT, "application/json")
+            .headers(self.auth_headers(token)?)
             .send()
             .await?;
 
         self.handle_response(response).await
     }
 
-    pub async fn get_streaks(&self) -> Result<Vec<Streak>> {
+    pub async fn get_streaks(&self, token: &str) -> Result<Vec<Streak>> {
         let url = format!("{}/api/streaks", self.base_url);
         debug!("Requesting streaks from: {}", url);
         let response = self.client
             .get(&url)
-            .header(header::ACCEPT, "application/json")
+            .headers(self.auth_headers(token)?)
             .send()
             .await?;
 
@@ -86,7 +107,6 @@ impl Api {
         debug!("Requesting user stats from: {}", url);
         let response = self.client
             .get(&url)
-            .header(header::ACCEPT, "application/json")
             .send()
             .await?;
 

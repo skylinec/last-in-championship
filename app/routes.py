@@ -1,3 +1,6 @@
+import secrets
+from functools import wraps
+
 def init_app(app):
     """Initialize Flask app with filters and context processors"""
     
@@ -72,7 +75,6 @@ import uuid
 from collections import defaultdict
 from datetime import date, datetime, timedelta
 from decimal import Decimal
-from functools import wraps
 from threading import Lock, Thread
 
 from flask import Blueprint
@@ -2424,6 +2426,29 @@ def get_attendance(username, start_date, end_date):
 
 # ...existing code...
 
+def api_auth_required(f):
+    """Decorator to require API authentication"""
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return jsonify({"error": "No authorization token"}), 401
+            
+        token = auth_header.split(' ')[1]
+        
+        # Verify token in database
+        db = SessionLocal()
+        try:
+            user = db.query(User).filter_by(api_token=token).first()
+            if not user:
+                return jsonify({"error": "Invalid token"}), 401
+            # Add user to request context
+            request.current_user = user.username
+            return f(*args, **kwargs)
+        finally:
+            db.close()
+    return decorated_function
+
 @bp.route("/api/login", methods=["POST"])
 def api_login():
     try:
@@ -2434,15 +2459,29 @@ def api_login():
         if not username or not password:
             return jsonify({"error": "Missing credentials"}), 400
             
-        if verify_user(username, password):
-            session['user'] = username
-            return jsonify({"message": "Login successful"})
-        return jsonify({"error": "Invalid credentials"}), 401
+        db = SessionLocal()
+        try:
+            user = db.query(User).filter_by(username=username).first()
+            if user and user.password == password:  # In production, use proper password hashing
+                # Generate new API token
+                token = secrets.token_urlsafe(32)
+                user.api_token = token
+                db.commit()
+                
+                return jsonify({
+                    "message": "Login successful",
+                    "token": token
+                })
+            return jsonify({"error": "Invalid credentials"}), 401
+        finally:
+            db.close()
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+# Update API endpoints to require authentication
 @bp.route("/api/rankings/<period>")
 @bp.route("/api/rankings/<period>/<date_str>")
+@api_auth_required
 def api_rankings(period, date_str=None):
     try:
         mode = request.args.get('mode', 'last_in')
@@ -2457,6 +2496,7 @@ def api_rankings(period, date_str=None):
         return jsonify({"error": str(e)}), 500
 
 @bp.route("/api/streaks")
+@api_auth_required
 def api_streaks():
     db = SessionLocal()
     try:
@@ -2475,6 +2515,7 @@ def api_streaks():
         db.close()
 
 @bp.route("/api/users/<username>/stats")
+@api_auth_required
 def api_user_stats(username):
     try:
         data = load_data()
@@ -2491,6 +2532,7 @@ def api_user_stats(username):
         return jsonify({"error": str(e)}), 500
 
 @bp.route("/api/log", methods=["POST"])
+@api_auth_required
 def api_log_attendance():
     try:
         entry = request.get_json()

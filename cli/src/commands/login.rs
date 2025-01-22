@@ -31,7 +31,12 @@ impl LoginCommand {
 
         let api = Api::new(config.api_url.clone());
         match api.login(&username, &password).await {
-            Ok(_) => {
+            Ok(token) => {
+                let mut new_config = config.clone();
+                new_config.username = username;
+                new_config.api_token = Some(token.clone());  // Clone the token
+                new_config.save()?;
+                
                 pb.finish_with_message("✅ Login successful");
                 Ok(())
             },

@@ -2624,25 +2624,6 @@ def calculate_user_stats(entries):
 
 # ...existing code...
 
-@bp.route("/api/users/<username>/stats")
-@api_auth_required
-def api_user_stats(username):
-    try:
-        data = load_data()
-        if not data:
-            return jsonify({"error": "No data found"}), 404
-            
-        user_entries = [e for e in data if e["name"] == username]
-        if not user_entries:
-            return jsonify({"error": "User not found"}), 404
-            
-        stats = calculate_user_stats(user_entries)
-        return jsonify(stats)
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-# ...existing code...
-
 @bp.route("/api/query/<period>")
 @api_auth_required
 def api_query_data(period):

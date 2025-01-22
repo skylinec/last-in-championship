@@ -36,16 +36,17 @@
                     <span class="value">{{ streak.max_streak }} days</span>
                 </div>
                 
-                {% if streak.past_streaks|length > 1 %}
+                {% if streak.past_streaks and streak.past_streaks|length > 1 %}
                 <div class="past-streaks">
                     <h3>Past Notable Streaks</h3>
                     <div class="past-streaks-list">
-                        {% for past in streak.past_streaks[1:] %}
+                        {% for past in streak.past_streaks[1:5] %}
                         <div class="past-streak-item" 
                              onclick="showStreakCalendar('{{ past.start.strftime('%Y-%m-%d') }}', 
                                                        '{{ past.end.strftime('%Y-%m-%d') }}', 
                                                        '{{ streak.username }}', 
-                                                       '{{ past.break_reason }}')">
+                                                       '{{ past.break_reason }}',
+                                                       {{ 'true' if past.is_current else 'false' }})">
                             <div class="past-streak-info">
                                 <span class="streak-length">{{ past.length }} days</span>
                                 <span class="streak-dates">{{ past.date_range }}</span>

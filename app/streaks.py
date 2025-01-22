@@ -23,15 +23,14 @@ def get_streak_history(username, db):
     try:
         entries = db.execute(text("""
             WITH valid_entries AS (
-                SELECT DISTINCT ON (name, date::date)
-                    name,
+                SELECT DISTINCT ON (date::date)
                     date::date as entry_date,
                     status,
                     timestamp
                 FROM entries 
                 WHERE name = :username
                     AND status IN ('in-office', 'remote')
-                ORDER BY name, date::date DESC, timestamp DESC
+                ORDER BY date::date DESC, timestamp DESC
             ),
             streak_bounds AS (
                 SELECT 
@@ -39,9 +38,8 @@ def get_streak_history(username, db):
                     status,
                     CASE 
                         WHEN entry_date > CURRENT_DATE THEN 1
-                        WHEN date_trunc('day', entry_date::timestamp) + interval '1 day' < 
-                             lag(entry_date::timestamp) over (order by entry_date)
-                             AND NOT (EXTRACT(DOW FROM entry_date) IN (0, 6))  -- Not weekend
+                        WHEN date_trunc('day', lag(entry_date::timestamp) over (order by entry_date))
+                             - date_trunc('day', entry_date::timestamp) > interval '3 days'
                         THEN 1
                         ELSE 0
                     END as is_break
@@ -58,9 +56,8 @@ def get_streak_history(username, db):
                 min(entry_date) as start_date,
                 max(entry_date) as end_date,
                 count(*) as length,
-                max(entry_date) = CURRENT_DATE as is_current
+                max(entry_date) >= CURRENT_DATE - interval '3 days' as is_current
             FROM streak_groups
-            WHERE entry_date <= CURRENT_DATE
             GROUP BY streak_group
             ORDER BY max(entry_date) DESC
         """), {"username": username}).fetchall()
@@ -72,22 +69,35 @@ def get_streak_history(username, db):
         today = datetime.now().date()
         streaks = []
 
+        prev_start = None
+        prev_end = None
+
         for entry in entries:
             start_date = entry.start_date
             end_date = entry.end_date
             length = entry.length
+            is_current = entry.is_current
 
-            # Calculate if streak is current
-            is_current = (end_date >= (today - timedelta(days=3)) and 
-                        any(d in working_days for d in ['mon', 'tue', 'wed', 'thu', 'fri']))
+            # Calculate break reason
+            break_reason = "Current active streak" if is_current else "Streak ended"
+            if prev_end and start_date:
+                days_between = (prev_start - end_date).days - 1
+                if days_between > 0:
+                    if days_between <= 2 and all(d in ['sat', 'sun'] for d in [prev_end.strftime('%a').lower()]):
+                        break_reason = "Weekend break"
+                    else:
+                        break_reason = f"Missed {days_between} day{'s' if days_between > 1 else ''}"
 
             streaks.append({
                 'start': start_date,
                 'end': end_date,
                 'length': length,
                 'is_current': is_current,
-                'break_reason': "Current active streak" if is_current else "Missed attendance"
+                'break_reason': break_reason
             })
+
+            prev_start = start_date
+            prev_end = end_date
 
         return streaks
 

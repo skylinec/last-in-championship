@@ -10,7 +10,7 @@
         <div class="streak-card">
             <div class="streak-header">
                 <h2>{{ streak.username }}</h2>
-                <div class="streak-count {% if streak.past_streaks %}active{% endif %}"
+                <div class="streak-count {% if streak.is_current %}active{% endif %}"
                     {% if streak.past_streaks %}
                     onclick="showStreakCalendar('{{ streak.past_streaks[0].start.strftime('%Y-%m-%d') }}', 
                                               '{{ streak.past_streaks[0].end.strftime('%Y-%m-%d') }}', 
@@ -18,9 +18,9 @@
                                               '{{ streak.past_streaks[0].break_reason }}',
                                               {{ 'true' if streak.past_streaks[0].is_current else 'false' }})">
                     {% endif %}>
-                    <span class="current">{{ streak.past_streaks[0].length if streak.past_streaks else 0 }}</span>
+                    <span class="current">{{ streak.current_streak }}</span>
                     <span class="days">days</span>
-                    {% if streak.past_streaks %}
+                    {% if streak.is_current %}
                     <div class="streak-info-icon">ℹ️</div>
                     {% endif %}
                 </div>

@@ -1920,27 +1920,35 @@ def view_streaks():
         today = datetime.now().date()
         streak_data = []
         for username in recent_users:
-            # Get past streaks from history
+            # Get complete streak history
             past_streaks = get_streak_history(username, db)
-            current_streak = past_streaks[0] if past_streaks else None
-
-            # Format streaks for display
-            formatted_past_streaks = []
-            for streak in past_streaks[1:]:  # Skip current streak
-                formatted_past_streaks.append({
+            
+            # Process streaks for display
+            formatted_streaks = []
+            current_streak = None
+            
+            for streak in past_streaks:
+                formatted_streak = {
                     'start': streak['start'],
                     'end': streak['end'],
                     'length': streak['length'],
-                    'break_reason': streak.get('break_reason', 'Streak ended'),
+                    'is_current': streak['is_current'],
+                    'break_reason': streak['break_reason'],
                     'date_range': f"{streak['start'].strftime('%d/%m/%Y')} - {streak['end'].strftime('%d/%m/%Y')}"
-                })
+                }
+                
+                if streak['is_current']:
+                    current_streak = formatted_streak
+                else:
+                    formatted_streaks.append(formatted_streak)
 
             streak_data.append({
                 'username': username,
+                'past_streaks': [current_streak] + formatted_streaks if current_streak else formatted_streaks,
+                'max_streak': max((s['length'] for s in past_streaks), default=0),
                 'current_streak': current_streak['length'] if current_streak else 0,
                 'current_start': current_streak['start'] if current_streak else None,
-                'past_streaks': formatted_past_streaks[:5],  # Show top 5 past streaks
-                'max_streak': max((s['length'] for s in past_streaks), default=0)
+                'is_current': bool(current_streak)
             })
         
         # Sort by current streak first, then max streak

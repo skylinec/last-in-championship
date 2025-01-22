@@ -109,7 +109,7 @@ from .visualisation import (calculate_arrival_patterns, calculate_average_time,
                             calculate_status_counts, calculate_user_comparison,
                             calculate_weekly_patterns, analyze_early_arrivals,
                             analyze_late_arrivals)
-from .streaks import calculate_current_streak, get_streak_history, get_attendance_for_period
+from .streaks import calculate_current_streak, get_streak_history, get_attendance_for_period, get_current_streak_info
 
 # If you need to call methods from your main app or from 'app.py' directly, 
 # you typically do that through current_app from flask, or separate your code further.
@@ -807,6 +807,15 @@ def view_rankings(period, date_str=None):
                 for rank in rankings:
                     streak = calculate_current_streak(rank["name"])
                     rank["current_streak"] = streak  # Add this line
+
+                # Add this before returning template
+                for rank in rankings:
+                    streak_info = get_current_streak_info(rank['name'], db)
+                    rank.update({
+                        'streak': streak_info['length'],
+                        'streak_start': streak_info['start'],
+                        'is_current_streak': streak_info['is_current']
+                    })
 
                 template_data = {
                     'rankings': rankings,
@@ -1783,6 +1792,8 @@ def get_history():
 @bp.route("/rankings/day/<date>")
 @login_required
 def day_rankings(date=None):
+    db = SessionLocal()
+
     if date is None:
         date = datetime.now().date().isoformat()
     
@@ -1855,6 +1866,12 @@ def day_rankings(date=None):
         latest_time = max(all_times)
         earliest_hour = max(7, earliest_time.hour)  # Don't go earlier than 7am
         latest_hour = min(19, latest_time.hour + 1)  # Don't go later than 7pm
+
+    for entry in rankings:
+        streak_info = get_current_streak_info(entry['name'], db)
+        entry['streak'] = streak_info['length']
+        entry['streak_start'] = streak_info['start']
+        entry['is_current_streak'] = streak_info['is_current']
 
     return render_template("day_rankings.html", 
                          rankings=rankings,

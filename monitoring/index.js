@@ -287,6 +287,108 @@ async function generateStreaks() {
   }
 }
 
+async function generateStreaks() {
+  const client = await pool.connect();
+  try {
+    const startTime = Date.now();
+    
+    // Get streak history query
+    const streakHistoryQuery = `
+      WITH RECURSIVE dates AS (
+        SELECT min(date::date) as date
+        FROM entries
+        UNION ALL
+        SELECT date + 1
+        FROM dates
+        WHERE date < CURRENT_DATE
+      ),
+      valid_days AS (
+        SELECT DISTINCT e.name, e.date::date
+        FROM entries e
+        WHERE e.status IN ('in-office', 'remote')
+        ORDER BY e.name, e.date::date
+      ),
+      streak_calc AS (
+        SELECT 
+          v.name,
+          v.date,
+          CASE 
+            WHEN LAG(v.date) OVER (PARTITION BY v.name ORDER BY v.date) IS NULL 
+              OR date - LAG(v.date) OVER (PARTITION BY v.name ORDER BY v.date) <= 3
+            THEN 0 ELSE 1 
+          END as new_streak
+        FROM valid_days v
+      ),
+      streak_groups AS (
+        SELECT 
+          name,
+          date,
+          SUM(new_streak) OVER (PARTITION BY name ORDER BY date) as streak_group
+        FROM streak_calc
+      )
+      SELECT 
+        name,
+        MIN(date) as streak_start,
+        MAX(date) as streak_end,
+        COUNT(*) as streak_length
+      FROM streak_groups
+      GROUP BY name, streak_group
+      ORDER BY name, streak_start DESC
+    `;
+
+    const streakHistory = await client.query(streakHistoryQuery);
+    
+    // Update user_streaks table with history
+    for (const row of streakHistory.rows) {
+      await client.query(`
+        INSERT INTO user_streaks (
+          username, 
+          current_streak,
+          streak_start_date,
+          last_attendance,
+          max_streak,
+          streak_history
+        ) VALUES ($1, $2, $3, $4, $5, $6)
+        ON CONFLICT (username) 
+        DO UPDATE SET 
+          current_streak = CASE 
+            WHEN (CURRENT_DATE - $4::date) <= 3 THEN $2
+            ELSE 0 
+          END,
+          streak_start_date = $3,
+          last_attendance = $4,
+          max_streak = GREATEST(user_streaks.max_streak, $5),
+          streak_history = $6
+      `, [
+        row.name,
+        row.streak_length,
+        row.streak_start,
+        row.streak_end,
+        row.streak_length,
+        JSON.stringify([{
+          start: row.streak_start,
+          end: row.streak_end,
+          length: row.streak_length,
+          is_current: (new Date() - new Date(row.streak_end)) / (1000 * 60 * 60 * 24) <= 3
+        }])
+      ]);
+    }
+
+    await logMonitoringEvent('streak_generation', {
+      duration: Date.now() - startTime,
+      streaks_processed: streakHistory.rows.length
+    });
+
+  } catch (error) {
+    await logMonitoringEvent('streak_generation', {
+      error: error.message
+    }, 'error');
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
 function isWeekendGap(date1, date2) {
   // Check if the gap between dates only includes weekend days
   const d1 = new Date(date1);

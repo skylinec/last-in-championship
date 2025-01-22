@@ -18,174 +18,142 @@ def get_working_days(db, username):
         return ['mon', 'tue', 'wed', 'thu', 'fri']  # Default working days
     return settings.points.get('working_days', {}).get(username, ['mon', 'tue', 'wed', 'thu', 'fri'])
 
-def get_attendance_for_period(username, start_date, end_date, db):
-    """Get attendance data for a date range"""
-    try:
-        entries = db.execute(
-            Entry.select().where(
-                Entry.c.name == username,
-                (Entry.c.date.cast(Date)) >= start_date.strftime('%Y-%m-%d'),
-                (Entry.c.date.cast(Date)) <= end_date.strftime('%Y-%m-%d')
-            ).order_by(Entry.c.date.asc())
-        ).fetchall()
-        
-        return {entry.date: entry.status for entry in entries}
-    except Exception as e:
-        logger.error(f"Error getting attendance data: {str(e)}")
-        return {}
-
-def calculate_current_streak(name):
-    """Get the current (most recent) streak length"""
-    db = SessionLocal()
-    try:
-        # Get streak history
-        streaks = get_streak_history(name, db)
-        
-        # Return the most recent streak's length
-        if streaks:
-            return streaks[0]['length']
-        return 0
-    finally:
-        db.close()
-
-def get_streak_data(username, db):
-    """Get complete streak data for a user"""
-    try:
-        # Get all streaks
-        streaks = get_streak_history(username, db)
-        
-        # Get current streak from most recent streak
-        current_streak = streaks[0]['length'] if streaks else 0
-        
-        # Calculate max streak
-        max_streak = max((s['length'] for s in streaks), default=0)
-        
-        # Get last attendance date
-        last_attendance = streaks[0]['end'].isoformat() if streaks else None
-
-        return {
-            'current_streak': current_streak,
-            'max_streak': max_streak,
-            'last_attendance': last_attendance
-        }
-    except Exception as e:
-        logger.error(f"Error getting streak data: {str(e)}")
-        return {
-            'current_streak': 0,
-            'max_streak': 0,
-            'last_attendance': None
-        }
-
 def get_streak_history(username, db):
     """Get historical streak data for a user"""
     try:
         entries = db.execute(text("""
-            WITH sorted_entries AS (
-                SELECT date, status
+            WITH valid_entries AS (
+                SELECT DISTINCT ON (name, date::date)
+                    name,
+                    date::date as entry_date,
+                    status,
+                    timestamp
                 FROM entries 
                 WHERE name = :username
-                  AND status IN ('in-office', 'remote')
-                ORDER BY date ASC
+                    AND status IN ('in-office', 'remote')
+                ORDER BY name, date::date DESC, timestamp DESC
+            ),
+            streak_bounds AS (
+                SELECT 
+                    entry_date,
+                    status,
+                    CASE 
+                        WHEN entry_date > CURRENT_DATE THEN 1
+                        WHEN date_trunc('day', entry_date::timestamp) + interval '1 day' < 
+                             lag(entry_date::timestamp) over (order by entry_date)
+                             AND NOT (EXTRACT(DOW FROM entry_date) IN (0, 6))  -- Not weekend
+                        THEN 1
+                        ELSE 0
+                    END as is_break
+                FROM valid_entries
+            ),
+            streak_groups AS (
+                SELECT
+                    entry_date,
+                    status,
+                    sum(is_break) over (order by entry_date) as streak_group
+                FROM streak_bounds
             )
-            SELECT * FROM sorted_entries
+            SELECT 
+                min(entry_date) as start_date,
+                max(entry_date) as end_date,
+                count(*) as length,
+                max(entry_date) = CURRENT_DATE as is_current
+            FROM streak_groups
+            WHERE entry_date <= CURRENT_DATE
+            GROUP BY streak_group
+            ORDER BY max(entry_date) DESC
         """), {"username": username}).fetchall()
-        
+
         if not entries:
             return []
 
-        streaks = []
-        current_streak = 0
-        streak_start = None
-        last_date = None
         working_days = get_working_days(db, username)
         today = datetime.now().date()
-
-        def is_working_day(check_date):
-            """Helper to check if a date is a working day"""
-            return (check_date.weekday() < 5 and 
-                   check_date.strftime('%a').lower() in working_days)
-
-        def get_next_working_day(from_date):
-            """Get the next working day after the given date"""
-            next_date = from_date + timedelta(days=1)
-            while not is_working_day(next_date):
-                next_date += timedelta(days=1)
-            return next_date
-
-        def should_continue_streak(prev_date, current_date):
-            """Check if current_date should continue streak from prev_date"""
-            if not prev_date:
-                return False
-            expected_date = get_next_working_day(prev_date)
-            return current_date == expected_date
+        streaks = []
 
         for entry in entries:
-            entry_date = entry.date if isinstance(entry.date, date) else datetime.strptime(entry.date, '%Y-%m-%d').date()
-            
-            # Skip non-working days without breaking streak
-            if not is_working_day(entry_date):
-                continue
-            
-            if current_streak == 0:
-                streak_start = entry_date
-                current_streak = 1
-            elif should_continue_streak(last_date, entry_date):
-                current_streak += 1
-            else:
-                # Save completed streak
-                if current_streak > 0:
-                    streaks.append({
-                        'start': streak_start,
-                        'end': last_date,
-                        'length': current_streak,
-                        'break_reason': "Missed working day(s)",
-                        'is_current': False
-                    })
-                streak_start = entry_date
-                current_streak = 1
-            
-            last_date = entry_date
+            start_date = entry.start_date
+            end_date = entry.end_date
+            length = entry.length
 
-        # Handle final streak
-        if current_streak > 0:
-            is_active = last_date == today
+            # Calculate if streak is current
+            is_current = (end_date >= (today - timedelta(days=3)) and 
+                        any(d in working_days for d in ['mon', 'tue', 'wed', 'thu', 'fri']))
+
             streaks.append({
-                'start': streak_start,
-                'end': last_date,
-                'length': current_streak,
-                'break_reason': "Current active streak" if is_active else "End of records",
-                'is_current': is_active
+                'start': start_date,
+                'end': end_date,
+                'length': length,
+                'is_current': is_current,
+                'break_reason': "Current active streak" if is_current else "Missed attendance"
             })
 
-        return sorted(streaks, key=lambda x: x['end'].toordinal(), reverse=True)
+        return streaks
 
     except Exception as e:
         logger.error(f"Error getting streak history: {str(e)}")
         return []
 
-def get_current_streak_info(username, db=None):
-    """Get complete info about user's current streak"""
-    if db is None:
-        db = SessionLocal()
-        should_close = True
-    else:
-        should_close = False
+def get_attendance_for_period(username, start_date, end_date, db):
+    """Get attendance records for a date range"""
+    try:
+        attendance = {}
+        entries = db.execute(text("""
+            SELECT DISTINCT ON (date::date)
+                date::date as entry_date,
+                status
+            FROM entries 
+            WHERE name = :username 
+                AND date::date BETWEEN :start_date AND :end_date
+                AND status IN ('in-office', 'remote', 'sick', 'leave')
+            ORDER BY date::date, timestamp DESC
+        """), {
+            "username": username,
+            "start_date": start_date.strftime('%Y-%m-%d'),
+            "end_date": end_date.strftime('%Y-%m-%d')
+        }).fetchall()
 
+        for entry in entries:
+            attendance[entry.entry_date.isoformat()] = entry.status
+            
+        return attendance
+    except Exception as e:
+        logger.error(f"Error getting attendance: {str(e)}")
+        return {}
+
+def calculate_current_streak(username):
+    """Calculate current streak for a user"""
+    db = SessionLocal()
     try:
         streaks = get_streak_history(username, db)
         if not streaks:
-            return {
-                'length': 0,
-                'start': None,
-                'end': None,
-                'is_current': False
-            }
+            return 0
+            
+        current = streaks[0]
+        return current['length'] if current['is_current'] else 0
+        
+    except Exception as e:
+        logger.error(f"Error calculating current streak: {str(e)}")
+        return 0
+    finally:
+        db.close()
 
+def get_current_streak_info(username, db=None):
+    """Get current streak details"""
+    should_close = db is None
+    if should_close:
+        db = SessionLocal()
+    
+    try:
+        streaks = get_streak_history(username, db)
+        if not streaks:
+            return {'length': 0, 'start': None, 'is_current': False}
+            
         current = streaks[0]
         return {
             'length': current['length'],
             'start': current['start'],
-            'end': current['end'],
             'is_current': current['is_current']
         }
     finally:

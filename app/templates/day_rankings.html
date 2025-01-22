@@ -23,10 +23,10 @@
             <tr class="rank-row {% if entry.status == 'in-office' %}in-office{% endif %}">
                 <td>{{ loop.index }}</td>
                 <td class="name-cell">
-                    {% if entry.streak > 0 %}
-                    <div class="streak-flame" data-streak="{{ entry.streak }}" 
-                         title="Streak: {{ entry.streak }} working day{% if entry.streak != 1 %}s{% endif %}
-                                {% if entry.streak_start %}(started {{ entry.streak_start.strftime('%d/%m/%Y') }}){% endif %}">
+                    {% if entry.streak > 0 and entry.is_current_streak %}
+                    <div class="streak-flame" data-streak="{{ entry.streak }}"
+                         title="Current streak: {{ entry.streak }} working day{% if entry.streak != 1 %}s{% endif %}
+                                {% if entry.streak_start %}(since {{ entry.streak_start.strftime('%d/%m/%Y') }}){% endif %}">
                         🔥<span class="streak-count">{{ entry.streak }}</span>
                     </div>
                     {% endif %}

@@ -71,9 +71,30 @@
             </div>
         </div>
         <div class="podium-names">
-            <div id="secondName">-</div>
-            <div id="firstName">-</div>
-            <div id="thirdName">-</div>
+            <div id="secondName" class="podium-user">
+                <div class="podium-name-with-streak">
+                    <div class="streak-flame hidden" data-streak="0">
+                        🔥<span class="streak-count">0</span>
+                    </div>
+                    <span class="name">-</span>
+                </div>
+            </div>
+            <div id="firstName" class="podium-user">
+                <div class="podium-name-with-streak">
+                    <div class="streak-flame hidden" data-streak="0">
+                        🔥<span class="streak-count">0</span>
+                    </div>
+                    <span class="name">-</span>
+                </div>
+            </div>
+            <div id="thirdName" class="podium-user">
+                <div class="podium-name-with-streak">
+                    <div class="streak-flame hidden" data-streak="0">
+                        🔥<span class="streak-count">0</span>
+                    </div>
+                    <span class="name">-</span>
+                </div>
+            </div>
         </div>
         <div class="podium-points">
             <div id="secondPoints">-</div>
@@ -281,7 +302,10 @@
     display: inline-flex;
     align-items: center;
     font-size: 1.2em;
-    cursor: help;
+}
+
+.streak-flame.hidden {
+    display: none;
 }
 
 .streak-count {
@@ -434,24 +458,33 @@ async function updatePodium() {
             const streakFlame = nameCell.querySelector('.streak-flame');
             const userName = nameCell.lastChild.textContent.trim();
             
-            // Create name element with streak if present
-            let nameHtml = userName;
-            if (streakFlame) {
+            const container = document.getElementById(`${place}Name`);
+            const nameWithStreak = container.querySelector('.podium-name-with-streak');
+            const flameDiv = nameWithStreak.querySelector('.streak-flame');
+            const nameSpan = nameWithStreak.querySelector('.name');
+            
+            nameSpan.textContent = userName;
+            
+            if (streakFlame && streakFlame.getAttribute('data-streak') > 0) {
                 const streak = streakFlame.getAttribute('data-streak');
-                const tooltip = streakFlame.getAttribute('title') || `${streak} day streak`;
-                nameHtml = `
-                    <div class="podium-name-with-streak">
-                        <div class="streak-flame" data-streak="${streak}" title="${tooltip}">
-                            🔥<span class="streak-count">${streak}</span>
-                        </div>
-                        ${userName}
-                    </div>`;
+                const tooltip = streakFlame.getAttribute('title');
+                flameDiv.setAttribute('data-streak', streak);
+                flameDiv.setAttribute('title', tooltip);
+                flameDiv.querySelector('.streak-count').textContent = streak;
+                flameDiv.classList.remove('hidden');
+            } else {
+                flameDiv.classList.add('hidden');
             }
             
-            document.getElementById(`${place}Name`).innerHTML = nameHtml;
             document.getElementById(`${place}Points`).textContent = cells[2].textContent;
         } else {
-            document.getElementById(`${place}Name`).textContent = '-';
+            const container = document.getElementById(`${place}Name`);
+            const nameWithStreak = container.querySelector('.podium-name-with-streak');
+            const flameDiv = nameWithStreak.querySelector('.streak-flame');
+            const nameSpan = nameWithStreak.querySelector('.name');
+            
+            nameSpan.textContent = '-';
+            flameDiv.classList.add('hidden');
             document.getElementById(`${place}Points`).textContent = '-';
         }
     });

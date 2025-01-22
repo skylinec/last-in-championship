@@ -2421,3 +2421,106 @@ def get_attendance(username, start_date, end_date):
         return jsonify({}), 500
     finally:
         db.close()
+
+# ...existing code...
+
+@bp.route("/api/login", methods=["POST"])
+def api_login():
+    try:
+        data = request.get_json()
+        username = data.get("username")
+        password = data.get("password")
+        
+        if not username or not password:
+            return jsonify({"error": "Missing credentials"}), 400
+            
+        if verify_user(username, password):
+            session['user'] = username
+            return jsonify({"message": "Login successful"})
+        return jsonify({"error": "Invalid credentials"}), 401
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@bp.route("/api/rankings/<period>")
+@bp.route("/api/rankings/<period>/<date_str>")
+def api_rankings(period, date_str=None):
+    try:
+        mode = request.args.get('mode', 'last_in')
+        data = load_data()
+        if not data:
+            return jsonify([])
+            
+        current_date = datetime.strptime(date_str, '%Y-%m-%d') if date_str else datetime.now()
+        rankings = calculate_scores(data, period, current_date, mode=mode)
+        return jsonify(rankings)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@bp.route("/api/streaks")
+def api_streaks():
+    db = SessionLocal()
+    try:
+        streaks = []
+        recent_users = db.query(Entry.name).distinct().all()
+        for (username,) in recent_users:
+            streak_info = get_current_streak_info(username, db)
+            streaks.append({
+                "username": username,
+                "current_streak": streak_info['length'],
+                "max_streak": streak_info.get('max_streak', 0),
+                "streak_start": streak_info['start'].isoformat() if streak_info['start'] else None
+            })
+        return jsonify(streaks)
+    finally:
+        db.close()
+
+@bp.route("/api/users/<username>/stats")
+def api_user_stats(username):
+    try:
+        data = load_data()
+        if not data:
+            return jsonify({"error": "No data found"}), 404
+            
+        user_entries = [e for e in data if e["name"] == username]
+        if not user_entries:
+            return jsonify({"error": "User not found"}), 404
+            
+        stats = calculate_user_stats(user_entries)
+        return jsonify(stats)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@bp.route("/api/log", methods=["POST"])
+def api_log_attendance():
+    try:
+        entry = request.get_json()
+        if not entry:
+            return jsonify({"error": "Missing entry data"}), 400
+            
+        db = SessionLocal()
+        try:
+            # Check for existing entry
+            existing = db.query(Entry).filter_by(
+                date=entry["date"],
+                name=entry["name"]
+            ).first()
+            
+            if existing:
+                return jsonify({"error": "Already logged attendance for this date"}), 400
+                
+            new_entry = Entry(
+                id=str(uuid.uuid4()),
+                date=entry["date"],
+                time=entry["time"],
+                name=entry["name"],
+                status=entry["status"]
+            )
+            
+            db.add(new_entry)
+            db.commit()
+            
+            return jsonify({"message": "Attendance logged successfully"})
+        finally:
+            db.close()
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500

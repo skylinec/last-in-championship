@@ -1,0 +1,8 @@
+
+# API URL for the Last-In Championship server
+# Default: https://lic.mattdh.me
+api_url = "https://lic.mattdh.me"
+
+# Your default username for attendance logging
+# This will be used if no username is provided in commands
+username = "johndoe"

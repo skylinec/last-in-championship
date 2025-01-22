@@ -1,4 +1,4 @@
-FROM rust:1.71 as builder
+FROM rust:latest as builder
 
 # Install cross-compilation tools
 RUN apt-get update && apt-get install -y \

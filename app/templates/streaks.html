@@ -41,7 +41,7 @@
                     <h3>Past Notable Streaks</h3>
                     <div class="past-streaks-list">
                         {% for past in streak.past_streaks[1:5] %}
-                        <div class="past-streak-item" 
+                        <div class="past-streak-item {% if past.is_current %}active-streak{% endif %}" 
                              onclick="showStreakCalendar('{{ past.start.strftime('%Y-%m-%d') }}', 
                                                        '{{ past.end.strftime('%Y-%m-%d') }}', 
                                                        '{{ streak.username }}', 
@@ -604,7 +604,6 @@ function createDayElement(currentDate, start, end, attendance, startDate, endDat
     content.className = 'calendar-day-content';
     
     const dayNumber = document.createElement('div');
-    dayNumber.className = 'day-number';
     dayNumber.textContent = currentDate.getDate();
     content.appendChild(dayNumber);
     

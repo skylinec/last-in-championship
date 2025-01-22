@@ -32,34 +32,42 @@ def get_streak_history(username, db):
                     AND status IN ('in-office', 'remote')
                 ORDER BY date::date DESC, timestamp DESC
             ),
-            streak_bounds AS (
+            streak_breaks AS (
                 SELECT 
                     entry_date,
                     status,
                     CASE 
                         WHEN entry_date > CURRENT_DATE THEN 1
-                        WHEN date_trunc('day', lag(entry_date::timestamp) over (order by entry_date))
-                             - date_trunc('day', entry_date::timestamp) > interval '3 days'
-                        THEN 1
+                        WHEN LAG(entry_date) OVER (ORDER BY entry_date DESC) IS NULL THEN 0
+                        WHEN entry_date - LAG(entry_date) OVER (ORDER BY entry_date DESC) > 3 THEN 1
                         ELSE 0
-                    END as is_break
+                    END as is_new_streak,
+                    CASE
+                        WHEN entry_date - LAG(entry_date) OVER (ORDER BY entry_date DESC) > 3 THEN
+                            entry_date - LAG(entry_date) OVER (ORDER BY entry_date DESC)
+                        ELSE NULL
+                    END as break_length
                 FROM valid_entries
             ),
             streak_groups AS (
                 SELECT
                     entry_date,
                     status,
-                    sum(is_break) over (order by entry_date) as streak_group
-                FROM streak_bounds
+                    SUM(is_new_streak) OVER (ORDER BY entry_date DESC) as streak_group,
+                    break_length
+                FROM streak_breaks
             )
             SELECT 
-                min(entry_date) as start_date,
-                max(entry_date) as end_date,
-                count(*) as length,
-                max(entry_date) >= CURRENT_DATE - interval '3 days' as is_current
+                MIN(entry_date) as start_date,
+                MAX(entry_date) as end_date,
+                COUNT(*) as length,
+                MAX(entry_date) >= CURRENT_DATE - interval '3 days' as is_current,
+                STRING_AGG(DISTINCT status, ', ' ORDER BY status) as statuses,
+                MIN(break_length) as break_after
             FROM streak_groups
             GROUP BY streak_group
-            ORDER BY max(entry_date) DESC
+            HAVING COUNT(*) >= 1
+            ORDER BY MAX(entry_date) DESC
         """), {"username": username}).fetchall()
 
         if not entries:
@@ -69,35 +77,33 @@ def get_streak_history(username, db):
         today = datetime.now().date()
         streaks = []
 
-        prev_start = None
-        prev_end = None
-
         for entry in entries:
             start_date = entry.start_date
             end_date = entry.end_date
             length = entry.length
             is_current = entry.is_current
+            break_length = entry.break_after
 
             # Calculate break reason
-            break_reason = "Current active streak" if is_current else "Streak ended"
-            if prev_end and start_date:
-                days_between = (prev_start - end_date).days - 1
-                if days_between > 0:
-                    if days_between <= 2 and all(d in ['sat', 'sun'] for d in [prev_end.strftime('%a').lower()]):
-                        break_reason = "Weekend break"
-                    else:
-                        break_reason = f"Missed {days_between} day{'s' if days_between > 1 else ''}"
+            if is_current:
+                break_reason = "Current active streak"
+            elif break_length is None:
+                break_reason = "First recorded streak"
+            else:
+                if break_length <= 3:
+                    break_reason = "Weekend break"
+                else:
+                    missed_days = break_length - 2  # Subtract weekend days
+                    break_reason = f"Missed {missed_days} working day{'s' if missed_days > 1 else ''}"
 
             streaks.append({
                 'start': start_date,
                 'end': end_date,
                 'length': length,
                 'is_current': is_current,
-                'break_reason': break_reason
+                'break_reason': break_reason,
+                'date_range': f"{start_date.strftime('%d/%m/%Y')} - {end_date.strftime('%d/%m/%Y')}"
             })
-
-            prev_start = start_date
-            prev_end = end_date
 
         return streaks
 

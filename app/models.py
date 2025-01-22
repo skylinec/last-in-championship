@@ -94,8 +94,8 @@ class UserStreak(Base):
     current_streak = Column(Integer, default=0)
     last_attendance = Column(DateTime, nullable=True)
     max_streak = Column(Integer, default=0)
-    streak_start_date = Column(Date, nullable=True)  # Add this line
-    streak_history = Column(JSON, default=list)  # Add this line
+    streak_start_date = Column(Date, nullable=True)
+    streak_history = Column(JSON, default=list)
 
 class TieBreaker(Base):
     __tablename__ = 'tie_breakers'

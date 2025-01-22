@@ -52,6 +52,7 @@ BEGIN
 END $$;
 
 ALTER TABLE user_streaks ADD COLUMN IF NOT EXISTS streak_start_date DATE;
+ALTER TABLE user_streaks ADD COLUMN IF NOT EXISTS streak_history JSONB DEFAULT '[]'::jsonb;
 
 ------------------------------------------
 -- SECTION 3: TIE BREAKER SYSTEM

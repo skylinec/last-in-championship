@@ -103,7 +103,7 @@ impl Api {
         self.handle_response(response).await
     }
 
-    pub async fn get_user_stats(&self, token: &str, username: &str) -> Result<Ranking> {
+    pub async fn get_user_stats(&self, token: &str, username: &str) -> Result<StatsResponse> {
         let url = format!("{}/api/users/{}/stats", self.base_url, username);
         debug!("Requesting user stats from: {}", url);
         let response = self.client

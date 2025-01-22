@@ -1,5 +1,7 @@
 import secrets
 from functools import wraps
+import os
+from werkzeug.utils import safe_join
 
 def init_app(app):
     """Initialize Flask app with filters and context processors"""
@@ -292,9 +294,26 @@ def index():
     # Get core users and calculate current streaks
     core_users = get_core_users()
     
-    # Return template with core users for form and podium display
+    # Get CLI download info
+    cli_dir = "/app/static/cli"
+    cli_downloads = []
+    if os.path.exists(cli_dir):
+        for filename in os.listdir(cli_dir):
+            if filename.startswith("lic-cli"):
+                platform = "Windows" if filename.endswith(".exe") else "Linux"
+                arch = "x64" if "x64" in filename else "ARM64"
+                cli_downloads.append({
+                    "filename": filename,
+                    "platform": platform,
+                    "arch": arch,
+                    "url": url_for('static', filename=f'cli/{filename}'),
+                    "size": os.path.getsize(os.path.join(cli_dir, filename)) // 1024  # Size in KB
+                })
+    
+    # Return template with core users and CLI downloads
     return render_template("index.html", 
-                         core_users=core_users)
+                         core_users=core_users,
+                         cli_downloads=cli_downloads)
 
 @bp.route("/login", methods=["GET", "POST"])
 def login():
@@ -2652,7 +2671,7 @@ def api_query_data(period):
             query = query.filter(Entry.status == status)
 
         # Apply ordering
-        if mode == 'last-in':
+        if mode == 'lastin':
             query = query.order_by(Entry.date.desc(), Entry.time.desc())
         else:  # early-bird
             query = query.order_by(Entry.date.desc(), Entry.time.asc())

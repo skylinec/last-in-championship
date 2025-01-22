@@ -102,6 +102,27 @@
             <div id="thirdPoints">-</div>
         </div>
     </div>
+
+    {% if cli_downloads %}
+    <div class="card mt-4">
+        <div class="card-header">
+            <h5 class="mb-0">CLI Downloads</h5>
+        </div>
+        <div class="card-body">
+            <div class="list-group">
+                {% for download in cli_downloads %}
+                <a href="{{ download.url }}" class="list-group-item list-group-item-action">
+                    <div class="d-flex w-100 justify-content-between">
+                        <h6 class="mb-1">{{ download.platform }} ({{ download.arch }})</h6>
+                        <small>{{ download.size }}KB</small>
+                    </div>
+                    <small class="text-muted">{{ download.filename }}</small>
+                </a>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+    {% endif %}
 </div>
 
 <style>

@@ -1,12 +1,12 @@
-use clap::Args;
+use clap::{Args, ValueEnum};  // Add ValueEnum
 use comfy_table::Cell;
 use chrono::{NaiveDate, Local};
-use crate::{api::Api, config::Config, ui};
+use crate::{api::Api, config::Config, ui, models::Period};
 
 #[derive(Args)]
 pub struct QueryCommand {
-    #[clap(short, long, default_value = "day")]
-    period: String,
+    #[clap(short, long, default_value = "day", value_enum, help = "Period to query (day, week, month)")]
+    period: Period,
 
     #[clap(short, long)]
     from: Option<String>,
@@ -17,7 +17,7 @@ pub struct QueryCommand {
     #[clap(short, long)]
     user: Option<String>,
 
-    #[clap(short = 'm', long, default_value = "last-in")]
+    #[clap(short = 'm', long, default_value = "last_in", help = "Mode for query (last_in or early_bird)")]
     mode: String,
 
     #[clap(short, long)]
@@ -46,7 +46,7 @@ impl QueryCommand {
 
         let results = api.query_data(
             token,
-            &self.period,
+            &self.period.to_string(),  // Convert Period to string
             from_date,
             to_date,
             self.user.as_deref(),

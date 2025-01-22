@@ -1,7 +1,6 @@
 use clap::Args;
 use comfy_table::Cell;
-use colored::*;
-use crate::{api::Api, config::Config, ui};
+use crate::{api::Api, config::Config, ui, models::StatsResponse};  // Change to use StatsResponse
 
 #[derive(Args)]
 pub struct StatsCommand {
@@ -16,11 +15,10 @@ impl StatsCommand {
         let api = Api::new(config.api_url.clone());
         let username = self.user.clone().unwrap_or(config.username.clone());
         
-        // Get token from config, return error if not found
         let token = config.api_token.as_ref()
             .ok_or_else(|| anyhow::anyhow!("Not logged in. Please run `lic login` first."))?;
             
-        let stats = api.get_user_stats(token, &username).await?;
+        let stats: StatsResponse = api.get_user_stats(token, &username).await?;  // Change type annotation
 
         let mut table = ui::create_table();
         table.set_header(vec!["Metric", "Value"]);

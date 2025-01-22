@@ -5,6 +5,7 @@ services:
     build: .
     volumes:
       - ./data:/app/data
+      - cli_builds:/app/static/cli:ro    # Add this line to mount CLI builds
     environment:
       - FLASK_ENV=production
       - SECRET_KEY=${SECRET_KEY}
@@ -162,6 +163,13 @@ services:
       matomo_db:
         condition: service_healthy
 
+  cli-builder:
+    build:
+      context: ./cli
+      dockerfile: Dockerfile.builder
+    volumes:
+      - cli_builds:/output
+
 volumes:
   postgres_data:
   prometheus_data:
@@ -173,3 +181,4 @@ volumes:
   bugzilla_db:
   matomo_data:
   matomo_mysql:
+  cli_builds:

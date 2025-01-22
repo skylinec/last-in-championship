@@ -1,12 +1,12 @@
-use clap::Args;
+use clap::{Args, ValueEnum};  // Add ValueEnum
 use comfy_table::Cell;
 use chrono::Local;
-use crate::{api::Api, config::Config, ui};
+use crate::{api::Api, config::Config, ui, models::Period};
 
 #[derive(Args)]
 pub struct RankingsCommand {
-    #[clap(short, long, default_value = "day")]
-    period: String,
+    #[clap(short, long, default_value = "day", value_enum, help = "Period to show rankings for (day, week, month)")]
+    period: Period,
     
     #[clap(short, long)]
     date: Option<String>,
@@ -22,7 +22,7 @@ impl RankingsCommand {
         let token = config.api_token.as_ref()
             .ok_or_else(|| anyhow::anyhow!("Not logged in. Please run `lic login` first."))?;
 
-        let rankings = api.get_rankings(token, &self.period, self.date.clone()).await?;
+        let rankings = api.get_rankings(token, &self.period.to_string(), self.date.clone()).await?;
 
         let mut table = ui::create_table();
         table.set_header(vec![

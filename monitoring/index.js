@@ -21,6 +21,10 @@ async function initDb() {
       )
     `);
     
+    // Clear existing streaks and force regeneration on startup
+    await client.query('TRUNCATE user_streaks CASCADE');
+    await generateStreaks();
+    
     // Add periodic cleanup
     setInterval(cleanupOldLogs, 1800000); // Run every 30 minutes
     await cleanupOldLogs(); // Initial cleanup
@@ -130,173 +134,13 @@ async function generateStreaks() {
   const client = await pool.connect();
   try {
     const startTime = Date.now();
-    
-    // Get working days configuration from settings
-    const settingsResult = await client.query('SELECT points FROM settings LIMIT 1');
-    const workingDays = settingsResult.rows[0]?.points?.working_days || {};
 
-    // Get only valid attendance entries
-    const entries = await client.query(`
-      WITH grouped_entries AS (
-        SELECT DISTINCT ON (name, date::date)
-          name, 
-          date::date,
-          timestamp,
-          EXTRACT(DOW FROM date::date) as day_of_week
-        FROM entries 
-        WHERE status IN ('in-office', 'remote')  -- Only valid attendance
-        ORDER BY name, date::date DESC, timestamp DESC
-      )
-      SELECT * FROM grouped_entries
-      ORDER BY name, date ASC
-    `);
-
-    const streaks = new Map();
-    let currentUser = null;
-    let currentStreak = 0;
-    let maxStreak = 0;
-    let lastDate = null;
-    let lastTimestamp = null;
-    let streakStart = null;
-
-    function isWorkingDay(date, userWorkingDays, dayMap) {
-      const dow = date.getDay();
-      return dow > 0 && dow < 6 && userWorkingDays.includes(dayMap[dow]);
-    }
-
-    function getNextWorkingDay(date, userWorkingDays, dayMap) {
-      let nextDate = new Date(date);
-      nextDate.setDate(nextDate.getDate() + 1);
-      while (!isWorkingDay(nextDate, userWorkingDays, dayMap)) {
-        nextDate.setDate(nextDate.getDate() + 1);
-      }
-      return nextDate;
-    }
-
-    function shouldContinueStreak(lastDate, currentDate, userWorkingDays, dayMap) {
-      if (!lastDate) return false;
-      const expectedNext = getNextWorkingDay(lastDate, userWorkingDays, dayMap);
-      return currentDate.getTime() === expectedNext.getTime();
-    }
-
-    for (const entry of entries.rows) {
-      const entryDate = new Date(entry.date);
-      const userWorkingDays = workingDays[entry.name] || ['mon', 'tue', 'wed', 'thu', 'fri'];
-      const dayMap = {1: 'mon', 2: 'tue', 3: 'wed', 4: 'thu', 5: 'fri'};
-      
-      // Skip non-working days without breaking streak
-      if (!isWorkingDay(entryDate, userWorkingDays, dayMap)) continue;
-
-      // Handle user change
-      if (entry.name !== currentUser) {
-        if (currentUser && currentStreak > 0) {
-          streaks.set(currentUser, {
-            username: currentUser,
-            currentStreak: Math.max(0, currentStreak - 1),
-            maxStreak: Math.max(maxStreak, currentStreak - 1),
-            lastAttendance: lastTimestamp,
-            streakStartDate: streakStart
-          });
-        }
-        
-        currentUser = entry.name;
-        currentStreak = 1;
-        maxStreak = 1;
-        streakStart = entryDate;
-        lastDate = entryDate;
-        lastTimestamp = entry.timestamp;
-        continue;
-      }
-
-      if (lastDate?.getTime() === entryDate.getTime()) continue;
-
-      if (shouldContinueStreak(lastDate, entryDate, userWorkingDays, dayMap)) {
-        currentStreak++;
-        maxStreak = Math.max(maxStreak, currentStreak);
-      } else {
-        maxStreak = Math.max(maxStreak, currentStreak);
-        currentStreak = 1;
-        streakStart = entryDate;
-      }
-
-      lastDate = entryDate;
-      lastTimestamp = entry.timestamp;
-    }
-
-    // Handle last user
-    if (currentUser && currentStreak > 0) {
-      const finalStreak = lastDate?.getTime() === new Date().setHours(0,0,0,0) ? 
-        currentStreak : Math.max(0, currentStreak - 1);
-      maxStreak = Math.max(maxStreak, finalStreak);
-      
-      streaks.set(currentUser, {
-        username: currentUser,
-        currentStreak: finalStreak,
-        maxStreak: maxStreak,
-        lastAttendance: lastTimestamp,
-        streakStartDate: streakStart
-      });
-    }
-
-    // Update database with new streak values
-    if (streaks.size > 0) {
-      await client.query('BEGIN');
-      try {
-        for (const streak of streaks.values()) {
-          await client.query(`
-            INSERT INTO user_streaks (
-              username, current_streak, last_attendance, max_streak, streak_start_date
-            ) VALUES ($1, $2, $3, $4, $5)
-            ON CONFLICT (username) 
-            DO UPDATE SET 
-              current_streak = $2,
-              last_attendance = $3,
-              max_streak = GREATEST(user_streaks.max_streak, $4),
-              streak_start_date = CASE
-                WHEN user_streaks.current_streak != $2 THEN $5
-                ELSE user_streaks.streak_start_date
-              END
-          `, [
-            streak.username,
-            streak.currentStreak,
-            streak.lastAttendance,
-            streak.maxStreak,
-            streak.streakStartDate
-          ]);
-        }
-        await client.query('COMMIT');
-      } catch (error) {
-        await client.query('ROLLBACK');
-        throw error;
-      }
-    }
-
-    await logMonitoringEvent('streak_generation', {
-      duration: Date.now() - startTime,
-      streaks_processed: streaks.size,
-      streak_details: Array.from(streaks.values())
-    });
-
-  } catch (error) {
-    await logMonitoringEvent('streak_generation', {
-      error: error.message
-    }, 'error');
-    throw error;
-  } finally {
-    client.release();
-  }
-}
-
-async function generateStreaks() {
-  const client = await pool.connect();
-  try {
-    const startTime = Date.now();
-    
-    // Get streak history query
+    // Get streak history query with better streak gap handling
     const streakHistoryQuery = `
       WITH RECURSIVE dates AS (
         SELECT min(date::date) as date
         FROM entries
+        WHERE status IN ('in-office', 'remote')
         UNION ALL
         SELECT date + 1
         FROM dates
@@ -330,7 +174,8 @@ async function generateStreaks() {
         name,
         MIN(date) as streak_start,
         MAX(date) as streak_end,
-        COUNT(*) as streak_length
+        COUNT(*) as streak_length,
+        MAX(date) >= CURRENT_DATE - INTERVAL '3 days' as is_current
       FROM streak_groups
       GROUP BY name, streak_group
       ORDER BY name, streak_start DESC
@@ -342,7 +187,7 @@ async function generateStreaks() {
     for (const row of streakHistory.rows) {
       await client.query(`
         INSERT INTO user_streaks (
-          username, 
+          username,
           current_streak,
           streak_start_date,
           last_attendance,
@@ -352,7 +197,7 @@ async function generateStreaks() {
         ON CONFLICT (username) 
         DO UPDATE SET 
           current_streak = CASE 
-            WHEN (CURRENT_DATE - $4::date) <= 3 THEN $2
+            WHEN $4 >= CURRENT_DATE - INTERVAL '3 days' THEN $2
             ELSE 0 
           END,
           streak_start_date = $3,
@@ -369,7 +214,7 @@ async function generateStreaks() {
           start: row.streak_start,
           end: row.streak_end,
           length: row.streak_length,
-          is_current: (new Date() - new Date(row.streak_end)) / (1000 * 60 * 60 * 24) <= 3
+          is_current: row.is_current
         }])
       ]);
     }
@@ -704,3 +549,30 @@ generateStreaks().catch(console.error);
 checkForTieBreakers().catch(console.error);
 
 // Remove the cron schedule for tie breakers since we're using interval now
+
+// Add handler for streak reset events
+const CHECK_INTERVAL = 10000; // 10 seconds
+
+async function checkForStreakReset() {
+  const client = await pool.connect();
+  try {
+    const result = await client.query(`
+      SELECT id FROM monitoring_logs 
+      WHERE event_type = 'streak_reset' 
+      AND timestamp > NOW() - INTERVAL '1 minute'
+      LIMIT 1
+    `);
+    
+    if (result.rows.length > 0) {
+      console.log('Streak reset detected, regenerating streaks...');
+      await generateStreaks();
+    }
+  } finally {
+    client.release();
+  }
+}
+
+// Add streak reset check to intervals
+setInterval(checkForStreakReset, CHECK_INTERVAL);
+
+// ...existing code...

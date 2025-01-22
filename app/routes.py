@@ -1153,12 +1153,23 @@ def reset_streaks():
             "Manual reset of streaks"
         )
         
-        # Delete all streak data
-        db.execute(text("DELETE FROM user_streaks"))
+        # Drop and recreate user_streaks table
+        db.execute(text("""
+            TRUNCATE user_streaks CASCADE;
+            -- Reset streak history column too
+            UPDATE user_streaks SET streak_history = NULL;
+        """))
+        
+        # Force immediate streak recalculation by monitoring service
+        db.execute(text("""
+            INSERT INTO monitoring_logs (event_type, details, status)
+            VALUES ('streak_reset', '{"triggered_by": "manual_reset"}', 'success')
+        """))
+        
         db.commit()
         
         return jsonify({
-            "message": "Streaks reset successfully",
+            "message": "Streaks reset successfully. They will be recalculated automatically.",
             "type": "success"
         })
     except Exception as e:

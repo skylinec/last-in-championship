@@ -8,3 +8,4 @@
 .env
 
 cli/target
+cli/Cargo.lock

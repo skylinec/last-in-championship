@@ -30,3 +30,8 @@ RUN cargo build --release --target x86_64-pc-windows-gnu && \
 RUN mkdir -p /output && \
     cp target/x86_64-pc-windows-gnu/release/lic-cli.exe /output/lic-cli-windows-x64.exe && \
     cp target/x86_64-unknown-linux-gnu/release/lic-cli /output/lic-cli-linux-x64
+
+# Copy binaries to Flask app static directory
+RUN mkdir -p /app/static/cli && \
+    cp /output/lic-cli-windows-x64.exe /app/static/cli && \
+    cp /output/lic-cli-linux-x64 /app/static/cli

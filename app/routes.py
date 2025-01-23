@@ -2720,3 +2720,30 @@ def api_query_data(period):
         db.close()
 
 # ...existing code...
+
+@bp.route('/download/cli/<platform>')
+@login_required
+def download_cli(platform):
+    """Download CLI binary"""
+    try:
+        if platform == 'windows':
+            filename = 'lic-cli-windows-x64.exe'
+        elif platform == 'linux':
+            filename = 'lic-cli-linux-x64'
+        else:
+            return jsonify({"error": "Invalid platform"}), 400
+        
+        cli_dir = os.path.join(app.static_folder, 'cli')
+        if not os.path.exists(cli_dir):
+            os.makedirs(cli_dir)
+            
+        return send_from_directory(
+            cli_dir, 
+            filename,
+            as_attachment=True
+        )
+    except Exception as e:
+        app.logger.error(f"Error downloading CLI: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
+# Update index route to include CLI downloads

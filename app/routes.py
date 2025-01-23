@@ -300,7 +300,7 @@ def index():
     if os.path.exists(cli_dir):
         for filename in os.listdir(cli_dir):
             if filename.startswith("lic-cli"):
-                platform = "Windows" if filename.endswith(".exe") else "Linux"
+                platform = "Windows" if filename.endswith(".exe") else "Linux/macOS"
                 arch = "x64" if "x64" in filename else "ARM64"
                 cli_downloads.append({
                     "filename": filename,

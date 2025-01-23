@@ -36,11 +36,11 @@ ENV PATH="/usr/local/osx-ndk-x86/bin:$PATH" \
     CC_x86_64_apple_darwin=o64-clang \
     CXX_x86_64_apple_darwin=o64-clang++ \
     AR_x86_64_apple_darwin=x86_64-apple-darwin20.4-ar \
-    CC_aarch64_apple_darwin=aarch64-apple-darwin20.4-clang \
-    CXX_aarch64_apple_darwin=aarch64-apple-darwin20.4-clang++ \
+    CC_aarch64_apple_darwin=oa64-clang \
+    CXX_aarch64_apple_darwin=oa64-clang++ \
     AR_aarch64_apple_darwin=aarch64-apple-darwin20.4-ar \
     CARGO_TARGET_X86_64_APPLE_DARWIN_LINKER=o64-clang \
-    CARGO_TARGET_AARCH64_APPLE_DARWIN_LINKER=aarch64-apple-darwin20.4-clang
+    CARGO_TARGET_AARCH64_APPLE_DARWIN_LINKER=oa64-clang
 
 # Set up workspace
 WORKDIR /usr/src/lic-cli

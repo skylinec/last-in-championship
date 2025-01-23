@@ -1,54 +1,46 @@
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
-use std::fs;
+use std::{fs, io};
+use directories::ProjectDirs;
 use anyhow::Result;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Config {
     pub api_url: String,
     pub username: String,
-    pub api_token: Option<String>,
-}
-
-impl Default for Config {
-    fn default() -> Self {
-        Self {
-            api_url: "https://lic.mattdh.me".to_string(),
-            username: String::new(),
-            api_token: None,
-        }
-    }
+    pub api_token: String,  // Add this field
 }
 
 impl Config {
-    pub fn load(config_path: Option<PathBuf>) -> Result<Self> {
-        let path = config_path.unwrap_or_else(|| Self::default_path());
+    pub fn load() -> Result<Self> {
+        let config_path = get_config_path()?;
         
-        if path.exists() {
-            let content = fs::read_to_string(path)?;
-            Ok(toml::from_str(&content)?)
-        } else {
-            let config = Config::default();
-            config.save()?;
-            Ok(config)
+        if !config_path.exists() {
+            return Err(anyhow::anyhow!("Config file not found. Please run 'lic-cli login' first."));
         }
+
+        let config_str = fs::read_to_string(config_path)?;
+        let config = serde_json::from_str(&config_str)?;
+        Ok(config)
     }
 
     pub fn save(&self) -> Result<()> {
-        let path = Self::default_path();
-        if let Some(parent) = path.parent() {
+        let config_path = get_config_path()?;
+        
+        // Ensure directory exists
+        if let Some(parent) = config_path.parent() {
             fs::create_dir_all(parent)?;
         }
-        
-        let content = toml::to_string(self)?;
-        fs::write(path, content)?;
+
+        let config_str = serde_json::to_string_pretty(self)?;
+        fs::write(config_path, config_str)?;
         Ok(())
     }
+}
 
-    fn default_path() -> PathBuf {
-        dirs::config_dir()
-            .unwrap_or_else(|| PathBuf::from("."))
-            .join("lic")
-            .join("config.toml")
-    }
+fn get_config_path() -> io::Result<PathBuf> {
+    let proj_dirs = ProjectDirs::from("com", "mattdh", "lic-cli")
+        .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "Could not determine config directory"))?;
+    
+    Ok(proj_dirs.config_dir().join("config.json"))
 }

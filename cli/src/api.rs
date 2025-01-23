@@ -5,19 +5,21 @@ use tracing::debug;
 use chrono::NaiveDate;
 
 use crate::models::*;
+use crate::models::AttendanceEntry;
 
 pub struct Api {
     client: Client,
     base_url: String,
+    token: String,
 }
 
 impl Api {
-    pub fn new(base_url: String) -> Self {
-        let client = Client::builder()
-            .cookie_store(true)
-            .build()
-            .expect("Failed to create HTTP client");
-        Self { client, base_url }
+    pub fn new(base_url: String, token: String) -> Self {
+        Self {
+            client: Client::new(),
+            base_url,
+            token,
+        }
     }
 
     pub async fn login(&self, username: &str, password: &str) -> Result<String> {
@@ -61,18 +63,21 @@ impl Api {
     }
 
     pub async fn log_attendance(&self, entry: AttendanceEntry) -> Result<()> {
-        let resp = self.client
-            .post(&format!("{}/api/log", self.base_url))
-            .header(header::CONTENT_TYPE, "application/json")
+        let url = format!("{}/api/log", self.base_url);
+        
+        let response = self.client
+            .post(&url)
+            .header("Authorization", format!("Bearer {}", self.token))
             .json(&entry)
             .send()
             .await?;
 
-        if !resp.status().is_success() {
-            anyhow::bail!("Failed to log attendance: {}", resp.text().await?);
+        if response.status().is_success() {
+            Ok(())
+        } else {
+            let error_text = response.text().await?;
+            Err(anyhow::anyhow!("{}", error_text))
         }
-
-        Ok(())
     }
 
     pub async fn get_rankings(&self, token: &str, period: &str, date: Option<String>) -> Result<Vec<Ranking>> {

@@ -168,7 +168,7 @@ services:
       context: ./cli
       dockerfile: Dockerfile.builder
     volumes:
-      - cli_builds:/output
+      - cli_builds:/app/static/cli  # This ensures binaries are copied to the correct location
 
 volumes:
   postgres_data:

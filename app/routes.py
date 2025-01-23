@@ -295,7 +295,7 @@ def index():
     core_users = get_core_users()
     
     # Get CLI download info
-    cli_dir = "/app/static/cli"
+    cli_dir = os.path.join(app.root_path, 'static', 'cli')
     cli_downloads = []
     if os.path.exists(cli_dir):
         for filename in os.listdir(cli_dir):
@@ -306,7 +306,7 @@ def index():
                     "filename": filename,
                     "platform": platform,
                     "arch": arch,
-                    "url": url_for('static', filename=f'cli/{filename}'),
+                    "url": url_for('bp.download_cli', platform=platform.lower()),  # Updated this line
                     "size": os.path.getsize(os.path.join(cli_dir, filename)) // 1024  # Size in KB
                 })
     
@@ -2733,14 +2733,24 @@ def download_cli(platform):
         else:
             return jsonify({"error": "Invalid platform"}), 400
         
-        cli_dir = os.path.join(app.static_folder, 'cli')
+        # Use app.root_path to ensure correct path resolution
+        cli_dir = os.path.join(app.root_path, 'static', 'cli')
         if not os.path.exists(cli_dir):
-            os.makedirs(cli_dir)
+            app.logger.error(f"CLI directory not found: {cli_dir}")
+            return jsonify({"error": "CLI files not found"}), 404
             
+        # Check if file exists
+        file_path = os.path.join(cli_dir, filename)
+        if not os.path.exists(file_path):
+            app.logger.error(f"CLI file not found: {file_path}")
+            return jsonify({"error": "CLI file not found"}), 404
+            
+        app.logger.info(f"Serving CLI file: {file_path}")
         return send_from_directory(
-            cli_dir, 
+            cli_dir,
             filename,
-            as_attachment=True
+            as_attachment=True,
+            download_name=filename  # Ensures correct filename in download
         )
     except Exception as e:
         app.logger.error(f"Error downloading CLI: {str(e)}")

@@ -295,19 +295,31 @@ def index():
     core_users = get_core_users()
     
     # Get CLI download info
-    cli_dir = os.path.join(app.static_folder, 'cli')  # Use app.static_folder to get correct path
+    cli_dir = os.path.join(app.static_folder, 'cli')
     cli_downloads = []
     if os.path.exists(cli_dir):
         for filename in os.listdir(cli_dir):
             if filename.startswith("lic-cli"):
-                platform = "Windows" if filename.endswith(".exe") else "Linux/macOS"
-                arch = "x64" if "x64" in filename else "ARM64"
+                if filename.endswith(".exe"):
+                    platform = "windows"
+                    display_platform = "Windows"
+                elif "macos-arm64" in filename:
+                    platform = "macos-arm64"
+                    display_platform = "macOS"
+                elif "macos-x64" in filename:
+                    platform = "macos-x64"
+                    display_platform = "macOS"
+                else:
+                    platform = "linux"
+                    display_platform = "Linux"
+                
+                arch = "ARM64" if "arm64" in filename else "x64"
                 cli_downloads.append({
                     "filename": filename,
-                    "platform": platform,
+                    "platform": display_platform,
                     "arch": arch,
-                    "url": url_for('bp.download_cli', platform=platform.lower()),
-                    "size": os.path.getsize(os.path.join(cli_dir, filename)) // 1024  # Size in KB
+                    "url": url_for('bp.download_cli', platform=platform),
+                    "size": os.path.getsize(os.path.join(cli_dir, filename)) // 1024
                 })
     
     # Return template with core users and CLI downloads
@@ -2739,12 +2751,15 @@ def download_cli(platform):
         filename = platform_map[platform]
         app.logger.info(f"Serving CLI file from static/cli/{filename}")
         
+        # Set content type based on platform
+        mime_type = 'application/x-msdownload' if platform == 'windows' else 'application/octet-stream'
+        
         return send_from_directory(
             'static/cli',
             filename,
             as_attachment=True,
             download_name=filename,
-            mimetype='application/octet-stream'
+            mimetype=mime_type
         )
     except Exception as e:
         app.logger.error(f"Error downloading CLI: {str(e)}")

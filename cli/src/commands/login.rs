@@ -29,7 +29,7 @@ impl LoginCommand {
                 .interact()?
         };
 
-        let api = Api::new(config.api_url.clone());
+        let api = Api::new(config.api_url.clone(), None);  // Add None for token during login
         match api.login(&username, &password).await {
             Ok(token) => {
                 let mut new_config = config.clone();

@@ -11,8 +11,9 @@ pub struct StatsCommand {
 impl StatsCommand {
     pub async fn run(&self, config: &Config) -> anyhow::Result<()> {
         let pb = ui::create_spinner("Fetching statistics...");
+        let config_api_token = config.api_token.clone();
         
-        let api = Api::new(config.api_url.clone());
+        let api = Api::new(config.api_url.clone(), config_api_token);
         let username = self.user.clone().unwrap_or(config.username.clone());
         
         let token = config.api_token.as_ref()

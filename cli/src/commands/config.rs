@@ -13,33 +13,23 @@ pub struct ConfigCommand {
 
 impl ConfigCommand {
     pub async fn run(&self, config: &Config) -> anyhow::Result<()> {
-        let mut config = config.clone();
-        let mut modified = false;
-
-        if let Some(api_url) = &self.api_url {
-            config.api_url = api_url.clone();
-            modified = true;
-        }
-
-        if let Some(username) = &self.username {
-            config.username = username.clone();
-            modified = true;
-        }
-
-        if !modified {
-            // Interactive configuration
-            config.api_url = Input::new()
+        let new_config = if self.api_url.is_some() || self.username.is_some() {
+            config.clone().with_updates(self.api_url.clone(), self.username.clone())
+        } else {
+            let api_url = Input::<String>::new()
                 .with_prompt("API URL")
-                .default(config.api_url)
+                .default(config.api_url.clone())
                 .interact()?;
 
-            config.username = Input::new()
+            let username = Input::<String>::new()
                 .with_prompt("Default username")
-                .default(config.username)
+                .default(config.username.clone())
                 .interact()?;
-        }
 
-        config.save()?;
+            config.clone().with_updates(Some(api_url), Some(username))
+        };
+
+        new_config.save()?;
         println!("✅ Configuration saved successfully");
         Ok(())
     }

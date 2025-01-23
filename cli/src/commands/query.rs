@@ -1,6 +1,6 @@
 use clap::{Args, ValueEnum};  // Add ValueEnum
 use comfy_table::Cell;
-use chrono::{NaiveDate, Local};
+use chrono::{NaiveDate};  // Remove Local
 use crate::{api::Api, config::Config, ui, models::Period};
 
 #[derive(Args)]
@@ -31,7 +31,7 @@ impl QueryCommand {
     pub async fn run(&self, config: &Config) -> anyhow::Result<()> {
         let pb = ui::create_spinner("Querying data...");
         
-        let api = Api::new(config.api_url.clone());
+        let api = Api::new(config.api_url.clone(), config.api_token.clone());
         let token = config.api_token.as_ref()
             .ok_or_else(|| anyhow::anyhow!("Not logged in. Please run `lic login` first."))?;
 

@@ -55,7 +55,7 @@ async fn main() -> anyhow::Result<()> {
     tracing_subscriber::fmt::init();
 
     let cli = Cli::parse();
-    let config = Config::load(cli.config_path)?;
+    let config = Config::load()?;
     
     debug!("Using API URL: {}", config.api_url);
 

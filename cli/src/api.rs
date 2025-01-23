@@ -14,11 +14,11 @@ pub struct Api {
 }
 
 impl Api {
-    pub fn new(base_url: String, token: String) -> Self {
+    pub fn new(base_url: String, token: Option<String>) -> Self {
         Self {
             client: Client::new(),
             base_url,
-            token,
+            token: token.unwrap_or_default()
         }
     }
 

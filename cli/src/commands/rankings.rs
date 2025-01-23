@@ -1,4 +1,4 @@
-use clap::{Args, ValueEnum};  // Add ValueEnum
+use clap::Args;  // Remove ValueEnum import
 use comfy_table::Cell;
 use chrono::Local;
 use crate::{api::Api, config::Config, ui, models::Period};
@@ -16,7 +16,7 @@ impl RankingsCommand {
     pub async fn run(&self, config: &Config) -> anyhow::Result<()> {
         let pb = ui::create_spinner("Fetching rankings...");
 
-        let api = Api::new(config.api_url.clone());
+        let api = Api::new(config.api_url.clone(), config.api_token.clone());
         
         // Get token from config, return error if not found
         let token = config.api_token.as_ref()

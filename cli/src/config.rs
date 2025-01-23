@@ -4,19 +4,23 @@ use std::{fs, io};
 use directories::ProjectDirs;
 use anyhow::Result;
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Config {
     pub api_url: String,
     pub username: String,
-    pub api_token: String,  // Add this field
+    pub api_token: Option<String>,
 }
 
 impl Config {
     pub fn load() -> Result<Self> {
         let config_path = get_config_path()?;
         
-        if !config_path.exists() {
-            return Err(anyhow::anyhow!("Config file not found. Please run 'lic-cli login' first."));
+        if (!config_path.exists()) {
+            return Ok(Self {
+                api_url: String::from("http://localhost:4030"),
+                username: String::new(),
+                api_token: None,
+            });
         }
 
         let config_str = fs::read_to_string(config_path)?;
@@ -35,6 +39,16 @@ impl Config {
         let config_str = serde_json::to_string_pretty(self)?;
         fs::write(config_path, config_str)?;
         Ok(())
+    }
+
+    pub fn with_updates(mut self, api_url: Option<String>, username: Option<String>) -> Self {
+        if let Some(url) = api_url {
+            self.api_url = url;
+        }
+        if let Some(name) = username {
+            self.username = name;
+        }
+        self
     }
 }
 

@@ -9,7 +9,7 @@ impl StreaksCommand {
     pub async fn run(&self, config: &Config) -> anyhow::Result<()> {
         let pb = ui::create_spinner("Fetching streaks...");
         
-        let api = Api::new(config.api_url.clone());
+        let api = Api::new(config.api_url.clone(), config.api_token.clone());
         
         // Get token from config, return error if not found
         let token = config.api_token.as_ref()

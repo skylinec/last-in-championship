@@ -5,7 +5,7 @@ services:
     build: .
     volumes:
       - ./data:/app/data
-      - cli_builds:/app/static/cli:ro    # Add this line to mount CLI builds
+      - cli_builds:/app/static/cli    # Add this line to mount CLI builds
     environment:
       - FLASK_ENV=production
       - SECRET_KEY=${SECRET_KEY}

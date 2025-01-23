@@ -82,7 +82,7 @@ from threading import Lock, Thread
 from flask import Blueprint
 from flask import \
     current_app as app  # Use current_app instead of direct import
-from flask import jsonify, redirect, render_template, request, session, url_for
+from flask import jsonify, redirect, render_template, request, session, url_for, send_from_directory
 from sqlalchemy import inspect, text
 
 from .blueprints import \

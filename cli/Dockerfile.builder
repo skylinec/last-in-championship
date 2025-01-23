@@ -26,8 +26,10 @@ ENV PKG_CONFIG_ALLOW_CROSS=1 \
     OPENSSL_LIB_DIR=/usr/lib/x86_64-linux-gnu \
     OPENSSL_INCLUDE_DIR=/usr/include
 
-# Create output directories
-RUN mkdir -p /app/static/cli
+# Create output directories and set permissions
+RUN mkdir -p /app/static/cli && \
+    chmod -R 755 /app/static/cli && \
+    chown -R 1000:1000 /app/static/cli  # Standard user ID in most containers
 
 # Keep container running with build loop
 CMD ["/build-loop.sh"]

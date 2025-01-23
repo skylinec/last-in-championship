@@ -5,7 +5,8 @@ services:
     build: .
     volumes:
       - ./data:/app/data
-      - cli_builds:/app/static/cli    # Add this line to mount CLI builds
+      - cli_builds:/app/static/cli:ro  # Add read-only flag
+    user: "1000:1000"  # Match the ownership we set in Dockerfile.builder
     environment:
       - FLASK_ENV=production
       - SECRET_KEY=${SECRET_KEY}
@@ -168,7 +169,8 @@ services:
       context: ./cli
       dockerfile: Dockerfile.builder
     volumes:
-      - cli_builds:/app/static/cli  # This ensures binaries are copied to the correct location
+      - cli_builds:/app/static/cli
+    user: "1000:1000"  # Match the web service user
     restart: always  # Add this line to always restart
     command: ["sh", "/build-loop.sh"]  # Add this line to run continuous build script
 

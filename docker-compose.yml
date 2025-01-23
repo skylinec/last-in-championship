@@ -169,6 +169,8 @@ services:
       dockerfile: Dockerfile.builder
     volumes:
       - cli_builds:/app/static/cli  # This ensures binaries are copied to the correct location
+    restart: always  # Add this line to always restart
+    command: ["sh", "/build-loop.sh"]  # Add this line to run continuous build script
 
 volumes:
   postgres_data:

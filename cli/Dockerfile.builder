@@ -15,6 +15,10 @@ RUN apt-get update && apt-get install -y \
 WORKDIR /usr/src/lic-cli
 COPY . .
 
+# Copy build script and make it executable
+COPY build-loop.sh /build-loop.sh
+RUN chmod +x /build-loop.sh
+
 # Set PKG_CONFIG for cross-compilation
 ENV PKG_CONFIG_ALLOW_CROSS=1 \
     OPENSSL_STATIC=1 \
@@ -22,16 +26,8 @@ ENV PKG_CONFIG_ALLOW_CROSS=1 \
     OPENSSL_LIB_DIR=/usr/lib/x86_64-linux-gnu \
     OPENSSL_INCLUDE_DIR=/usr/include
 
-# Build for different platforms
-RUN cargo build --release --target x86_64-pc-windows-gnu && \
-    cargo build --release --target x86_64-unknown-linux-gnu 
+# Create output directories
+RUN mkdir -p /app/static/cli
 
-# Copy binaries to output directory
-RUN mkdir -p /output && \
-    cp target/x86_64-pc-windows-gnu/release/lic-cli.exe /output/lic-cli-windows-x64.exe && \
-    cp target/x86_64-unknown-linux-gnu/release/lic-cli /output/lic-cli-linux-x64
-
-# Copy binaries to Flask app static directory
-RUN mkdir -p /app/static/cli && \
-    cp /output/lic-cli-windows-x64.exe /app/static/cli && \
-    cp /output/lic-cli-linux-x64 /app/static/cli
+# Keep container running with build loop
+CMD ["/build-loop.sh"]

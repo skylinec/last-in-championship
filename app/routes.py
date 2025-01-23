@@ -295,7 +295,7 @@ def index():
     core_users = get_core_users()
     
     # Get CLI download info
-    cli_dir = os.path.join('static', 'cli')  # Changed from app.root_path/static/cli
+    cli_dir = os.path.join(app.static_folder, 'cli')  # Use app.static_folder to get correct path
     cli_downloads = []
     if os.path.exists(cli_dir):
         for filename in os.listdir(cli_dir):
@@ -306,7 +306,7 @@ def index():
                     "filename": filename,
                     "platform": platform,
                     "arch": arch,
-                    "url": url_for('bp.download_cli', platform=platform.lower()),  # Updated this line
+                    "url": url_for('bp.download_cli', platform=platform.lower()),
                     "size": os.path.getsize(os.path.join(cli_dir, filename)) // 1024  # Size in KB
                 })
     

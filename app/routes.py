@@ -295,7 +295,7 @@ def index():
     core_users = get_core_users()
     
     # Get CLI download info
-    cli_dir = os.path.join(app.root_path, 'static', 'cli')
+    cli_dir = os.path.join('static', 'cli')  # Changed from app.root_path/static/cli
     cli_downloads = []
     if os.path.exists(cli_dir):
         for filename in os.listdir(cli_dir):
@@ -2734,20 +2734,11 @@ def download_cli(platform):
             return jsonify({"error": "Invalid platform"}), 400
         
         # Use app.root_path to ensure correct path resolution
-        cli_dir = os.path.join(app.root_path, 'static', 'cli')
-        if not os.path.exists(cli_dir):
-            app.logger.error(f"CLI directory not found: {cli_dir}")
-            return jsonify({"error": "CLI files not found"}), 404
+        cli_dir = 'cli'  # Changed to be relative to static folder
             
-        # Check if file exists
-        file_path = os.path.join(cli_dir, filename)
-        if not os.path.exists(file_path):
-            app.logger.error(f"CLI file not found: {file_path}")
-            return jsonify({"error": "CLI file not found"}), 404
-            
-        app.logger.info(f"Serving CLI file: {file_path}")
+        app.logger.info(f"Serving CLI file from static/cli/{filename}")
         return send_from_directory(
-            cli_dir,
+            'static/cli',  # Fix: Path relative to app root
             filename,
             as_attachment=True,
             download_name=filename  # Ensures correct filename in download

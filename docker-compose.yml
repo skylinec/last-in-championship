@@ -5,7 +5,7 @@ services:
     build: .
     volumes:
       - ./data:/app/data
-      - cli_builds:/app/static/cli:ro  # Add read-only flag
+      - cli_builds:/app/app/static/cli:ro  # Fix: Path matches Flask structure
     user: "1000:1000"  # Match the ownership we set in Dockerfile.builder
     environment:
       - FLASK_ENV=production
@@ -169,8 +169,8 @@ services:
       context: ./cli
       dockerfile: Dockerfile.builder
     volumes:
-      - cli_builds:/app/static/cli
-    user: "1000:1000"  # Match the web service user
+      - cli_builds:/app/app/static/cli  # Fix: Path matches Flask structure
+    # user: "1000:1000"  # Match the web service user
     restart: always  # Add this line to always restart
     command: ["sh", "/build-loop.sh"]  # Add this line to run continuous build script
 

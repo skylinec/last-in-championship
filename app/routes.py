@@ -2726,22 +2726,25 @@ def api_query_data(period):
 def download_cli(platform):
     """Download CLI binary"""
     try:
-        if platform == 'windows':
-            filename = 'lic-cli-windows-x64.exe'
-        elif platform == 'linux':
-            filename = 'lic-cli-linux-x64'
-        else:
-            return jsonify({"error": "Invalid platform"}), 400
+        platform_map = {
+            'windows': 'lic-cli-windows-x64.exe',
+            'linux': 'lic-cli-linux-x64',
+            'macos-x64': 'lic-cli-macos-x64',
+            'macos-arm64': 'lic-cli-macos-arm64'
+        }
         
-        # Use app.root_path to ensure correct path resolution
-        cli_dir = 'cli'  # Changed to be relative to static folder
+        if platform not in platform_map:
+            return jsonify({"error": "Invalid platform"}), 400
             
+        filename = platform_map[platform]
         app.logger.info(f"Serving CLI file from static/cli/{filename}")
+        
         return send_from_directory(
-            'static/cli',  # Fix: Path relative to app root
+            'static/cli',
             filename,
             as_attachment=True,
-            download_name=filename  # Ensures correct filename in download
+            download_name=filename,
+            mimetype='application/octet-stream'
         )
     except Exception as e:
         app.logger.error(f"Error downloading CLI: {str(e)}")

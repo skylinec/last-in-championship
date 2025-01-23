@@ -8,8 +8,22 @@ RUN apt-get update && apt-get install -y \
     gcc-mingw-w64-x86-64 \
     musl-tools \
     libssl-dev \
+    clang \
+    llvm \
     && rustup target add x86_64-pc-windows-gnu \
-    && rustup target add x86_64-unknown-linux-gnu
+    && rustup target add x86_64-unknown-linux-gnu \
+    && rustup target add x86_64-apple-darwin \
+    && rustup target add aarch64-apple-darwin
+
+# Install OSX Cross toolchain
+RUN git clone https://github.com/tpoechtrager/osxcross \
+    && cd osxcross \
+    && wget -nc https://github.com/joseluisq/macosx-sdks/releases/download/12.3/MacOSX12.3.sdk.tar.xz \
+    && mv MacOSX12.3.sdk.tar.xz tarballs/ \
+    && UNATTENDED=1 ./build.sh \
+    && rm -rf /osxcross/build
+
+ENV PATH="/osxcross/target/bin:$PATH"
 
 # Set up workspace
 WORKDIR /usr/src/lic-cli

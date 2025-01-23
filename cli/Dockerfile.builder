@@ -10,6 +10,8 @@ RUN apt-get update && apt-get install -y \
     libssl-dev \
     clang \
     llvm \
+    cmake \
+    xz-utils \
     && rustup target add x86_64-pc-windows-gnu \
     && rustup target add x86_64-unknown-linux-gnu \
     && rustup target add x86_64-apple-darwin \

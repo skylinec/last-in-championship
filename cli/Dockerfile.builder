@@ -18,7 +18,9 @@ COPY . .
 # Set PKG_CONFIG for cross-compilation
 ENV PKG_CONFIG_ALLOW_CROSS=1 \
     OPENSSL_STATIC=1 \
-    OPENSSL_DIR=/usr/lib/x86_64-linux-gnu
+    OPENSSL_DIR=/usr \
+    OPENSSL_LIB_DIR=/usr/lib/x86_64-linux-gnu \
+    OPENSSL_INCLUDE_DIR=/usr/include
 
 # Build for different platforms
 RUN cargo build --release --target x86_64-pc-windows-gnu && \
